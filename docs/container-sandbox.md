@@ -1,9 +1,9 @@
 # Codex sandbox in the development container
 
-The current session can authenticate to Codex and complete textual model tasks,
-but `unshare -Ur true` fails with `Operation not permitted`. Seccomp filtering is
-active. Consequently file edits and shell tests in Codex's workspace-write sandbox
-fail. Changing the container user to root alone may not resolve host-side filters.
+The original container rejected `unshare -Ur true` with `Operation not permitted`.
+After the user's privileged rebuild and SSH-agent forwarding, namespaces work and
+the real Codex edit/test smoke passes, including independently rerun generated tests.
+Changing the container user to root alone may not resolve host-side filters.
 
 At the user's request, `compose.privileged.yaml` provides an **explicit opt-in**
 for a dedicated local development container. It sets privileged: true on both the
@@ -27,12 +27,17 @@ git pull --ff-only origin feat/virtual-agent-cafe-mvp
 docker compose -f compose.yaml -f compose.privileged.yaml --profile dev run --rm --build codex bash
 ```
 
+For GitHub access, start/load your existing SSH agent in WSL first (`ssh-add -l`
+must list an identity), then include `-f compose.ssh.yaml` in the above Compose
+command. The forwarded socket and known_hosts must be available. No private keys
+are copied into the image.
+
 Inside the new container:
 
 ```bash
 unshare -Ur true
 codex login status
-python3 scripts/codex_smoke.py
+scripts/codex-smoke.sh
 scripts/check.sh
 ```
 

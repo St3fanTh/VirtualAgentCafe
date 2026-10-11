@@ -86,15 +86,15 @@ VAC_MODE=codex docker compose up --build backend
 ```
 
 The workspace-write sandbox requires working Linux user namespaces. Check it with
-an actual harmless Codex task. This session's existing container rejects namespaces
-with `bwrap: No permissions to create a new namespace`; auth works, execution is
-blocked. Configure your host/container to support Codex's sandbox, or run backend
+an actual harmless Codex task. The original container rejected namespaces
+with `bwrap: No permissions to create a new namespace`. The privileged rebuild
+now passes the real editing/testing smoke with the corrected adapter. Configure your host/container to support Codex's sandbox, or run backend
 in WSL directly where it is supported. No automatic sandbox bypass is provided.
 
 Run the opt-in real smoke test after login and sandbox setup:
 
 ```bash
-.venv/bin/python scripts/codex_smoke.py
+scripts/codex-smoke.sh
 ```
 
 It asks the real CLI to create a Python function and unittest in a temporary Git

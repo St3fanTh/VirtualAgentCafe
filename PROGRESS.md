@@ -173,3 +173,29 @@
 - Commit-ID: `git log --format='%h %s' --grep='allow completed Codex turns after helper command warnings'`.
 - Nächster Schritt: Nutzer lädt Commit und wiederholt echten Smoke im funktionierenden
   Privileged-Container; privates Prompt/Tool-Logging weiterhin ausgeschaltet.
+
+## Live-Abnahme — Echte Codex-Dateiänderungen und Tests erfolgreich
+- Ausgangscommit 28a1be9; Branch feat/virtual-agent-cafe-mvp sauber übernommen.
+- Nach Nutzer-Neustart: unshare -Ur true erfolgreich; SSH-Agent mit Repository-Key,
+  GitHub-Authentifizierung und git ls-remote erfolgreich. Keine Credentialänderung.
+- Tatsächlich ausgeführt: `PYTHONPATH=/workspace/backend /opt/venv/bin/python
+  scripts/codex_smoke.py` gegen angemeldete Codex CLI 0.162.1.
+- Ergebnis: agent.started → thinking → message → waiting → vorübergehender
+  Hilfsfehler → coding → coding → testing → waiting → message → finished.
+  `Real Codex smoke: PASS`; generierte greeting.py/test_greeting.py vorhanden und
+  generierte unittest unabhängig erneut erfolgreich ausgeführt. Live-Code-Abnahme
+  somit bestanden. Kein CLI-Sandbox-Bypass; workspace-write bleibt aktiviert.
+- Umgebungsfehler behoben: Codex-Shell wählte Systempython ohne Pydantic statt
+  installierter /opt/venv. scripts/environment.sh wählt nutzbare lokale .venv bzw.
+  Container-venv und aktuelle Repositoryquelle; check.sh/demo.sh nutzen ihn.
+  scripts/codex-smoke.sh bietet denselben stabilen Einstieg für echte Smoke-Läufe.
+- Geändert: scripts/environment.sh, scripts/codex-smoke.sh, scripts/check.sh,
+  scripts/demo.sh, README.md, docs/codex-adapter.md, docs/container-sandbox.md.
+- Tests: scripts/check.sh in neuer Umgebung Python 3.13.5 vollständig grün:
+  Ruff, 59 pytest-Tests, Godot 4.4.1 Import, Zustandsmapping, Headless-Lauf,
+  Demo→WebSocket→Godot, Aufgaben-/Nachrichten-/Abbruch-E2E und Backend-Reconnect.
+- Offene Punkte: Sichtprüfung in Windows-Godot (Nutzer möchte jetzt Probelauf),
+  CI dieses Abschlusscommits noch zu bestätigen. Keine visuellen Befunde erfunden.
+- Commit-ID: `git log --format='%h %s' --grep='validate live Codex execution and select project environment'`.
+- Nächste Schritte: Demo auf Nutzerhost mit docker compose starten, game/project.godot
+  in Windows öffnen/F5; danach Codex-Modus und erste echte Aufgabe über Figur starten.

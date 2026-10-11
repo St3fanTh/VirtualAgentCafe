@@ -38,7 +38,9 @@ Run Compose from the repository in WSL with Docker Desktop WSL integration enabl
 docker compose up --build backend
 ```
 
-Open `game/project.godot` with Godot 4.4.1 on Windows, then press F6/F5 to run.
+Open `game/project.godot` with Godot 4.4.1 on Windows, then press **F5** to run.
+The demo shows Ada and Turing working, testing, messaging and finishing. Click a
+character to open the task panel; submitting real tasks requires Codex mode.
 Windows reaches the forwarded backend at `127.0.0.1:8000`. Only loopback is published;
 the backend binds 0.0.0.0 **inside** its container. Do not publish it to the LAN.
 Project files are mounted with `.:/workspace`; no host-specific drive path required.
@@ -61,8 +63,9 @@ Task prompts and raw model/tool responses stay private; results are workspace fi
 The final response is saved to `.cafe/last-response.md` within that workspace; the
 game shows its path. With Compose, inspect it via `docker compose exec backend`
 or copy results to the host with `docker compose cp backend:/workspace/.runtime/workspaces ./agent-results`.
-The sandbox must support Linux user namespaces. The existing dev container in this
-session blocks them; use a suitable host/container for a successful live run.
+The sandbox must support Linux user namespaces. The opt-in privileged development
+configuration was verified with a real Codex edit/test smoke run. Check your own
+runtime with `unshare -Ur true` and `scripts/codex-smoke.sh`.
 See [Codex adapter](docs/codex-adapter.md) for exact event mapping and limits.
 For the requested opt-in privileged container rebuild, see
 [container sandbox setup](docs/container-sandbox.md).
@@ -84,6 +87,10 @@ raw JSONL traces. A private key was present in the original local Docker context
 it remains local and is excluded from both Git and builds.
 
 ## Tests and development
+
+Project shell entrypoints select the local `.venv` or the container's `/opt/venv`
+and import the current mounted backend source, so a pull takes effect without a
+stale image-installed package. `scripts/codex-smoke.sh` validates a real Codex run.
 
 `scripts/check.sh` runs Ruff, pytest, Godot import, all state mappings, a headless
 launch and a live Uvicorn→WebSocket→Godot smoke test on a temporary port. It fails
