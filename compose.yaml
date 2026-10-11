@@ -1,0 +1,32 @@
+services:
+  codex:
+    build:
+      context: .
+      dockerfile: Dockerfile
+
+    image: virtual-agent-cafe-dev:latest
+
+    working_dir: /workspace
+
+    stdin_open: true
+    tty: true
+
+    volumes:
+      # Projektverzeichnis
+      - /mnt/f/Workspace/VirtualAgentCafe:/workspace
+
+      # Persistente Codex-Sessions und Login
+      - codex_home:/home/node/.codex
+
+    environment:
+      HOME: /home/node
+      CODEX_HOME: /home/node/.codex
+      PYTHONUNBUFFERED: "1"
+
+    ports:
+      - "127.0.0.1:8000:8000"
+
+    command: ["codex"]
+
+volumes:
+  codex_home:

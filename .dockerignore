@@ -1,0 +1,11 @@
+.git
+.env
+.env.*
+docker/ssh
+**/*.pem
+**/*.key
+.venv
+.runtime
+artifacts
+**/__pycache__
+game/.godot
