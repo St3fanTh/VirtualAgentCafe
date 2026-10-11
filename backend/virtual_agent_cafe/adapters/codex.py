@@ -146,13 +146,23 @@ class CodexAdapter:
             "workspace-write",
             "-C",
             str(workspace),
+            "--output-last-message",
+            str(workspace / ".cafe" / "last-response.md"),
             "-",
         ]
+
+    @staticmethod
+    def prepare_response_file(workspace: Path) -> None:
+        response_file = workspace / ".cafe" / "last-response.md"
+        if not response_file.resolve().is_relative_to(workspace.resolve()):
+            raise ValueError("Invalid response path")
+        response_file.parent.mkdir(parents=True, exist_ok=True)
 
     async def run(self, prompt: str, workspace: Path, emit: Emit) -> RunResult:
         observer = CodexObserver(emit)
         process = None
         try:
+            await asyncio.to_thread(self.prepare_response_file, workspace)
             async with asyncio.timeout(self.timeout):
                 process = await asyncio.create_subprocess_exec(
                     *self.arguments(workspace),
@@ -176,7 +186,9 @@ class CodexAdapter:
                     observer.consume(data)
                 code = await process.wait()
                 if code == 0 and observer.successful:
-                    return RunResult(True, "Codex turn completed; files available in workspace")
+                    return RunResult(
+                        True, "Codex turn completed; see workspace and .cafe/last-response.md"
+                    )
                 return RunResult(False, "Codex failed or did not complete; check login and sandbox")
         except TimeoutError:
             return RunResult(False, "Codex task timed out")

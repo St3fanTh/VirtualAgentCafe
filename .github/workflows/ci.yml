@@ -25,7 +25,9 @@ jobs:
       - name: Unit, integration and Godot checks
         run: scripts/check.sh
       - name: Validate Compose and secret-free build context
-        run: docker compose config --quiet
+        run: |
+          docker compose config --quiet
+          docker compose -f compose.yaml -f compose.privileged.yaml --profile dev config --quiet
       - name: Container smoke test
         run: |
           trap 'docker compose down' EXIT

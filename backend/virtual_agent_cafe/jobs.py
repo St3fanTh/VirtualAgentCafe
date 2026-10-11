@@ -31,6 +31,7 @@ class JobManager:
             "agent_id": agent_id,
             "status": "running",
             "workspace": str(self.root / agent_id),
+            "response_file": str(self.root / agent_id / ".cafe" / "last-response.md"),
         }
         self.history[str(correlation)] = record
         while len(self.history) > 100:

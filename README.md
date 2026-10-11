@@ -58,9 +58,14 @@ own persistent Git directory under `.runtime/workspaces/`; the two can work in
 parallel. **Cancel running task** terminates its process group. **Message other
 agent** sends the text as an explicit public message when both agents are idle.
 Task prompts and raw model/tool responses stay private; results are workspace files.
+The final response is saved to `.cafe/last-response.md` within that workspace; the
+game shows its path. With Compose, inspect it via `docker compose exec backend`
+or copy results to the host with `docker compose cp backend:/workspace/.runtime/workspaces ./agent-results`.
 The sandbox must support Linux user namespaces. The existing dev container in this
 session blocks them; use a suitable host/container for a successful live run.
 See [Codex adapter](docs/codex-adapter.md) for exact event mapping and limits.
+For the requested opt-in privileged container rebuild, see
+[container sandbox setup](docs/container-sandbox.md).
 
 ## Git and credentials
 

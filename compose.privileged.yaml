@@ -1,0 +1,8 @@
+# Explicit local development opt-in. Grants broad host/device capabilities.
+# Do not enable for public/shared production deployments.
+# Keeps the image's non-root node user and Codex workspace-write sandbox.
+services:
+  codex:
+    privileged: true
+  backend:
+    privileged: true

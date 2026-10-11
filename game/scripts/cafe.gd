@@ -114,8 +114,12 @@ func build_ui() -> void:
 
 func on_frame(frame: Dictionary) -> void:
 	if state.apply(frame):
-		for id in state.agents:
-			characters[id].update_state(state.agents[id])
+		if frame.get("kind") == "snapshot":
+			for id in state.agents:
+				characters[id].reset_state(state.agents[id])
+		else:
+			var id: String = frame.event.agent_id
+			characters[id].enqueue_state(state.agents[id])
 		status_label.text = "Ada · %s     |     Turing · %s" % [state.state_label("ada"), state.state_label("turing")]
 	elif state.needs_snapshot:
 		network.force_reconnect()
@@ -181,7 +185,7 @@ func on_task_result(_result: int, code: int, _headers: PackedStringArray, body: 
 	if code == 202 or (request_action == "cancel" and code == 200):
 		var accepted = JSON.parse_string(body.get_string_from_utf8())
 		if request_action == "task" and accepted is Dictionary:
-			result_label.text = "Files: " + str(accepted.get("workspace", "")).left(100)
+			result_label.text = "Files: " + str(accepted.get("response_file", accepted.get("workspace", ""))).left(110)
 		task_input.text = ""
 		task_panel.hide()
 	else:

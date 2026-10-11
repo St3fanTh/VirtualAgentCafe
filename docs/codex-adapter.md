@@ -3,13 +3,14 @@
 Live tasks invoke the installed CLI with the public machine-readable stream:
 
 ```text
-codex exec --json --ephemeral --ignore-user-config --sandbox workspace-write -C <agent-workspace> -
+codex exec --json --ephemeral --ignore-user-config --sandbox workspace-write -C <agent-workspace> --output-last-message <agent-workspace>/.cafe/last-response.md -
 ```
 
 Prompts go through stdin, not shell interpolation or process arguments. The backend
 never stores them in job history, logs or public frames. Stderr is discarded; raw
 JSONL is parsed in memory and not retained. Reasoning content and agent response
-content are not broadcast. Public bubbles identify an observed response; explicit
+content are not broadcast. The final response is saved privately to
+`.cafe/last-response.md` in that agent’s workspace and can be read locally. Public bubbles identify an observed response; explicit
 peer messages are public by design.
 
 Source: [official non-interactive Codex documentation](https://developers.openai.com/codex/noninteractive/).

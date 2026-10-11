@@ -13,6 +13,24 @@ var is_selected := false
 var last_sequence := -1
 var bubble := ""
 var bubble_left := 0.0
+var presentation_queue: Array[Dictionary] = []
+var dwell := 0.0
+const MAX_PRESENTATION_QUEUE := 16
+const MIN_EVENT_DWELL := 0.65
+
+func reset_state(state: Dictionary) -> void:
+	presentation_queue.clear()
+	last_sequence = -1
+	update_state(state)
+
+func enqueue_state(state: Dictionary) -> void:
+	if presentation_queue.size() >= MAX_PRESENTATION_QUEUE:
+		# Keep newest evidence when visual presentation falls behind.
+		presentation_queue.clear()
+	if presentation_queue.is_empty() and dwell <= 0:
+		update_state(state)
+	else:
+		presentation_queue.append(state.duplicate(true))
 
 func update_state(state: Dictionary) -> void:
 	var new_status := str(state.get("status", "agent.waiting"))
@@ -21,6 +39,7 @@ func update_state(state: Dictionary) -> void:
 	detail = str(state.get("detail", "")).left(256)
 	source = str(state.get("source", "system"))
 	if changed:
+		dwell = MIN_EVENT_DWELL
 		clock = 0.0
 		last_sequence = int(state.get("sequence", 0))
 		var target := destination()
@@ -47,6 +66,9 @@ func destination() -> Vector2:
 
 func _process(delta: float) -> void:
 	clock += delta
+	dwell = maxf(0, dwell - delta)
+	if dwell <= 0 and not presentation_queue.is_empty():
+		update_state(presentation_queue.pop_front())
 	bubble_left = maxf(0, bubble_left - delta)
 	if not route.is_empty():
 		position = position.move_toward(route[0], delta * 45)

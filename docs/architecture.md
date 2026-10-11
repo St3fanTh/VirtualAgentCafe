@@ -13,3 +13,9 @@ demo is illustrative. Real activities come exclusively from observed CLI JSONL e
 The Godot client owns presentation, movement and local animation time, never agent state.
 Tasks are submitted separately from the activity stream; private prompts and raw tool
 outputs are never broadcast. State and job history are ephemeral.
+
+Presentation uses a separate bounded queue (16 observed states per character) and
+0.65 s minimum dwell so short edits/test invocations remain visible. Overflow
+collapses stale presentation to recent evidence. The HUD continues to show current
+backend state. Snapshots immediately clear pending animations and replace state.
+Final Codex responses are written privately into the workspace, never broadcast.

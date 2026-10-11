@@ -107,3 +107,16 @@ def test_live_demo_websocket():
 def test_timestamp_requires_timezone():
     with pytest.raises(ValidationError):
         event(timestamp="2026-10-11T12:00:00")
+
+
+def test_event_burst_keeps_memory_and_subscriber_queues_bounded():
+    bus = EventBus(queue_limit=4)
+    queues = [bus.subscribe() for _ in range(4)]
+    correlation = uuid4()
+    for _ in range(5000):
+        bus.emit("ada", EventType.CODING, correlation, source="demo")
+    assert bus.sequence == 5000
+    assert len(bus.seen) == len(bus.recent_ids) == 1024
+    assert all(queue.qsize() <= 4 for queue in queues)
+    snapshot = bus.snapshot()
+    assert snapshot["agents"][0]["sequence"] == 5000

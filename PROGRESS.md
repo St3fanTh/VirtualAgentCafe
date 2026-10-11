@@ -114,3 +114,34 @@
 - Offene Probleme: sandboxfähige Laufzeit für echte Dateiänderungen/Tests, grafische
   Sichtprüfung. Nächster unabhängiger Schritt: Animationswechsel sichtbar glätten,
   Queue-/Reconnect-Last prüfen; Live-Test nach Umgebungsänderung wiederholen.
+
+## M5 — Darstellung, Last und Wiederanlauf; Live-Code-Abnahme weiterhin offen
+- M4-Commit f30069f gepusht; GitHub Actions vollständig grün inkl. Container-Build:
+  https://github.com/St3fanTh/VirtualAgentCafe/actions/runs/38177963295
+- Implementiert: begrenzte visuelle Ereignisqueue (16 Zustände/Figur) mit 0.65 s
+  Mindestanzeige; kurze tatsächliche Coding-/Testing-Ereignisse bleiben sichtbar.
+  Backend und HUD laufen unabhängig weiter; Snapshot ersetzt visuelle Queue sofort.
+- Echte Codex-Antwort wird privat unter .cafe/last-response.md gespeichert,
+  Ergebnisdateipfad im HUD; keine Rohantwort im öffentlichen Ereignisstream.
+- Echter Textauftrag durch CodexAdapter/JobManager erfolgreich ausgeführt und
+  gespeicherte Antwort unabhängig geprüft: PASS. Das bestätigt reale Modellanbindung,
+  ersetzt NICHT die weiterhin blockierte Live-Abnahme für Dateiänderungen/Testtools.
+- Tests: scripts/check.sh vollständig grün, 52 pytest-Tests; Lasttest mit 5000 Events
+  und vier begrenzten Subscriberqueues; echter Backend-Neustart bei laufendem Godot
+  prüft Offline-Anzeige, Backoff und erneuten Snapshot. Godot-Zustandstests prüfen
+  nun Mindestanzeige, Queue-Limit und Resync. Aufgaben-/Kommunikations-/Abbruch-E2E grün.
+- Auf expliziten Nutzerwunsch: separate compose.privileged.yaml mit privileged:true
+  für codex/backend, Standardkonfiguration unverändert. Keine Änderung laufender
+  Container oder Host-Sicherheit vorgenommen; Docker-Daemon ist hier nicht vorhanden.
+  Non-root node und Codex workspace-write bleiben bestehen.
+- Compose inklusive Privileged-Override validiert. Neubau/Smoke-Anleitung unter
+  docs/container-sandbox.md dokumentiert; broad host access ist explizites lokales Opt-in.
+- Geändert: character.gd, cafe.gd, test_states.gd, test_reconnect.gd,
+  backend/tests/{test_backend,test_reconnect}.py, adapters/codex.py, jobs.py,
+  README.md, docs/{architecture,codex-adapter,container-sandbox}.md, compose.privileged.yaml.
+- Offene Abnahme: Privileged-Container muss auf dem Nutzerhost neu erstellt werden;
+  anschließend unshare und scripts/codex_smoke.py ausführen. Keine erfolgreichen
+  Live-Dateiänderungen/Tests behauptet. Grafische Sichtprüfung in Windows-Godot offen.
+- Commit-ID: `git log --format='%h %s' --grep='polish event presentation and container sandbox setup'`.
+- Nächste Schritte: CI dieses Commits bestätigen; nach Nutzer-Neubau echte Code-/Test-
+  Abnahme wiederholen und Ergebnis in PROGRESS.md festhalten.
