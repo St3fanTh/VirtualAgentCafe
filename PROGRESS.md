@@ -18,3 +18,19 @@
 - Commit-ID: `git log --format='%h %s' --grep='initialize secure project foundation'`.
   Eigene Commit-ID kann nicht in demselben Commit enthalten sein; Folgebericht trägt Hash nach.
 - Nächste Schritte: M1 Eventmodell, begrenzter Bus, REST/WebSocket und Simulator mit Tests.
+
+## M1 — Backend, Ereignisse und Demo
+- Vorheriger Meilenstein: c42aac3, Push erfolgreich.
+- Implementiert: validierte unveränderliche Events, acht Zustände, zwei Agenten,
+  globale Sequenzen, Duplikatschutz, begrenzter Fan-out, Snapshot bei Overflow/Connect,
+  /health, /agents, /ws/events und deterministischer Simulator mit konfigurierbarem Takt.
+- Geändert: backend/pyproject.toml, backend/virtual_agent_cafe/{models,bus,main,simulator}.py,
+  Paketinitialisierung, backend/tests/test_backend.py, docs/architecture.md, docs/event-schema.md.
+- Tests: Python 3.12.15; Ruff check/format grün; pytest: 19 bestanden, einschließlich
+  API/WebSocket-Reconnect und Simulator→WebSocket-Integration.
+- Testproblem behoben: Testzugriff auf Bus muss im Server-Eventloop erfolgen (portal.call).
+- Godot-Projektcheck noch nicht anwendbar, Projekt folgt in M2. Godot CLI verfügbar.
+- Offene Punkte: TestClient meldet eine vorgelagerte httpx-Deprecation;
+  Container-Build hier mangels Docker nicht ausführbar.
+- Commit-ID: `git log --format='%h %s' --grep='implement typed agent event backend'`.
+- Nächste Schritte: Caféwelt, Netzwerkclient, Zustandstests, Interaktion für Aufgaben.
