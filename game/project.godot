@@ -1,0 +1,17 @@
+; Godot 4 project
+config_version=5
+
+[application]
+config/name="VirtualAgentCafe"
+run/main_scene="res://scenes/cafe.tscn"
+
+[display]
+window/size/viewport_width=960
+window/size/viewport_height=640
+window/stretch/mode="canvas_items"
+
+[rendering]
+renderer/rendering_method="gl_compatibility"
+textures/default_filters/use_nearest_mipmap_filter=false
+textures/canvas_textures/default_texture_filter=0
+environment/defaults/default_clear_color=Color(0.063, 0.078, 0.11, 1)

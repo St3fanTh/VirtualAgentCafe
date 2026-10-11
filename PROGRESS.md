@@ -34,3 +34,23 @@
   Container-Build hier mangels Docker nicht ausführbar.
 - Commit-ID: `git log --format='%h %s' --grep='implement typed agent event backend'`.
 - Nächste Schritte: Caféwelt, Netzwerkclient, Zustandstests, Interaktion für Aufgaben.
+
+## M2 — Godot-Café und Live-Verbindung
+- Vorheriger Meilenstein: 6c74e56, Push erfolgreich.
+- Implementiert: prozedurale Pixel-Art-Tilemap, zwei Figuren, Arbeitsplätze,
+  Teststation, Gesprächsecke, Café und Wartelounge; ereignisabhängige Bewegung und
+  Animationen für alle acht Zustände, Sprechblasen, Status/HUD, Offline-Anzeige.
+- Anklicken öffnet Aufgabendialog; echte Aufgabe wird erst im Codex-Modus freigeschaltet.
+- WebSocket mit Backoff (0.5–15 s), begrenzten Paketen, Snapshot-Verarbeitung,
+  Duplikatunterdrückung und Resync bei Sequenzlücken.
+- Geändert: game/project.godot, game/scenes/cafe.tscn, game/scripts/*.gd,
+  game/tests/test_states.gd, game/tests/test_live.gd, backend/main.py.
+- Tests: pytest 19 bestanden; Ruff grün; Godot Import, 120-Frame-Headless-Start und
+  Zustandstests erfolgreich; echter Uvicorn→WebSocket→Godot-Livetest erfolgreich,
+  inklusive Figuren-Auswahl und Empfang von Coding/Testing/Message/Finished.
+- Bei wiederholtem Backendtest Cancellation-Race gefunden und behoben:
+  WebSocket räumt Subscriber auch bei Abbruch durch ASGI-Server zuverlässig auf.
+- Offene Punkte: Kein grafischer Displayserver hier; visuelle Editorprüfung noch offen.
+  Docker nicht vorhanden. Codex-Aufgaben-Endpunkt folgt nach Integrations-/CI-Meilenstein.
+- Commit-ID: `git log --format='%h %s' --grep='implement Godot cafe and event animations'`.
+- Nächste Schritte: reproduzierbare Check-/Demo-Skripte, CI, Setup-Dokumentation.

@@ -63,13 +63,14 @@ def create_app(mode: str = "demo", interval: float = 1.0) -> FastAPI:
             done, _ = await asyncio.wait({sender, receiver}, return_when=asyncio.FIRST_COMPLETED)
             for task in done:
                 task.result()
-        except (WebSocketDisconnect, TimeoutError, RuntimeError):
+        except (WebSocketDisconnect, TimeoutError, RuntimeError, asyncio.CancelledError):
             pass
         finally:
             sender.cancel()
             receiver.cancel()
-            await asyncio.gather(sender, receiver, return_exceptions=True)
             bus.unsubscribe(queue)
+            with suppress(asyncio.CancelledError):
+                await asyncio.gather(sender, receiver, return_exceptions=True)
 
     return app
 
