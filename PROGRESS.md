@@ -72,3 +72,15 @@
   Visuelle Editorprüfung und Live-Codex-Ausführung folgen separat.
 - Commit-ID: `git log --format='%h %s' --grep='add reproducible integration checks and CI'`.
 - Nächste Schritte: Codex-Adapter, Aufgaben- und Kommunikations-API, echte Ausführung.
+
+## M3-Korrektur — Ausführungsrechte im Git-Index
+- M3-Commit: 0805673, Push erfolgreich; erster CI-Lauf fehlgeschlagen (Exit 126).
+- Ursache: Mount speichert chmod nicht als Git-Dateimodus; Skripte waren im Index 100644.
+- Behoben: git update-index --chmod=+x für check.sh, demo.sh und entrypoint.sh.
+- Tests: komplette scripts/check.sh-Kette erneut grün (19 pytest, Ruff, Godot,
+  eigenständiger Live-WebSocket-Test). CI wird mit diesem Push neu gestartet.
+- Geänderte Dateien: drei Skripte (nur Dateimodus), PROGRESS.md.
+- Commit-ID: `git log --format='%h %s' --grep='preserve executable script permissions'`.
+- Parallel gestarteter echter Codex-Probelauf: CLI authentifiziert, Turn gestartet,
+  aber alle Shelltools mit bwrap-Namespace-Fehler abgewiesen; keine Dateien erzeugt.
+  Keine Sandbox-Umgehung vorgenommen. M4 implementiert sichtbaren Fehlerzustand.
