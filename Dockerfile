@@ -33,7 +33,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # --------------------------------------------------
 # 2. Codex CLI
 # --------------------------------------------------
-RUN npm install -g @openai/codex
+RUN npm install -g @openai/codex@0.162.1
 
 # --------------------------------------------------
 # 3. Godot 4.4.1

@@ -46,9 +46,21 @@ The named `runtime` volume keeps agent workspaces writable inside the container.
 
 ## Live Codex tasks
 
-The live adapter is delivered in M4. Install/login to the actual Codex CLI first;
-no dummy activity is presented as real execution. See [Codex adapter](docs/codex-adapter.md)
-for event mapping and workspace boundaries once available.
+Install Codex CLI 0.162.1 and log in, then start live mode:
+
+```bash
+codex login
+scripts/demo.sh codex
+```
+
+Click an agent, enter a task and choose **Run with Codex**. Each agent works in its
+own persistent Git directory under `.runtime/workspaces/`; the two can work in
+parallel. **Cancel running task** terminates its process group. **Message other
+agent** sends the text as an explicit public message when both agents are idle.
+Task prompts and raw model/tool responses stay private; results are workspace files.
+The sandbox must support Linux user namespaces. The existing dev container in this
+session blocks them; use a suitable host/container for a successful live run.
+See [Codex adapter](docs/codex-adapter.md) for exact event mapping and limits.
 
 ## Git and credentials
 

@@ -3,7 +3,7 @@ from enum import StrEnum
 from typing import Literal
 from uuid import UUID, uuid4
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import AwareDatetime, BaseModel, ConfigDict, Field
 
 
 class EventType(StrEnum):
@@ -29,7 +29,7 @@ class Event(BaseModel):
     event_id: UUID = Field(default_factory=uuid4)
     agent_id: Literal["ada", "turing"]
     type: EventType
-    timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    timestamp: AwareDatetime = Field(default_factory=lambda: datetime.now(UTC))
     sequence: int = Field(ge=1)
     correlation_id: UUID
     payload: Payload = Field(default_factory=Payload)

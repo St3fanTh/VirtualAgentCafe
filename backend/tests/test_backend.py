@@ -102,3 +102,8 @@ def test_live_demo_websocket():
                 if {"agent.coding", "agent.testing", "agent.message", "agent.finished"} <= types:
                     break
             assert {"agent.coding", "agent.testing", "agent.message", "agent.finished"} <= types
+
+
+def test_timestamp_requires_timezone():
+    with pytest.raises(ValidationError):
+        event(timestamp="2026-10-11T12:00:00")

@@ -84,3 +84,33 @@
 - Parallel gestarteter echter Codex-Probelauf: CLI authentifiziert, Turn gestartet,
   aber alle Shelltools mit bwrap-Namespace-Fehler abgewiesen; keine Dateien erzeugt.
   Keine Sandbox-Umgehung vorgenommen. M4 implementiert sichtbaren Fehlerzustand.
+
+## M4 — Codex-Anbindung implementiert, Live-Abnahme umgebungsbedingt offen
+- Vorherige Korrektur: d061319, Push erfolgreich. GitHub Actions für d061319
+  vollständig erfolgreich, inklusive Docker-Build und Container-Healthcheck:
+  https://github.com/St3fanTh/VirtualAgentCafe/actions/runs/38177618970
+- Implementiert: Adapter-Interface, Codex JSONL-Observer und echter CLI-Subprozess,
+  Prompts über stdin, isolierte persistente Agenten-Git-Arbeitsbereiche,
+  Aufgaben-/Status-/Abbruch-API, begrenzte Historie, Timeouts und Prozessgruppen-Cleanup,
+  explizite Peer-Nachrichten mit bestätigter Zustellung und gemeinsamer Korrelation.
+- Godot kann Aufgaben senden, Abbrechen und Nachrichten zustellen; zeigt Ergebnisordner
+  und sichere Statusdetails. CLI im Image auf geprüfte 0.162.1 festgelegt.
+- Rohtexte, Reasoning, Befehle, Prompts und Tool-Ausgaben werden nicht veröffentlicht.
+  Thinking bedeutet belegten aktiven Modellturn; CLI liefert keinen API-Aufruf-Trace.
+  Coding nur bei file_change; Testing nur bei geparsten Testbefehlen.
+- Geändert: adapters/*, jobs.py, main.py, models.py, Backendtests/Fixture,
+  game/scripts/cafe.gd, game/tests/test_tasks.gd, scripts/codex_smoke.py,
+  Dockerfile, README.md, docs/codex-adapter.md.
+- Reguläre Tests: scripts/check.sh grün; 50 pytest-Tests, Ruff, Godot-Import,
+  Zustandsmapping, Headless-Start, Demo→Godot. Zusätzlich Godot-UI→HTTP→CLI-Fixture→
+  Events→Godot für Aufgaben, Bearbeiten/Testen/Fertig, Peer-Nachricht und Abbruch grün.
+- ECHTER Live-Test tatsächlich ausgeführt: authentifizierter Codex-Turn und öffentliche
+  Events beobachtet; Shell und File-Change durch fehlende Linux-Namespaces blockiert.
+  Ergebnis korrekt agent.error, KEIN agent.finished. Keine Sandbox-Umgehung.
+  `scripts/codex_smoke.py` deshalb derzeit fehlgeschlagen; Live-Abnahme NICHT bestanden.
+- Nutzer nach sandboxfähigem Container gefragt. Alle übrigen Prüfungen reproduzierbar;
+  CI nutzt explizit eine CLI-Subprozess-Fixture, keine vermeintlichen Live-Läufe.
+- Commit-ID: `git log --format='%h %s' --grep='integrate Codex tasks and observed runtime events'`.
+- Offene Probleme: sandboxfähige Laufzeit für echte Dateiänderungen/Tests, grafische
+  Sichtprüfung. Nächster unabhängiger Schritt: Animationswechsel sichtbar glätten,
+  Queue-/Reconnect-Last prüfen; Live-Test nach Umgebungsänderung wiederholen.
