@@ -280,3 +280,105 @@ def test_actual_peer_message_delivery(tmp_path):
                 ).status_code
                 == 422
             )
+
+
+def test_helper_failure_does_not_override_later_edit_and_successful_tests():
+    events = []
+    observer = CodexObserver(lambda kind, detail: events.append((kind, detail)))
+    transcript = [
+        {"type": "turn.started"},
+        {
+            "type": "item.completed",
+            "item": {"type": "command_execution", "command": "rg --files", "exit_code": 1},
+        },
+        {"type": "item.completed", "item": {"type": "file_change", "status": "completed"}},
+        {
+            "type": "item.started",
+            "item": {"type": "command_execution", "command": "python3 -m unittest -v"},
+        },
+        {
+            "type": "item.completed",
+            "item": {
+                "type": "command_execution",
+                "command": "python3 -m unittest -v",
+                "exit_code": 0,
+            },
+        },
+        {"type": "turn.completed"},
+    ]
+    for entry in transcript:
+        observer.consume(entry)
+    assert observer.successful
+    assert observer.command_warnings == 1
+    assert EventType.ERROR in [kind for kind, _ in events]
+    assert EventType.CODING in [kind for kind, _ in events]
+    assert EventType.TESTING in [kind for kind, _ in events]
+
+
+@pytest.mark.parametrize("failure", ["test", "patch", "runtime", "sandbox"])
+def test_successful_other_commands_cannot_clear_real_failures(failure):
+    observer = CodexObserver(lambda *_: None)
+    if failure == "test":
+        observer.consume(
+            {
+                "type": "item.completed",
+                "item": {"type": "command_execution", "command": "pytest", "exit_code": 1},
+            }
+        )
+    elif failure == "patch":
+        observer.consume(
+            {"type": "item.completed", "item": {"type": "file_change", "status": "failed"}}
+        )
+    elif failure == "runtime":
+        observer.consume({"type": "turn.failed"})
+    else:
+        observer.consume(
+            {
+                "type": "item.completed",
+                "item": {
+                    "type": "command_execution",
+                    "command": "ls",
+                    "exit_code": 1,
+                    "aggregated_output": "bwrap: Operation not permitted",
+                },
+            }
+        )
+    observer.consume(
+        {
+            "type": "item.completed",
+            "item": {"type": "command_execution", "command": "echo done", "exit_code": 0},
+        }
+    )
+    observer.consume({"type": "turn.completed"})
+    assert not observer.successful
+
+
+def test_new_turn_requires_its_own_completion():
+    observer = CodexObserver(lambda *_: None)
+    observer.consume({"type": "turn.completed"})
+    observer.consume({"type": "turn.started"})
+    assert not observer.successful
+
+
+async def test_adapter_completes_recovered_user_transcript_with_warning(tmp_path):
+    transcript = [
+        {"type": "turn.started"},
+        {
+            "type": "item.completed",
+            "item": {"type": "command_execution", "command": "rg --files", "exit_code": 1},
+        },
+        {"type": "item.completed", "item": {"type": "file_change", "status": "completed"}},
+        {
+            "type": "item.completed",
+            "item": {
+                "type": "command_execution",
+                "command": "python3 -m unittest -v",
+                "exit_code": 0,
+            },
+        },
+        {"type": "turn.completed"},
+    ]
+    cli = fake_cli(tmp_path, f"for row in {transcript!r}: print(json.dumps(row), flush=True)\n")
+    result = await CodexAdapter(cli).run("task", tmp_path, lambda *_: None)
+    assert result.success
+    assert "warnings" in result.reason

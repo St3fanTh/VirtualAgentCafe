@@ -29,7 +29,7 @@ saved CLI authentication is still used. No bypass flag is supplied.
 | Other command starts / successful command ends | agent.waiting |
 | agent_message or collab_tool_call completed | agent.message (content private) |
 | Runtime/tool/command failure | agent.error |
-| Process exits 0 + turn.completed + no fatal/unresolved command/test/edit failure | agent.finished |
+| Process exits 0 + turn.completed + no fatal/unresolved test/edit failure | agent.finished |
 
 `Thinking` denotes a public **active model turn**, not inspection of thoughts or a
 verified per-request API trace; the CLI does not expose an exact model-call lifecycle.
@@ -38,9 +38,11 @@ ignored; malformed/oversized JSONL fails the task. Tests are recognized from par
 command tokens, including shell wrappers, rather than from arbitrary output text.
 Editing via general shell commands is not labeled coding: only file_change evidence
 produces that state. Nonzero tests require a subsequent observed successful test
-run before success. Other failed commands conservatively require an observed successful
-rerun of the same command; raw commands are not retained (only bounded-stream
-fingerprints). A known namespace/sandbox failure remains fatal even when Codex
+run before success. Non-test command failures remain visible as error events and are
+counted as warnings, but do not alone invalidate a completed model turn: discovery
+commands such as `rg --files` can legitimately return 1 in a new empty workspace.
+The success summary explicitly mentions command warnings. Successful unrelated
+commands cannot clear failing tests, failed edits or fatal runtime errors. A known namespace/sandbox failure remains fatal even when Codex
 finishes its turn with a polite explanation.
 
 ## Tasks, files and communication

@@ -145,3 +145,31 @@
 - Commit-ID: `git log --format='%h %s' --grep='polish event presentation and container sandbox setup'`.
 - Nächste Schritte: CI dieses Commits bestätigen; nach Nutzer-Neubau echte Code-/Test-
   Abnahme wiederholen und Ergebnis in PROGRESS.md festhalten.
+
+## M4-Live-Korrektur — Hilfsbefehle als Warnungen behandeln
+- Vorheriger Commit: fe19dd3; dessen GitHub Actions vollständig erfolgreich.
+- Nutzer hat Privileged-Container neu gebaut. Sein echter Lauf zeigt nun Datei-
+  änderungen und gestartete/abgeschlossene Tests; ursprüngliche Namespaceblockade
+  dort behoben. Vollständige Live-Abnahme noch nicht bestätigt.
+- Fehler im Adapter: Jeder gescheiterte Hilfsbefehl wurde dauerhaft als Gesamtfehler
+  gespeichert, auch nach erfolgreicher Bearbeitung und erfolgreichen Tests.
+  Ein Suchbefehl kann in einem leeren Workspace regulär mit Exit 1 enden.
+- Behoben: Hilfsfehler weiterhin agent.error und Warnungszähler; abgeschlossenem
+  Turn wird bei ausschließlich solchen Fehlern Finished mit Warnungssummary erlaubt.
+  Failing Tests, failed File-Change, Runtime-Fehler und Sandboxfehler bleiben blockierend.
+  Sandbox-Erkennung um bwrap-Fehler erweitert, neue Turns benötigen eigenen Abschluss.
+  Fehlerdetail unterscheidet nun Sandbox, Tests, File-Change und Runtime.
+- Geändert: backend/virtual_agent_cafe/adapters/codex.py,
+  backend/tests/test_codex.py, docs/codex-adapter.md, PROGRESS.md.
+- Tests: scripts/check.sh vollständig grün; 59 pytest-Tests; 7 neue Regressionen
+  decken Nutzerfolge mit Hilfsfehler→Edit→grünen Tests, Warnungssummary und verbleibende
+  echte Fehler ab. Godot Import/Zustände/Headless/Livetest grün; Aufgaben-E2E und
+  Backend-Neustart-Godot-Reconnect ebenfalls grün.
+- SSH und Remote vor Push erneut erfolgreich geprüft. Keine Credentials geändert.
+- Eigene Agentenumgebung unverändert nicht privileged; daher tatsächlicher Code-
+  Smoke nach Korrektur hier nicht erfolgreich ausführbar. Nutzer kann ohne erneuten
+  Image-Build mit aktueller Quelle testen:
+  `PYTHONPATH=/workspace/backend python3 scripts/codex_smoke.py`.
+- Commit-ID: `git log --format='%h %s' --grep='allow completed Codex turns after helper command warnings'`.
+- Nächster Schritt: Nutzer lädt Commit und wiederholt echten Smoke im funktionierenden
+  Privileged-Container; privates Prompt/Tool-Logging weiterhin ausgeschaltet.

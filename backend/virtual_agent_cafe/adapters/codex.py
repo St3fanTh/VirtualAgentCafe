@@ -1,5 +1,4 @@
 import asyncio
-import hashlib
 import json
 import os
 import shlex
@@ -67,7 +66,8 @@ class CodexObserver:
         self.fatal = False
         self.failed_tests = False
         self.failed_patch = False
-        self.failed_commands: set[str] = set()
+        self.command_warnings = 0
+        self.sandbox_failed = False
 
     def consume(self, data: dict) -> None:
         kind = data.get("type")
@@ -76,6 +76,7 @@ class CodexObserver:
             raise ValueError("Invalid Codex item")
         item_type = item.get("type")
         if kind == "turn.started":
+            self.turn_complete = False
             self.emit(EventType.THINKING, "Codex model turn active")
         elif kind == "turn.completed":
             self.turn_complete = True
@@ -99,17 +100,17 @@ class CodexObserver:
                     )
                 elif kind == "item.completed":
                     failed = item.get("exit_code") not in (None, 0)
-                    fingerprint = hashlib.sha256(str(item.get("command", "")).encode()).hexdigest()
                     if failed:
-                        self.failed_commands.add(fingerprint)
-                    else:
-                        self.failed_commands.discard(fingerprint)
+                        self.command_warnings += 1
                     if testing:
                         self.failed_tests = failed
                     # Known environment failure must never become a success animation.
                     output = str(item.get("aggregated_output", ""))
-                    if "No permissions to create a new namespace" in output:
+                    if "No permissions to create a new namespace" in output or (
+                        failed and "bwrap:" in output
+                    ):
                         self.fatal = True
+                        self.sandbox_failed = True
                         self.emit(EventType.ERROR, "Codex sandbox unavailable: namespace denied")
                     elif failed:
                         self.emit(EventType.ERROR, "Codex command failed")
@@ -125,9 +126,7 @@ class CodexObserver:
 
     @property
     def successful(self) -> bool:
-        return self.turn_complete and not (
-            self.fatal or self.failed_tests or self.failed_patch or self.failed_commands
-        )
+        return self.turn_complete and not (self.fatal or self.failed_tests or self.failed_patch)
 
 
 class CodexAdapter:
@@ -186,10 +185,19 @@ class CodexAdapter:
                     observer.consume(data)
                 code = await process.wait()
                 if code == 0 and observer.successful:
-                    return RunResult(
-                        True, "Codex turn completed; see workspace and .cafe/last-response.md"
-                    )
-                return RunResult(False, "Codex failed or did not complete; check login and sandbox")
+                    detail = "Codex turn completed; see workspace and .cafe/last-response.md"
+                    if observer.command_warnings:
+                        detail = (
+                            "Codex turn completed with command warnings; see .cafe/last-response.md"
+                        )
+                    return RunResult(True, detail)
+                if observer.sandbox_failed:
+                    return RunResult(False, "Codex sandbox unavailable; check container namespaces")
+                if observer.failed_tests:
+                    return RunResult(False, "Codex task ended with failing tests")
+                if observer.failed_patch:
+                    return RunResult(False, "Codex task ended with a failed file edit")
+                return RunResult(False, "Codex runtime failed or turn did not complete")
         except TimeoutError:
             return RunResult(False, "Codex task timed out")
         except (OSError, ValueError, json.JSONDecodeError):
