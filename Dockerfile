@@ -55,25 +55,20 @@ RUN python3 -m venv /opt/venv
 
 ENV PATH="/opt/venv/bin:${PATH}"
 
-RUN pip install --no-cache-dir \
-    fastapi \
-    "uvicorn[standard]" \
-    websockets \
-    pytest \
-    pytest-asyncio \
-    httpx \
-    pydantic \
-    ruff
+COPY backend/requirements.lock /tmp/requirements.lock
+RUN pip install --no-cache-dir -r /tmp/requirements.lock
+COPY backend /opt/vac/backend
+RUN pip install --no-cache-dir --no-deps /opt/vac/backend
 
 # --------------------------------------------------
 # 5. Benutzer und Verzeichnisse
 # --------------------------------------------------
 RUN mkdir -p \
-      /workspace \
+      /workspace/.runtime \
       /home/node/.ssh \
       /home/node/.codex \
     && chown -R node:node \
-      /workspace \
+      /workspace/.runtime \
       /home/node \
     && chmod 700 /home/node/.ssh
 

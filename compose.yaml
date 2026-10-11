@@ -1,32 +1,37 @@
 services:
   codex:
-    build:
-      context: .
-      dockerfile: Dockerfile
-
+    build: .
     image: virtual-agent-cafe-dev:latest
-
     working_dir: /workspace
-
     stdin_open: true
     tty: true
-
     volumes:
-      # Projektverzeichnis
-      - /mnt/f/Workspace/VirtualAgentCafe:/workspace
-
-      # Persistente Codex-Sessions und Login
+      - .:/workspace
       - codex_home:/home/node/.codex
-
     environment:
-      HOME: /home/node
-      CODEX_HOME: /home/node/.codex
       PYTHONUNBUFFERED: "1"
-
+    command: ["codex"]
+    profiles: [dev]
+  backend:
+    build: .
+    image: virtual-agent-cafe-dev:latest
+    working_dir: /workspace
+    volumes:
+      - .:/workspace
+      - codex_home:/home/node/.codex
+      - runtime:/workspace/.runtime
+    environment:
+      VAC_BIND_HOST: "0.0.0.0"
+      VAC_MODE: "${VAC_MODE:-demo}"
+      VAC_DEMO_INTERVAL: "${VAC_DEMO_INTERVAL:-1}"
     ports:
       - "127.0.0.1:8000:8000"
-
-    command: ["codex"]
-
+    command: ["bash", "scripts/demo.sh"]
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=2)"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
 volumes:
   codex_home:
+  runtime:

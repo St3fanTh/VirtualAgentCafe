@@ -1,0 +1,9 @@
+# Optional: docker compose -f compose.yaml -f compose.ssh.yaml --profile dev run --rm codex
+# Requires an already running SSH agent on the host. Never mount private keys.
+services:
+  codex:
+    environment:
+      SSH_AUTH_SOCK: /run/host-ssh-agent
+    volumes:
+      - ${SSH_AUTH_SOCK:?Start an SSH agent first}:/run/host-ssh-agent
+      - ${HOME}/.ssh/known_hosts:/home/node/.ssh/known_hosts:ro

@@ -54,3 +54,21 @@
   Docker nicht vorhanden. Codex-Aufgaben-Endpunkt folgt nach Integrations-/CI-Meilenstein.
 - Commit-ID: `git log --format='%h %s' --grep='implement Godot cafe and event animations'`.
 - Nächste Schritte: reproduzierbare Check-/Demo-Skripte, CI, Setup-Dokumentation.
+
+## M3 — Reproduzierbare Integration und CI
+- Vorheriger Meilenstein: 33b37f4, Push erfolgreich.
+- Implementiert: scripts/check.sh, scripts/demo.sh, eigenständiger Prozess-Livetest
+  mit temporärem Port, Python-Abhängigkeitslock mit Hashes, GitHub Actions,
+  Container-Healthcheck, sicherer Compose-Start und optionales SSH-Agent-Forwarding.
+- Geändert: scripts/*, .github/workflows/ci.yml, backend/requirements.lock,
+  Dockerfile, compose.yaml, compose.ssh.yaml, ruff.toml, README.md, docs/codex-adapter.md.
+- Docker installiert Backend beim Image-Build, ohne Schreibzugriff auf Hostquellen
+  beim Start zu benötigen. Runtime-Volume hält isolierte Aufgabenbereiche schreibbar.
+- Tests: scripts/check.sh komplett grün: Ruff, 19 pytest-Tests, Godot-Import,
+  Zustandstests, Headless-Start, Uvicorn→WebSocket→Godot inkl. Figuren-Auswahl.
+- Compose-Konfiguration mit eigenständiger Docker Compose CLI validiert.
+- Offene Punkte: kein Docker-Daemon vorhanden, Build/Container-Smoke hier nicht
+  ausführbar; CI enthält diese Prüfungen, Status noch nicht verifiziert.
+  Visuelle Editorprüfung und Live-Codex-Ausführung folgen separat.
+- Commit-ID: `git log --format='%h %s' --grep='add reproducible integration checks and CI'`.
+- Nächste Schritte: Codex-Adapter, Aufgaben- und Kommunikations-API, echte Ausführung.
