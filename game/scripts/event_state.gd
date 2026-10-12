@@ -3,7 +3,7 @@ extends RefCounted
 const STATES := {
 	"agent.started": "Starting", "agent.thinking": "Thinking",
 	"agent.coding": "Coding", "agent.testing": "Testing",
-	"agent.message": "Communication", "agent.waiting": "Waiting",
+	"agent.message": "Communication", "agent.waiting": "Idle",
 	"agent.finished": "Finished", "agent.error": "Error"
 }
 var sequence: int = 0
@@ -52,4 +52,9 @@ func valid_agent(agent: Dictionary) -> bool:
 	return agent.get("agent_id") in ["ada", "turing"] and STATES.has(agent.get("status"))
 
 func state_label(agent_id: String) -> String:
-	return STATES.get(agents.get(agent_id, {}).get("status", "agent.waiting"), "Waiting")
+	var agent: Dictionary = agents.get(agent_id, {})
+	if agent.get("status") == "agent.waiting" and str(agent.get("detail", "")).begins_with("CLI:"):
+		return "CLI command"
+	if agent.get("status") == "agent.message" and agent.get("recipient") == null:
+		return "Response"
+	return STATES.get(agent.get("status", "agent.waiting"), "Idle")

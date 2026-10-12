@@ -3,11 +3,14 @@ extends Node2D
 const EventState = preload("res://scripts/event_state.gd")
 const Network = preload("res://scripts/network.gd")
 const Character = preload("res://scripts/character.gd")
+const ActivityCard = preload("res://scripts/activity_card.gd")
 const World = preload("res://scripts/world.gd")
+var ui_font := FontFile.new()
 var world = World.new()
 var state = EventState.new()
 var network = Network.new()
 var characters: Dictionary = {}
+var activity_cards: Dictionary = {}
 var connection_label: Label
 var status_label: Label
 var result_label: Label
@@ -29,11 +32,16 @@ func label(value: String, size := 16) -> Label:
 	return node
 
 func _ready() -> void:
+	# Distance-field glyphs keep both native 4K and smaller windows crisp.
+	ui_font.multichannel_signed_distance_field = true
+	ui_font.msdf_pixel_range = 16
+	ui_font.msdf_size = 96
+	ui_font.data = ThemeDB.fallback_font.data
 	var configured := OS.get_environment("VAC_BACKEND_URL")
 	if configured != "":
 		backend_url = configured.trim_suffix("/")
-	world.position = Vector2(64, 196)
-	world.scale = Vector2(5.6, 5.6)
+	world.position = Vector2(88, 310)
+	world.scale = Vector2(8.8, 8.8)
 	add_child(world)
 	for id in ["ada", "turing"]:
 		var character = Character.new()
@@ -70,12 +78,16 @@ func ui_style(color: Color, border: Color) -> StyleBoxFlat:
 func build_ui() -> void:
 	var layer := CanvasLayer.new()
 	add_child(layer)
+	layer.transform = Transform2D.IDENTITY.scaled(Vector2(2, 2))
 	var ui := Control.new()
 	ui.name = "HUD"
 	ui.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	ui.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var theme := Theme.new()
 	theme.default_font_size = 26
+	theme.default_font = ui_font
+	for control_type in ["Label", "Button", "TextEdit"]:
+		theme.set_font("font", control_type, ui_font)
 	theme.set_color("font_color", "Label", Color("f1e6d1"))
 	theme.set_color("font_color", "Button", Color("eee4d1"))
 	theme.set_stylebox("normal", "Button", ui_style(Color("293b40"), Color("536b69")))
@@ -89,41 +101,52 @@ func build_ui() -> void:
 	ui.theme = theme
 	layer.add_child(ui)
 	var title := label("VIRTUAL AGENT CAFE", 46)
-	title.position = Vector2(64, 32)
+	title.position = Vector2(44, 20)
 	ui.add_child(title)
 	var subtitle := label("A quiet place for busy minds.", 24)
-	subtitle.position = Vector2(66, 92)
+	subtitle.position = Vector2(46, 75)
 	subtitle.modulate = Color("c3ab90")
 	ui.add_child(subtitle)
 	connection_label = label("OFFLINE · reconnecting…", 25)
-	connection_label.position = Vector2(1360, 50)
+	connection_label.position = Vector2(1360, 30)
 	ui.add_child(connection_label)
 	var hint := label("Click Ada or Turing to assign a task · animations follow observed events", 22)
-	hint.position = Vector2(64, 142)
+	hint.position = Vector2(44, 113)
 	hint.modulate = Color("9eacb0")
 	ui.add_child(hint)
 	var effects := Button.new()
 	effects.text = "Atmosphere"
 	effects.toggle_mode = true
 	effects.button_pressed = true
-	effects.position = Vector2(1620, 115)
+	effects.position = Vector2(1620, 84)
 	effects.size = Vector2(235, 60)
 	effects.toggled.connect(world.set_effects)
 	ui.add_child(effects)
+	for id in ["ada", "turing"]:
+		var card = ActivityCard.new()
+		card.agent_id = id
+		card.position = Vector2(1490, 155 if id == "ada" else 514)
+		card.size = Vector2(386, 340)
+		ui.add_child(card)
+		activity_cards[id] = card
 	var footer := PanelContainer.new()
-	footer.position = Vector2(64, 1130)
-	footer.size = Vector2(1792, 115)
+	footer.position = Vector2(44, 887)
+	footer.size = Vector2(1832, 155)
 	footer.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	ui.add_child(footer)
-	status_label = label("Ada · Waiting     |     Turing · Waiting", 28)
-	status_label.position = Vector2(92, 1142)
+	status_label = label("Ada / Backend · Idle     |     Turing / Frontend · Idle", 28)
+	status_label.position = Vector2(70, 902)
 	ui.add_child(status_label)
+	var legend := label("CODING  </>     CLI TESTS  >_     PEER EXCHANGE  ↔     IDLE  ☕", 20)
+	legend.position = Vector2(70, 953)
+	legend.modulate = Color("bca88e")
+	ui.add_child(legend)
 	result_label = label("Results appear in each agent's workspace", 20)
-	result_label.position = Vector2(92, 1193)
+	result_label.position = Vector2(70, 1000)
 	result_label.modulate = Color("9eacb0")
 	ui.add_child(result_label)
 	task_panel = PanelContainer.new()
-	task_panel.position = Vector2(430, 330)
+	task_panel.position = Vector2(430, 230)
 	task_panel.size = Vector2(1060, 600)
 	task_panel.visible = false
 	ui.add_child(task_panel)
@@ -149,7 +172,7 @@ func build_ui() -> void:
 	task_button.pressed.connect(submit_task)
 	row.add_child(task_button)
 	var message_button := Button.new()
-	message_button.text = "Message other agent"
+	message_button.text = "Ask other agent"
 	message_button.pressed.connect(send_peer_message)
 	row.add_child(message_button)
 	var cancel_button := Button.new()
@@ -166,12 +189,16 @@ func on_frame(frame: Dictionary) -> void:
 		if frame.get("kind") == "snapshot":
 			for id in state.agents:
 				characters[id].reset_state(state.agents[id])
-				world.set_agent_status(id, state.agents[id].status)
+				world.set_agent_status(id, state.agents[id].status, state.agents[id].get("detail", ""))
+				activity_cards[id].history.clear()
+				activity_cards[id].history_label.text = "Snapshot synchronized"
+				activity_cards[id].update_state(state.agents[id])
 		else:
 			var id: String = frame.event.agent_id
 			characters[id].enqueue_state(state.agents[id])
-			world.set_agent_status(id, state.agents[id].status)
-		status_label.text = "Ada · %s     |     Turing · %s" % [state.state_label("ada"), state.state_label("turing")]
+			world.set_agent_status(id, state.agents[id].status, state.agents[id].get("detail", ""))
+			activity_cards[id].update_state(state.agents[id], frame.event)
+		status_label.text = "Ada / Backend · %s     |     Turing / Frontend · %s" % [state.state_label("ada"), state.state_label("turing")]
 	elif state.needs_snapshot:
 		network.force_reconnect()
 
@@ -193,7 +220,7 @@ func select_agent(id: String) -> void:
 	selected_id = id
 	for key in characters:
 		characters[key].is_selected = key == id
-	task_info.text = "Task for " + id.capitalize() + (" · Codex" if mode == "codex" else " · start backend in Codex mode to run tasks")
+	task_info.text = "Task for " + id.capitalize() + (" / Backend" if id == "ada" else " / Frontend") + (" · Codex" if mode == "codex" else " · start backend in Codex mode to run tasks")
 	task_button.disabled = mode != "codex" or not network.online
 	if mode == "codex":
 		task_info.text += "\n" + str(state.agents.get(id, {}).get("detail", "Ready"))
@@ -205,7 +232,7 @@ func send_peer_message() -> void:
 	if message.is_empty() or message.length() > 256:
 		task_info.text = "Enter a public message between 1 and 256 characters."
 		return
-	send_action("message", "/messages", {"recipient": "turing" if selected_id == "ada" else "ada", "text": message})
+	send_action("message", "/messages", {"recipient": "turing" if selected_id == "ada" else "ada", "text": message, "request_reply": true})
 
 func cancel_running_task() -> void:
 	send_action("cancel", "/cancel", {})
@@ -243,3 +270,9 @@ func on_task_result(_result: int, code: int, _headers: PackedStringArray, body: 
 		var response = JSON.parse_string(body.get_string_from_utf8())
 		var detail := str(response.get("detail", "Request failed")) if response is Dictionary else "Backend unreachable"
 		task_info.text = detail.left(100)
+
+
+func _unhandled_input(event: InputEvent) -> void:
+	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_F11:
+		var window := get_window()
+		window.mode = Window.MODE_WINDOWED if window.mode == Window.MODE_FULLSCREEN else Window.MODE_FULLSCREEN

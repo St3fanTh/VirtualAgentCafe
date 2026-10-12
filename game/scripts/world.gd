@@ -3,10 +3,12 @@ extends Node2D
 const WoodShader = preload("res://shaders/wood.gdshader")
 const GlassShader = preload("res://shaders/glass.gdshader")
 const MonitorShader = preload("res://shaders/monitor.gdshader")
+const SteamShader = preload("res://shaders/steam.gdshader")
 const AtmosphereShader = preload("res://shaders/atmosphere.gdshader")
 var effects_enabled := true
 var effect_materials: Array[ShaderMaterial] = []
 var monitors: Dictionary = {}
+var active_statuses: Dictionary = {}
 
 func shader_panel(area: Rect2, shader: Shader, depth: int) -> ShaderMaterial:
 	var panel := ColorRect.new()
@@ -26,7 +28,7 @@ func set_effects(enabled: bool) -> void:
 	for shader_material in effect_materials:
 		shader_material.set_shader_parameter("strength", 1.0 if enabled else 0.0)
 
-func set_agent_status(agent_id: String, status: String) -> void:
+func set_agent_status(agent_id: String, status: String, detail := "") -> void:
 	if not monitors.has(agent_id):
 		return
 	var color := Color("628b9a")
@@ -37,6 +39,9 @@ func set_agent_status(agent_id: String, status: String) -> void:
 		"agent.thinking": color = Color("ada4f0")
 		"agent.message": color = Color("8cd4e1")
 	monitors[agent_id].set_shader_parameter("activity_color", color)
+	active_statuses[agent_id] = status == "agent.testing" or (status == "agent.waiting" and detail.begins_with("CLI:"))
+	var lab_color := Color("d9b56c") if true in active_statuses.values() else Color("547b84")
+	monitors.lab.set_shader_parameter("activity_color", lab_color)
 
 func _ready() -> void:
 	# Native tilemap generated from a tiny original pixel atlas; no external assets.
@@ -72,7 +77,8 @@ func _ready() -> void:
 		shader_panel(Rect2(x + 2, 6, 44, 14), GlassShader, 1)
 	monitors.ada = shader_panel(Rect2(49, 25, 18, 10), MonitorShader, 1)
 	monitors.turing = shader_panel(Rect2(101, 25, 18, 10), MonitorShader, 1)
-	shader_panel(Rect2(242, 39, 55, 11), MonitorShader, 1)
+	monitors.lab = shader_panel(Rect2(242, 39, 55, 11), MonitorShader, 1)
+	shader_panel(Rect2(286, 77, 16, 29), SteamShader, 3)
 	shader_panel(Rect2(0, 0, 320, 160), AtmosphereShader, 8)
 
 func box(x: float, y: float, w: float, h: float, color: String) -> void:
@@ -80,8 +86,8 @@ func box(x: float, y: float, w: float, h: float, color: String) -> void:
 
 func text(at: Vector2, value: String, color := Color("eadbc7")) -> void:
 	# Render glyphs at viewport resolution instead of scaling a tiny bitmap font.
-	draw_set_transform(at, 0.0, Vector2.ONE / 5.6)
-	draw_string(ThemeDB.fallback_font, Vector2.ZERO, value, HORIZONTAL_ALIGNMENT_LEFT, -1, 32, color)
+	draw_set_transform(at, 0.0, Vector2.ONE / maxf(1.0, get_global_transform().get_scale().x))
+	draw_string(ThemeDB.fallback_font, Vector2.ZERO, value, HORIZONTAL_ALIGNMENT_LEFT, -1, 44, color)
 	draw_set_transform(Vector2.ZERO)
 
 func _draw() -> void:
@@ -109,8 +115,14 @@ func _draw() -> void:
 		box(x + 3, 17, 42, 3, "30374d")
 	for x in [12, 304]:
 		box(x - 4, 54, 8, 10, "b97a65")
-		box(x - 7, 42, 14, 12, "427b67")
-		box(x - 3, 35, 6, 12, "6cad7f")
+		box(x - 3, 37, 1, 18, "427b67")
+		for leaf in range(5):
+			var left := leaf % 2 == 0
+			var center := Vector2(x - 2, 38 + leaf * 3)
+			var tip := center + Vector2(-8 if left else 9, -5)
+			draw_colored_polygon(PackedVector2Array([center, center + Vector2(-5 if left else 6, 0), tip, center + Vector2(-2 if left else 3, -4)]), Color("6aab7f") if left else Color("43856e"))
+			draw_line(center, tip, Color("9bb991"), 0.4)
+		box(x - 4, 54, 8, 1, "dbad88")
 	# Soft patterned rugs under the seating and discussion table.
 	box(40, 118, 85, 35, "4c6365")
 	draw_rect(Rect2(42, 120, 81, 31), Color("78938b"), false, 0.6)
@@ -137,8 +149,8 @@ func _draw() -> void:
 		box(x + 27, 39, 4, 5, "edd3a1")
 		box(x + 3, 53, 3, 9, "755768")
 		box(x + 27, 53, 3, 9, "755768")
-	text(Vector2(45, 87), "CODE / ADA")
-	text(Vector2(97, 87), "CODE / TURING")
+	text(Vector2(45, 87), "BACKEND / ADA")
+	text(Vector2(97, 87), "FRONTEND / TURING")
 	# Test station.
 	box(239, 36, 61, 18, "739494")
 	box(242, 39, 55, 11, "273449")
@@ -146,24 +158,29 @@ func _draw() -> void:
 		box(x, 42, 4, 4, "82c79e")
 	box(244, 55, 3, 8, "394454")
 	box(291, 55, 3, 8, "394454")
-	text(Vector2(247, 87), "TEST LAB")
+	text(Vector2(247, 87), "CLI TEST LAB")
 	# Conversation nook, lounge and café counter.
 	box(179, 119, 30, 13, "b98773")
 	box(182, 116, 24, 3, "d6a381")
 	box(189, 117, 4, 3, "f1d3a0")
 	box(198, 117, 4, 3, "f1d3a0")
-	text(Vector2(168, 147), "CONVERSATION")
+	text(Vector2(168, 147), "PEER EXCHANGE")
 	box(47, 138, 72, 8, "8b6583")
 	box(47, 145, 72, 7, "65465f")
 	for x in [51, 72, 93]:
 		box(x, 139, 19, 5, "a17c93")
 		box(x + 1, 139, 17, 0.5, "bb97a6")
-	text(Vector2(57, 158), "COFFEE / WAIT")
+	text(Vector2(57, 158), "COFFEE / IDLE")
 	box(260, 111, 48, 35, "714e52")
 	box(257, 108, 54, 8, "d09a78")
 	box(258, 108, 52, 1, "f0c297")
 	for x in range(263, 306, 9):
 		box(x, 118, 1, 27, "926759")
+	# Decorative shelving and brass fittings on the coffee bar.
+	box(272, 83, 24, 2, "bc8b71")
+	for x in [274, 282, 290]:
+		box(x, 78, 4, 5, "ead2a7")
+		box(x + 1, 78, 2, 0.5, "fff0d1")
 	box(263, 130, 9, 1, "c19b80")
 	box(280, 130, 9, 1, "c19b80")
 	text(Vector2(178, 91), "MEET. MAKE. REPEAT.", Color("c9a788"))

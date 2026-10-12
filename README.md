@@ -7,9 +7,10 @@ Live mode shows **CODEX (live)**. No private reasoning is exposed.
 
 ## Graphics
 
-The café now uses a **1920×1280** reference canvas, sharper labels and a larger
-styled task panel. Warm lighting, reflective windows, subtle wooden flooring and
-illuminated monitors use four Compatibility shaders. The **Atmosphere** button
+The café now renders at **3840×2160 (4K UHD, 16:9)** with a 1920×1080 initial
+window, sharp distance-field text and a styled task panel. Press **F11** for fullscreen.
+Warm lighting, reflective windows, wooden flooring, coffee steam and illuminated
+monitors use five Compatibility shaders. The **Atmosphere** button
 lets you toggle effects. [Rendering details and preview](docs/graphics.md).
 
 ## Local setup (WSL/Linux)
@@ -62,10 +63,14 @@ codex login
 scripts/demo.sh codex
 ```
 
-Click an agent, enter a task and choose **Run with Codex**. Each agent works in its
+**Ada is the backend agent; Turing is the frontend agent.** Their actual Codex
+prompts include these roles. Click an agent, enter a task and choose **Run with Codex**. Each agent works in its
 own persistent Git directory under `.runtime/workspaces/`; the two can work in
-parallel. **Cancel running task** terminates its process group. **Message other
-agent** sends the text as an explicit public message when both agents are idle.
+parallel. **Cancel running task** terminates its process group. **Ask other
+agent** sends an explicit public question and starts one real Codex reply (queued
+when busy). Replies cannot trigger an endless dialogue. Role cards show current
+Coding, CLI tests and results, peer exchange, Response and Idle, plus recent events.
+See [agent roles and communication](docs/agent-roles.md).
 Task prompts and raw model/tool responses stay private; results are workspace files.
 The final response is saved to `.cafe/last-response.md` within that workspace; the
 game shows its path. With Compose, inspect it via `docker compose exec backend`

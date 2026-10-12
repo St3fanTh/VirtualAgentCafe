@@ -20,7 +20,7 @@ func _init() -> void:
 		seq += 1
 		var frame := {"kind": "event", "version": 1, "event": {
 			"agent_id": "ada", "type": kind, "sequence": seq,
-			"payload": {"detail": "Observed activity", "source": "codex"}}}
+			"payload": {"detail": "Observed activity", "source": "codex", "recipient": "turing"}}}
 		check(state.apply(frame), "Accept event " + kind)
 		check(state.state_label("ada") == EventState.STATES[kind], "Map state " + kind)
 		check(not state.apply(frame), "Reject duplicate")

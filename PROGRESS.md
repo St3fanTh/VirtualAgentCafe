@@ -275,3 +275,36 @@
 - Validierung: vollständige scripts/check.sh-Kette grün, 69 pytest-Tests plus
   Godot-/Integrationsprüfungen. Zusätzlicher Regressionstest für Queue-Überlauf.
 - Commit-ID: `git log --format='%h %s' --grep='preserve queued peer requests under concurrent delivery'`.
+
+## 4K-/Aktions-Meilenstein — UHD und sichtbare echte Agentenaktionen
+- Nutzerauftrag vollständig umgesetzt: 3840×2160 (4K UHD, 16:9) als tatsächlicher
+  fester Render-Viewport; Startfenster 1920×1080, F11 für Vollbild.
+- Rollen an Figuren, Arbeitsplätzen, Dialog und Karten: Ada Backend, Turing Frontend.
+  Coding/CLI-Test/CLI-Befehl/Chat/Response/Idle/DONE/ERROR gut sichtbare Figuren-Badges,
+  Tastatur-/Terminal-/Sprechblasen-/Kaffeeanimationen, passende Stationswege.
+  Private Modellantwort ohne Empfänger wird als Response statt Peer-Chat gezeigt.
+- Zwei Aktivitätskarten mit aktuellem autoritativem Zustand und bis fünf tatsächlich
+  beobachteten Einträgen inkl. Zeit, Framework, RUNNING/PASS/FAIL; Reconnect beginnt
+  ehrlich beim Snapshot. Figuren dürfen begrenzt vergangene echte Events nachspielen.
+- Grafik weiter verbessert: eigenes Distance-Field-UI-Fontresource für scharfe 4K-
+  Schrift, Blattpolygone, Regal-/Messingdetails, zusätzlicher Kaffee-Dampf-Shader,
+  reale Testaktivität steuert Testmonitor. Atmosphere schaltet alle fünf Effekte.
+- Geändert: game/project.godot, cafe.gd, activity_card.gd, character.gd,
+  event_state.gd, world.gd, steam.gdshader, test_states.gd, CI-Renderauflösung,
+  README.md, docs/graphics.md und gerenderte 4K-Vorschau.
+- Vorhandene lokale Szenen-UID-Änderung in game/scenes/cafe.tscn weiter erhalten,
+  nicht gestagt. Private Laufzeit-/Kommunikationsdaten nicht ins Repository übernommen.
+- Prüfungen: scripts/check.sh komplett grün, 69 pytest-Tests einschließlich
+  Rollen, echte Helper-Zustellung mit Fixture-Antwort, fehlende öffentliche Antwort,
+  volle Antwortqueue, Shell-Code-Änderungen und Datenschutz; Godot Import/Zustände,
+  Headless, Aufgaben-/Kommunikations-/Abbruch-E2E, Backend-Reconnect und Demo-Livetest.
+- Tatsächlicher 4K-OpenGL-Render über Godot 4.4.1 Compatibility/Mesa llvmpipe PASS;
+  Vorschauen mit/ohne Shader und Dialog visuell geprüft. Bei globalem Fontwechsel
+  fehlerhafte Labelabstände erkannt, durch eigenes UI-Fontresource behoben.
+  Keine Shader-/Scriptfehler; virtuelle VSync-/D-Bus-Warnungen ohne Funktionseinfluss.
+- Live-Proben aus Rollen-Meilenstein: echter Codex-Code/unittest PASS und zwei echte
+  Backend-/Frontend-Codex-Läufe mit gegenseitiger Nachrichtenzustellung PASS.
+- Commit-ID: `git log --format='%h %s' --grep='render cafe in 4K with visible role-based agent actions'`.
+- Offene Prüfung: finalen GitHub-Actions-Lauf bestätigen; Windows-GPU-Leistung
+  nicht gemessen. Nutzer lädt Branch, startet Backend für neue Rollenlogik erneut
+  und öffnet Godot/F5 (F11 bei 4K-Monitor); keine neuen Python-Abhängigkeiten nötig.

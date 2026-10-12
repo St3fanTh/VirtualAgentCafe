@@ -1,17 +1,21 @@
 # Café rendering
 
-The game uses a 1920×1280 reference canvas (same 3:2 aspect as the original).
-Its initial desktop window is 1440×960; resizing/maximizing scales the layout.
-HUD text, station labels and speech bubbles render with larger native font glyphs.
+The game renders a fixed 3840×2160 viewport (4K UHD, 16:9), including when the
+1920×1080 initial window downscales it. F11 toggles fullscreen. Role activity cards
+occupy a separate sidebar; the footer describes actual state and results.
+HUD text, station labels and speech bubbles use distance-field glyphs for sharp
+native 4K and downscaled output.
 Characters retain their pixel-art silhouettes and event-driven animation states.
 
-Four CanvasItem shaders run with Godot 4.4.1's Compatibility renderer:
+Five CanvasItem shaders run with Godot 4.4.1's Compatibility renderer:
 
 - **wood.gdshader:** staggered planks, subtle wood grain and a soft light band.
 - **glass.gdshader:** dusk skyline, interior reflection and decorative rain highlights.
 - **monitor.gdshader:** scanlines and soft illumination; agent monitor colors come
   from the latest backend state (coding green, tests amber, errors red, thinking violet).
 - **atmosphere.gdshader:** warm pools of light, a window light beam and edge shading.
+
+- **steam.gdshader:** decorative coffee steam above the coffee bar.
 
 The **Atmosphere** button toggles shader embellishments. It never modifies agent
 state. Ambient weather/scanlines are decorative; agent actions still only follow
@@ -28,7 +32,7 @@ Headless import does not exercise the graphics driver. With a graphical display:
 ```bash
 mkdir -p .runtime/previews
 VAC_PREVIEW_DIR="$PWD/.runtime/previews" godot --path game \
-  --resolution 1920x1280 --audio-driver Dummy --rendering-method gl_compatibility \
+  --resolution 3840x2160 --audio-driver Dummy --rendering-method gl_compatibility \
   --script res://tests/render_preview.gd
 ```
 

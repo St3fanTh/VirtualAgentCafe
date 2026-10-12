@@ -13,6 +13,7 @@ var is_selected := false
 var last_sequence := -1
 var bubble := ""
 var bubble_left := 0.0
+var peer_id = null
 var presentation_queue: Array[Dictionary] = []
 var dwell := 0.0
 const MAX_PRESENTATION_QUEUE := 16
@@ -36,6 +37,7 @@ func update_state(state: Dictionary) -> void:
 	var new_status := str(state.get("status", "agent.waiting"))
 	var changed := int(state.get("sequence", 0)) != last_sequence
 	status = new_status
+	peer_id = state.get("recipient")
 	detail = str(state.get("detail", "")).left(256)
 	source = str(state.get("source", "system"))
 	if changed:
@@ -60,7 +62,11 @@ func destination() -> Vector2:
 		"agent.testing":
 			return Vector2(282 if second else 252, 65)
 		"agent.message":
-			return Vector2(211 if second else 177, 116)
+			return Vector2(211 if second else 177, 116) if peer_id != null else Vector2(112 if second else 60, 63)
+		"agent.waiting":
+			if detail.begins_with("CLI:"):
+				return Vector2(282 if second else 252, 65)
+			return Vector2(104 if second else 64, 132)
 		_:
 			return Vector2(104 if second else 64, 132)
 
@@ -115,8 +121,11 @@ func _draw() -> void:
 			rect(4, -7 - phase, 4, 3, skin)
 			rect(-7, -3, 14, 2, dark)
 		"agent.testing":
-			rect(5, -12, 6, 9, Color("f8ce6a"))
-			rect(6, -10 + phase * 2, 4, 1, dark)
+			rect(5, -16, 17, 13, Color("f8ce6a"))
+			rect(6, -15, 15, 10, dark)
+			rect(8, -12 + phase, 3, 1, Color("82d8aa"))
+			rect(12, -10, 6, 0.5, Color("82d8aa"))
+			rect(7, -6, 12, 1, Color("9a8472"))
 		"agent.thinking":
 			for i in range(3):
 				rect(-4 + i * 4, -27, 2, 2, Color("aab5f5") if int(clock * 3) % 3 == i else dark)
@@ -132,14 +141,30 @@ func _draw() -> void:
 		"agent.waiting":
 			rect(6, -8 + phase, 4, 5, Color("e9dfba"))
 	var font := ThemeDB.fallback_font
-	draw_set_transform(Vector2(-9, 15), 0.0, Vector2.ONE / 5.6)
-	draw_string(font, Vector2.ZERO, agent_id.capitalize(), HORIZONTAL_ALIGNMENT_LEFT, -1, 26, Color("f2e9dc"))
+	var draw_scale := maxf(1.0, get_global_transform().get_scale().x)
+	var badge := "IDLE"
+	match status:
+		"agent.coding": badge = "</> CODE"
+		"agent.testing": badge = ">_ TEST"
+		"agent.message": badge = "↔ CHAT" if peer_id != null else "RESPONSE"
+		"agent.thinking": badge = "THINKING"
+		"agent.started": badge = "STARTING"
+		"agent.error": badge = "ERROR"
+		"agent.finished": badge = "DONE"
+		"agent.waiting": badge = ">_ CLI" if detail.begins_with("CLI:") else "IDLE"
+	var badge_width := font.get_string_size(badge, HORIZONTAL_ALIGNMENT_LEFT, -1, 36).x / draw_scale + 5
+	rect(-badge_width / 2, -36, badge_width, 7, Color("1e2c34"))
+	draw_set_transform(Vector2(-badge_width / 2 + 2.5, -31), 0.0, Vector2.ONE / draw_scale)
+	draw_string(font, Vector2.ZERO, badge, HORIZONTAL_ALIGNMENT_LEFT, -1, 36, tint.lightened(0.25))
+	draw_set_transform(Vector2.ZERO)
+	draw_set_transform(Vector2(-9, 15), 0.0, Vector2.ONE / draw_scale)
+	draw_string(font, Vector2.ZERO, agent_id.capitalize() + (" · Backend" if agent_id == "ada" else " · Frontend"), HORIZONTAL_ALIGNMENT_LEFT, -1, 36, Color("f2e9dc"))
 	draw_set_transform(Vector2.ZERO)
 	if bubble != "" and bubble_left > 0:
 		var text := bubble.left(42)
-		var width := minf(128, font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, 26).x / 5.6 + 8)
+		var width := minf(128, font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, 40).x / draw_scale + 8)
 		rect(-width / 2, -44, width, 13, Color("f0e7d6"))
 		rect(-2, -31, 4, 3, Color("f0e7d6"))
-		draw_set_transform(Vector2(-width / 2 + 4, -35), 0.0, Vector2.ONE / 5.6)
-		draw_string(font, Vector2.ZERO, text, HORIZONTAL_ALIGNMENT_LEFT, (width - 8) * 5.6, 26, dark)
+		draw_set_transform(Vector2(-width / 2 + 4, -35), 0.0, Vector2.ONE / draw_scale)
+		draw_string(font, Vector2.ZERO, text, HORIZONTAL_ALIGNMENT_LEFT, (width - 8) * draw_scale, 40, dark)
 		draw_set_transform(Vector2.ZERO)
