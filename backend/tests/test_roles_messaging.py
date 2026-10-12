@@ -2,12 +2,13 @@ import asyncio
 import json
 import sys
 
+import pytest
 from fastapi.testclient import TestClient
 
 from virtual_agent_cafe.adapters.base import RunResult
 from virtual_agent_cafe.adapters.codex import CodexObserver
 from virtual_agent_cafe.bus import EventBus
-from virtual_agent_cafe.jobs import JobManager
+from virtual_agent_cafe.jobs import BusyError, JobManager
 from virtual_agent_cafe.main import create_app
 from virtual_agent_cafe.messaging import PeerMessage
 from virtual_agent_cafe.models import EventType
@@ -167,4 +168,21 @@ async def test_silent_model_response_is_not_claimed_as_peer_exchange(tmp_path):
     record = next(iter(jobs.history.values()))
     assert record["status"] == "error"
     assert "did not publish" in record["detail"]
+    await jobs.close()
+
+
+async def test_full_reply_queue_rejects_new_request_without_losing_old_requests(tmp_path):
+    class BlockingAdapter:
+        async def run(self, prompt, workspace, emit):
+            await asyncio.Event().wait()
+
+    jobs = JobManager(EventBus(), BlockingAdapter(), tmp_path)
+    jobs.submit("turing", "Busy task")
+    for index in range(4):
+        await jobs.send_message("ada", "turing", f"Question {index}", request_reply=True)
+    with pytest.raises(BusyError):
+        await jobs.send_message("ada", "turing", "Overflow question", request_reply=True)
+    assert len(jobs.pending["turing"]) == 4
+    assert "Question 0" in jobs.pending["turing"][0][1]
+    assert "Overflow" not in (tmp_path / "turing/.cafe/inbox.jsonl").read_text()
     await jobs.close()

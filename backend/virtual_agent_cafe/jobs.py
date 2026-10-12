@@ -22,6 +22,7 @@ class JobManager:
         self.history: OrderedDict[str, dict] = OrderedDict()
         self.pending = {agent: deque(maxlen=4) for agent in ROLES}
         self.closing = False
+        self.message_lock = asyncio.Lock()
         self.idle_delay = idle_delay
         self.idle_tasks: dict[str, asyncio.Task] = {}
 
@@ -63,9 +64,11 @@ class JobManager:
         watcher = None
         offset = 0
         seen_messages = set()
+        message_failure = False
+        delivered_messages = 0
 
         async def drain():
-            nonlocal offset
+            nonlocal offset, message_failure, delivered_messages
             offset, messages = await asyncio.to_thread(read_outbox, self.root, agent_id, offset)
             for raw in messages:
                 try:
@@ -77,14 +80,19 @@ class JobManager:
                 if message.recipient == agent_id or len(seen_messages) >= 4:
                     continue
                 seen_messages.add(message.message_id)
-                await self.send_message(
-                    agent_id,
-                    message.recipient,
-                    message.text,
-                    correlation=correlation,
-                    source="codex",
-                    request_reply=not message.reply,
-                )
+                try:
+                    await self.send_message(
+                        agent_id,
+                        message.recipient,
+                        message.text,
+                        correlation=correlation,
+                        source="codex",
+                        request_reply=not message.reply,
+                    )
+                    delivered_messages += 1
+                except (BusyError, OSError, ValueError):
+                    message_failure = True
+                    emit(EventType.ERROR, "Peer message could not be delivered")
 
         async def watch():
             while True:
@@ -131,7 +139,9 @@ class JobManager:
             await asyncio.gather(watcher, return_exceptions=True)
             watcher = None
             await drain()
-            if reply_to and result.success and not seen_messages:
+            if message_failure:
+                result = RunResult(False, "Peer message delivery failed")
+            if reply_to and result.success and not delivered_messages:
                 result = RunResult(False, "Peer reply did not publish a public message")
             record = self.history.get(str(correlation))
             if record is not None:
@@ -193,10 +203,32 @@ class JobManager:
         source: str = "system",
         request_reply: bool = False,
     ) -> UUID:
+        async with self.message_lock:
+            return await self._deliver_message(
+                sender,
+                recipient,
+                text,
+                correlation=correlation,
+                source=source,
+                request_reply=request_reply,
+            )
+
+    async def _deliver_message(
+        self,
+        sender: str,
+        recipient: str,
+        text: str,
+        *,
+        correlation: UUID | None = None,
+        source: str = "system",
+        request_reply: bool = False,
+    ) -> UUID:
         if sender == recipient or sender not in ROLES or recipient not in ROLES:
             raise ValueError("Choose the other agent")
         if not text.strip() or len(text) > 256:
             raise ValueError("Invalid public message")
+        if request_reply and recipient in self.running and len(self.pending[recipient]) >= 4:
+            raise BusyError("Peer reply queue is full")
         correlation = correlation or uuid4()
         await asyncio.to_thread(deliver_inbox, self.root, recipient, sender, text, correlation)
         self.bus.emit(

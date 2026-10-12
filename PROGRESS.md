@@ -265,3 +265,13 @@
   scripts/codex-smoke.sh für tatsächliche Dateiänderung/unittest ebenfalls PASS.
 - Offene Schritte: 4K-UI/Grafik separat committen und finalen Grafik-CI-Lauf prüfen.
 - Commit-ID: `git log --format='%h %s' --grep='implement agent roles and real CLI collaboration'`.
+
+### Rollen-Meilenstein — Warteschlangen-Abschluss
+- Rollen-/CLI-Implementierung 1800b93 erfolgreich gepusht.
+- Gleichzeitige Nachrichtenversendung serialisiert; volle Antwortqueue lehnt neue
+  Anfragen mit HTTP 429 ab, ohne ältere Fragen zu verlieren. Zustellfehler erscheinen
+  als tatsächliche Fehler; öffentliche Antworten werden anhand erfolgter Zustellung geprüft.
+- Geändert: jobs.py, main.py, test_roles_messaging.py, docs/agent-roles.md.
+- Validierung: vollständige scripts/check.sh-Kette grün, 69 pytest-Tests plus
+  Godot-/Integrationsprüfungen. Zusätzlicher Regressionstest für Queue-Überlauf.
+- Commit-ID: `git log --format='%h %s' --grep='preserve queued peer requests under concurrent delivery'`.

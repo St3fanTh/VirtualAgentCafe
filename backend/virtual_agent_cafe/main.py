@@ -133,9 +133,12 @@ def create_app(
         data = await validated_body(request, MessageInput)
         if data.recipient == agent_id:
             raise HTTPException(422, "Choose the other agent")
-        correlation = await jobs.send_message(
-            agent_id, data.recipient, data.text, request_reply=data.request_reply
-        )
+        try:
+            correlation = await jobs.send_message(
+                agent_id, data.recipient, data.text, request_reply=data.request_reply
+            )
+        except BusyError:
+            raise HTTPException(429, "Peer reply queue is full") from None
         return {"status": "delivered", "correlation_id": str(correlation)}
 
     @app.get("/health")

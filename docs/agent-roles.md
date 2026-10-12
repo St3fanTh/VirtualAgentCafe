@@ -59,3 +59,7 @@ check delivery and a bounded reply, validate roles and verify idle transitions.
 `scripts/collaboration-smoke.sh` is opt-in and invokes **two real Codex runs**. It
 checks backend→frontend and frontend→backend delivery, actual inbox files and
 successful job completion. It has been executed successfully, separately from CI.
+
+A full reply queue rejects new requests with HTTP 429 instead of silently dropping
+older questions. Dispatch is serialized across CLI and API senders. A failed CLI
+message delivery fails that task visibly rather than claiming successful exchange.
