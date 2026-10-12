@@ -93,10 +93,17 @@ func _draw() -> void:
 	if is_selected:
 		draw_rect(Rect2(-11, -19, 22, 24), Color("eee4ad"), false, 1)
 	rect(-7, 2, 14, 3, Color(0, 0, 0, 0.25))
-	rect(-5, -10 + bounce, 10, 10, tint)
+	rect(-5, -10 + bounce, 10, 10, tint.darkened(0.15))
+	rect(-4.5, -10 + bounce, 8.5, 8, tint)
+	rect(-4, -9 + bounce, 1.5, 7, tint.lightened(0.22))
+	rect(3, -8 + bounce, 1, 6, tint.darkened(0.3))
+	rect(-1, -10 + bounce, 2, 1, Color("eee0c4"))
 	rect(-5, -19 + bounce, 10, 9, dark)
 	rect(-4, -16 + bounce, 8, 7, skin)
+	rect(3, -15 + bounce, 1, 5, skin.darkened(0.16))
+	rect(-3, -10 + bounce, 5, 0.5, Color("bc806d"))
 	rect(-5, -19 + bounce, 11, 4, Color("493446"))
+	rect(-4, -18 + bounce, 5, 0.5, Color("806064"))
 	rect(-2, -13 + bounce, 1, 1, dark)
 	rect(2, -13 + bounce, 1, 1, dark)
 	var stride := phase * 2 if not route.is_empty() else 0
@@ -125,10 +132,14 @@ func _draw() -> void:
 		"agent.waiting":
 			rect(6, -8 + phase, 4, 5, Color("e9dfba"))
 	var font := ThemeDB.fallback_font
-	draw_string(font, Vector2(-11, 15), agent_id.capitalize(), HORIZONTAL_ALIGNMENT_LEFT, -1, 6, Color("f2e9dc"))
+	draw_set_transform(Vector2(-9, 15), 0.0, Vector2.ONE / 5.6)
+	draw_string(font, Vector2.ZERO, agent_id.capitalize(), HORIZONTAL_ALIGNMENT_LEFT, -1, 26, Color("f2e9dc"))
+	draw_set_transform(Vector2.ZERO)
 	if bubble != "" and bubble_left > 0:
 		var text := bubble.left(42)
-		var width := minf(128, font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, 6).x + 8)
+		var width := minf(128, font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, 26).x / 5.6 + 8)
 		rect(-width / 2, -44, width, 13, Color("f0e7d6"))
 		rect(-2, -31, 4, 3, Color("f0e7d6"))
-		draw_string(font, Vector2(-width / 2 + 4, -35), text, HORIZONTAL_ALIGNMENT_LEFT, width - 8, 6, dark)
+		draw_set_transform(Vector2(-width / 2 + 4, -35), 0.0, Vector2.ONE / 5.6)
+		draw_string(font, Vector2.ZERO, text, HORIZONTAL_ALIGNMENT_LEFT, (width - 8) * 5.6, 26, dark)
+		draw_set_transform(Vector2.ZERO)

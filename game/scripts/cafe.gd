@@ -4,6 +4,7 @@ const EventState = preload("res://scripts/event_state.gd")
 const Network = preload("res://scripts/network.gd")
 const Character = preload("res://scripts/character.gd")
 const World = preload("res://scripts/world.gd")
+var world = World.new()
 var state = EventState.new()
 var network = Network.new()
 var characters: Dictionary = {}
@@ -31,13 +32,13 @@ func _ready() -> void:
 	var configured := OS.get_environment("VAC_BACKEND_URL")
 	if configured != "":
 		backend_url = configured.trim_suffix("/")
-	var world = World.new()
-	world.position = Vector2(0, 96)
-	world.scale = Vector2(3, 3)
+	world.position = Vector2(64, 196)
+	world.scale = Vector2(5.6, 5.6)
 	add_child(world)
 	for id in ["ada", "turing"]:
 		var character = Character.new()
 		character.agent_id = id
+		character.z_index = 2
 		character.position = Vector2(64 if id == "ada" else 104, 132)
 		character.tint = Color("64d8b1") if id == "ada" else Color("e9af6e")
 		character.selected.connect(select_agent)
@@ -54,46 +55,94 @@ func _ready() -> void:
 	task_request.request_completed.connect(on_task_result)
 	health_request.request_completed.connect(on_health)
 
+func ui_style(color: Color, border: Color) -> StyleBoxFlat:
+	var style := StyleBoxFlat.new()
+	style.bg_color = color
+	style.border_color = border
+	style.set_border_width_all(2)
+	style.set_corner_radius_all(16)
+	style.content_margin_left = 22
+	style.content_margin_right = 22
+	style.content_margin_top = 14
+	style.content_margin_bottom = 14
+	return style
+
 func build_ui() -> void:
-	var ui := CanvasLayer.new()
-	add_child(ui)
-	var title := label("VIRTUAL AGENT CAFE", 27)
-	title.position = Vector2(24, 12)
+	var layer := CanvasLayer.new()
+	add_child(layer)
+	var ui := Control.new()
+	ui.name = "HUD"
+	ui.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	ui.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var theme := Theme.new()
+	theme.default_font_size = 26
+	theme.set_color("font_color", "Label", Color("f1e6d1"))
+	theme.set_color("font_color", "Button", Color("eee4d1"))
+	theme.set_stylebox("normal", "Button", ui_style(Color("293b40"), Color("536b69")))
+	theme.set_stylebox("hover", "Button", ui_style(Color("405c5b"), Color("93b5a0")))
+	theme.set_stylebox("pressed", "Button", ui_style(Color("557970"), Color("c8d9b2")))
+	theme.set_stylebox("disabled", "Button", ui_style(Color("262c33"), Color("39414b")))
+	theme.set_stylebox("focus", "Button", ui_style(Color(0, 0, 0, 0), Color("e1bc89")))
+	theme.set_stylebox("panel", "PanelContainer", ui_style(Color("1f2b32"), Color("6c7e78")))
+	theme.set_stylebox("normal", "TextEdit", ui_style(Color("141e26"), Color("455e61")))
+	theme.set_stylebox("focus", "TextEdit", ui_style(Color(0, 0, 0, 0), Color("a5bfa7")))
+	ui.theme = theme
+	layer.add_child(ui)
+	var title := label("VIRTUAL AGENT CAFE", 46)
+	title.position = Vector2(64, 32)
 	ui.add_child(title)
-	connection_label = label("OFFLINE · reconnecting…", 15)
-	connection_label.position = Vector2(610, 22)
+	var subtitle := label("A quiet place for busy minds.", 24)
+	subtitle.position = Vector2(66, 92)
+	subtitle.modulate = Color("c3ab90")
+	ui.add_child(subtitle)
+	connection_label = label("OFFLINE · reconnecting…", 25)
+	connection_label.position = Vector2(1360, 50)
 	ui.add_child(connection_label)
-	var hint := label("Click Ada or Turing to assign a task · animations follow observed events", 15)
-	hint.position = Vector2(24, 54)
-	hint.modulate = Color("b9b4c5")
+	var hint := label("Click Ada or Turing to assign a task · animations follow observed events", 22)
+	hint.position = Vector2(64, 142)
+	hint.modulate = Color("9eacb0")
 	ui.add_child(hint)
-	status_label = label("Ada · Waiting     |     Turing · Waiting", 17)
-	status_label.position = Vector2(24, 590)
+	var effects := Button.new()
+	effects.text = "Atmosphere"
+	effects.toggle_mode = true
+	effects.button_pressed = true
+	effects.position = Vector2(1620, 115)
+	effects.size = Vector2(235, 60)
+	effects.toggled.connect(world.set_effects)
+	ui.add_child(effects)
+	var footer := PanelContainer.new()
+	footer.position = Vector2(64, 1130)
+	footer.size = Vector2(1792, 115)
+	footer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	ui.add_child(footer)
+	status_label = label("Ada · Waiting     |     Turing · Waiting", 28)
+	status_label.position = Vector2(92, 1142)
 	ui.add_child(status_label)
-	result_label = label("Results appear in each agent's workspace", 13)
-	result_label.position = Vector2(24, 618)
-	result_label.modulate = Color("b9b4c5")
+	result_label = label("Results appear in each agent's workspace", 20)
+	result_label.position = Vector2(92, 1193)
+	result_label.modulate = Color("9eacb0")
 	ui.add_child(result_label)
 	task_panel = PanelContainer.new()
-	task_panel.position = Vector2(185, 150)
-	task_panel.size = Vector2(590, 330)
+	task_panel.position = Vector2(430, 330)
+	task_panel.size = Vector2(1060, 600)
 	task_panel.visible = false
 	ui.add_child(task_panel)
 	var margin := MarginContainer.new()
 	for side in ["left", "right", "top", "bottom"]:
-		margin.add_theme_constant_override("margin_" + side, 18)
+		margin.add_theme_constant_override("margin_" + side, 30)
 	task_panel.add_child(margin)
 	var column := VBoxContainer.new()
-	column.add_theme_constant_override("separation", 12)
+	column.add_theme_constant_override("separation", 20)
 	margin.add_child(column)
-	task_info = label("Task", 17)
+	task_info = label("Task", 28)
 	task_info.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	column.add_child(task_info)
 	task_input = TextEdit.new()
-	task_input.custom_minimum_size = Vector2(550, 160)
+	task_input.custom_minimum_size = Vector2(950, 300)
 	task_input.placeholder_text = "Describe a concrete coding task…"
 	column.add_child(task_input)
 	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 12)
 	column.add_child(row)
 	task_button = Button.new()
 	task_button.text = "Run with Codex"
@@ -104,7 +153,7 @@ func build_ui() -> void:
 	message_button.pressed.connect(send_peer_message)
 	row.add_child(message_button)
 	var cancel_button := Button.new()
-	cancel_button.text = "Cancel running task"
+	cancel_button.text = "Cancel task"
 	cancel_button.pressed.connect(cancel_running_task)
 	row.add_child(cancel_button)
 	var close := Button.new()
@@ -117,9 +166,11 @@ func on_frame(frame: Dictionary) -> void:
 		if frame.get("kind") == "snapshot":
 			for id in state.agents:
 				characters[id].reset_state(state.agents[id])
+				world.set_agent_status(id, state.agents[id].status)
 		else:
 			var id: String = frame.event.agent_id
 			characters[id].enqueue_state(state.agents[id])
+			world.set_agent_status(id, state.agents[id].status)
 		status_label.text = "Ada · %s     |     Turing · %s" % [state.state_label("ada"), state.state_label("turing")]
 	elif state.needs_snapshot:
 		network.force_reconnect()

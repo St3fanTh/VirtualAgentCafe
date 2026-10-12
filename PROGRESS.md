@@ -199,3 +199,36 @@
 - Commit-ID: `git log --format='%h %s' --grep='validate live Codex execution and select project environment'`.
 - Nächste Schritte: Demo auf Nutzerhost mit docker compose starten, game/project.godot
   in Windows öffnen/F5; danach Codex-Modus und erste echte Aufgabe über Figur starten.
+
+## Grafik-Meilenstein — Höhere Auflösung und atmosphärische Shader
+- Nutzerauftrag: Café höher auflösen und mit Shadern optisch verbessern.
+- Referenzcanvas 1920×1280, Startfenster 1440×960; ursprüngliches Seitenverhältnis
+  erhalten. Größere native Schrift für HUD, Stationsnamen, Figuren und Sprechblasen;
+  Aufgabendialog mit angepassten Abständen, Kontrast, Fokus-/Hover-Stilen.
+- Vier neue Compatibility-CanvasItem-Shader: versetzte Holzplanken/Maserung,
+  Fensterglas mit Skyline/Reflexion/Regen, Monitorleuchten/Scanlines und warme
+  Lichtflächen/Fensterstrahl/Vignette. Atmosphäre über Button deaktivierbar.
+- Monitorfarben folgen tatsächlichen Backendzuständen; Agentenanimationen und
+  Ereignisfluss bleiben unverändert. Shaderflächen ignorieren Mauseingaben.
+- Möbel erweitert: Kontaktschatten, Kantenlichter, Tastaturdetails, Polster,
+  Teppiche, Pendelleuchten und Regale. GUI getrennt von Raumbeleuchtung.
+- Geändert: game/project.godot, game/scripts/{world,cafe,character}.gd,
+  game/shaders/*.gdshader, game/tests/render_preview.gd, .github/workflows/ci.yml,
+  README.md, docs/graphics.md, docs/images/cafe-preview.png und dieser Bericht.
+- Bereits vorhandene Nutzeränderungen (Godot-Formatierung/Featurefeld und Szenen-UID)
+  erhalten; game/scenes/cafe.tscn nicht als Teil dieses Meilensteins gestagt.
+- Tests: scripts/check.sh vollständig grün: Ruff, 59 pytest-Tests inkl. Aufgaben-
+  /Nachrichten-/Abbruch-E2E und Reconnect, Godot-Import, Zustandsmapping, Headless,
+  Live-Demo→WebSocket→Godot.
+- Zusätzlich echtes OpenGL-Rendering mit Godot 4.4.1 Compatibility/Mesa llvmpipe
+  unter temporärem Xvfb; 1920×1280 Vorschauen mit/ohne Effekte und Dialog erstellt
+  und visuell geprüft. Keine Shader-/Scriptfehler. Anfangs fehlende Display-Libraries
+  temporär unter /tmp bereitgestellt; System und Docker-Sicherheitsprofil unverändert.
+  Dummy-Audio vermeidet fehlendes Audiogerät; virtuelle VSync-Warnung bleibt harmlos.
+- Im Screenshot grobe Bodenstruktur und überlappende/deskalierte Beschriftungen
+  erkannt und verbessert; gerenderte Demo-Vorschau in docs/images abgelegt.
+- CI erhält zusätzlichen echten Shader-Render mit Screenshot-Artefakten; dessen
+  Remote-Ergebnis nach Push noch zu prüfen. Windows-GPU separat nicht gemessen.
+- Commit-ID: `git log --format='%h %s' --grep='enhance cafe resolution and atmospheric shaders'`.
+- Nächste Schritte: Nutzer pullt Featurebranch, startet Godot neu/F5 und vergleicht
+  mit dem Atmosphere-Schalter; Backend-Neubau für reine Grafikänderung nicht nötig.

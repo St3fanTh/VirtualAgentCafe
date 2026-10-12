@@ -5,6 +5,13 @@ Turing to give a task to Codex. Animation state follows backend events, never a
 random timer. Demo mode is deterministic and clearly marked **DEMO (simulated)**.
 Live mode shows **CODEX (live)**. No private reasoning is exposed.
 
+## Graphics
+
+The café now uses a **1920×1280** reference canvas, sharper labels and a larger
+styled task panel. Warm lighting, reflective windows, subtle wooden flooring and
+illuminated monitors use four Compatibility shaders. The **Atmosphere** button
+lets you toggle effects. [Rendering details and preview](docs/graphics.md).
+
 ## Local setup (WSL/Linux)
 
 Requirements: Python **3.12+**, Godot **4.4.1**, Git; Codex CLI for live mode.
