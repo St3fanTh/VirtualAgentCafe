@@ -14,8 +14,8 @@ class EventBus:
         self.queue_limit = queue_limit
         self.sequence = 0
         self.agents = {
-            "ada": AgentState(agent_id="ada", name="Ada"),
-            "turing": AgentState(agent_id="turing", name="Turing"),
+            "ada": AgentState(agent_id="ada", name="Ada", role="backend"),
+            "turing": AgentState(agent_id="turing", name="Turing", role="frontend"),
         }
         self.subscribers: set[asyncio.Queue] = set()
         self.recent_ids: deque[UUID] = deque(maxlen=1024)

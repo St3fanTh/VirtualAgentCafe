@@ -10,15 +10,15 @@ from ..models import EventType
 from .base import Emit, RunResult
 
 
-def is_test_command(command: str, depth: int = 0) -> bool:
+def test_command_label(command: str, depth: int = 0) -> str | None:
     if depth > 3 or len(command) > 65536:
-        return False
+        return None
     try:
         lexer = shlex.shlex(command, posix=True, punctuation_chars=";&|")
         lexer.whitespace_split = True
         tokens = list(lexer)
     except ValueError:
-        return False
+        return None
     groups: list[list[str]] = [[]]
     for token in tokens:
         if token and all(char in ";&|" for char in token):
@@ -34,24 +34,30 @@ def is_test_command(command: str, depth: int = 0) -> bool:
         if executable in {"bash", "sh", "zsh"}:
             for index, word in enumerate(words[1:], 1):
                 if word.startswith("-") and "c" in word and index + 1 < len(words):
-                    if is_test_command(words[index + 1], depth + 1):
-                        return True
+                    nested = test_command_label(words[index + 1], depth + 1)
+                    if nested:
+                        return nested
             continue
         if executable in {"pytest", "py.test"}:
-            return True
+            return "pytest"
         if executable.startswith("python") and words[1:3] in [["-m", "pytest"], ["-m", "unittest"]]:
-            return True
+            return "python -m " + words[2]
         if executable in {"npm", "pnpm", "yarn", "cargo", "go"}:
             if words[1:2] == ["test"] or words[1:3] == ["run", "test"]:
-                return True
+                return executable + " test"
         if executable == "check.sh" and "scripts/" in words[0]:
-            return True
+            return "project checks"
         if executable == "godot" and "--headless" in words[1:]:
-            return True
+            return "Godot headless tests"
         if executable == "uv" and words[1:2] == ["run"]:
-            if is_test_command(shlex.join(words[2:]), depth + 1):
-                return True
-    return False
+            nested = test_command_label(shlex.join(words[2:]), depth + 1)
+            if nested:
+                return nested
+    return None
+
+
+def is_test_command(command: str, depth: int = 0) -> bool:
+    return bool(test_command_label(command, depth))
 
 
 MAX_LINE = 1024 * 1024
@@ -65,6 +71,7 @@ class CodexObserver:
         self.turn_complete = False
         self.fatal = False
         self.failed_tests = False
+        self.failed_frameworks: set[str] = set()
         self.failed_patch = False
         self.command_warnings = 0
         self.sandbox_failed = False
@@ -90,20 +97,29 @@ class CodexObserver:
                     self.emit(EventType.ERROR, "Codex file edit failed")
                 else:
                     self.failed_patch = False
-                    self.emit(EventType.CODING, "Codex editing files")
+                    changes = item.get("changes", [])
+                    count = len(changes) if isinstance(changes, list) else 0
+                    detail = f"Editing files · {count} changes" if count else "Editing files"
+                    self.emit(EventType.CODING, detail)
             elif item_type == "command_execution":
-                testing = is_test_command(str(item.get("command", "")))
+                test_label = test_command_label(str(item.get("command", "")))
+                testing = bool(test_label)
                 if kind == "item.started":
                     self.emit(
                         EventType.TESTING if testing else EventType.WAITING,
-                        "Codex running tests" if testing else "Codex executing a command",
+                        f"CLI: {test_label} · RUNNING" if testing else "CLI: running shell command",
                     )
                 elif kind == "item.completed":
-                    failed = item.get("exit_code") not in (None, 0)
+                    failed = item.get("exit_code") != 0 or item.get("status") == "failed"
                     if failed:
                         self.command_warnings += 1
                     if testing:
-                        self.failed_tests = failed
+                        framework = test_label.removeprefix("python -m ")
+                        if failed:
+                            self.failed_frameworks.add(framework)
+                        else:
+                            self.failed_frameworks.discard(framework)
+                        self.failed_tests = bool(self.failed_frameworks)
                     # Known environment failure must never become a success animation.
                     output = str(item.get("aggregated_output", ""))
                     if "No permissions to create a new namespace" in output or (
@@ -113,9 +129,14 @@ class CodexObserver:
                         self.sandbox_failed = True
                         self.emit(EventType.ERROR, "Codex sandbox unavailable: namespace denied")
                     elif failed:
-                        self.emit(EventType.ERROR, "Codex command failed")
+                        label = test_label or "shell command"
+                        self.emit(
+                            EventType.ERROR, f"CLI: {label} · FAIL (exit {item.get('exit_code')})"
+                        )
+                    elif testing:
+                        self.emit(EventType.TESTING, f"CLI: {test_label} · PASS (exit 0)")
                     else:
-                        self.emit(EventType.WAITING, "Codex command completed")
+                        self.emit(EventType.THINKING, "CLI command finished · model turn active")
             elif item_type in {"agent_message", "collab_tool_call"}:
                 if kind == "item.completed":
                     self.emit(EventType.MESSAGE, "Codex sent a response (content kept private)")
@@ -157,11 +178,73 @@ class CodexAdapter:
             raise ValueError("Invalid response path")
         response_file.parent.mkdir(parents=True, exist_ok=True)
 
+    @staticmethod
+    def code_snapshot(workspace: Path) -> dict:
+        excluded = {
+            ".git",
+            ".cafe",
+            ".venv",
+            "node_modules",
+            "__pycache__",
+            ".pytest_cache",
+            ".ruff_cache",
+            ".godot",
+        }
+        extensions = {
+            ".py",
+            ".gd",
+            ".gdshader",
+            ".tscn",
+            ".godot",
+            ".js",
+            ".jsx",
+            ".ts",
+            ".tsx",
+            ".html",
+            ".css",
+            ".scss",
+            ".json",
+            ".toml",
+            ".yaml",
+            ".yml",
+            ".sql",
+            ".rs",
+            ".go",
+            ".c",
+            ".cpp",
+            ".h",
+            ".java",
+            ".cs",
+            ".md",
+        }
+        snapshot = {}
+        for visited, (directory, folders, files) in enumerate(os.walk(workspace)):
+            if visited >= 512 or len(snapshot) >= 512:
+                break
+            folders[:] = [
+                name
+                for name in folders
+                if name not in excluded and not (Path(directory) / name).is_symlink()
+            ]
+            for name in files:
+                path = Path(directory) / name
+                if path.suffix not in extensions or path.is_symlink():
+                    continue
+                try:
+                    stat = path.stat()
+                except OSError:
+                    continue
+                snapshot[str(path.relative_to(workspace))] = (stat.st_mtime_ns, stat.st_size)
+                if len(snapshot) >= 512:
+                    break
+        return snapshot
+
     async def run(self, prompt: str, workspace: Path, emit: Emit) -> RunResult:
         observer = CodexObserver(emit)
         process = None
         try:
             await asyncio.to_thread(self.prepare_response_file, workspace)
+            previous_files = await asyncio.to_thread(self.code_snapshot, workspace)
             async with asyncio.timeout(self.timeout):
                 process = await asyncio.create_subprocess_exec(
                     *self.arguments(workspace),
@@ -183,6 +266,19 @@ class CodexAdapter:
                     if not isinstance(data, dict):
                         raise ValueError("Invalid Codex event")
                     observer.consume(data)
+                    item = data.get("item", {})
+                    if data.get("type") == "item.completed" and item.get("type") in {
+                        "command_execution",
+                        "file_change",
+                    }:
+                        current_files = await asyncio.to_thread(self.code_snapshot, workspace)
+                        changed = sum(
+                            previous_files.get(path) != current_files.get(path)
+                            for path in previous_files.keys() | current_files.keys()
+                        )
+                        if changed and item.get("type") == "command_execution":
+                            emit(EventType.CODING, f"CLI wrote code files · {changed} changes")
+                        previous_files = current_files
                 code = await process.wait()
                 if code == 0 and observer.successful:
                     detail = "Codex turn completed; see workspace and .cafe/last-response.md"

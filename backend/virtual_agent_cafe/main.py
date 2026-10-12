@@ -3,7 +3,6 @@ import json
 import os
 from contextlib import asynccontextmanager, suppress
 from pathlib import Path
-from uuid import uuid4
 
 from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
@@ -13,7 +12,6 @@ from .adapters.base import AgentAdapter
 from .adapters.codex import CodexAdapter
 from .bus import EventBus
 from .jobs import BusyError, JobManager
-from .models import EventType
 from .simulator import simulate
 
 
@@ -33,6 +31,7 @@ class MessageInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
     recipient: str = Field(pattern="^(ada|turing)$")
     text: str = Field(min_length=1, max_length=256)
+    request_reply: bool = False
 
     @field_validator("text")
     @classmethod
@@ -134,24 +133,8 @@ def create_app(
         data = await validated_body(request, MessageInput)
         if data.recipient == agent_id:
             raise HTTPException(422, "Choose the other agent")
-        if agent_id in jobs.running or data.recipient in jobs.running:
-            raise HTTPException(409, "Send a message when both agents are idle")
-        correlation = uuid4()
-        bus.emit(
-            agent_id,
-            EventType.MESSAGE,
-            correlation,
-            source="system",
-            detail=data.text,
-            recipient=data.recipient,
-        )
-        bus.emit(
-            data.recipient,
-            EventType.MESSAGE,
-            correlation,
-            source="system",
-            detail="Message received from " + agent_id.capitalize(),
-            recipient=agent_id,
+        correlation = await jobs.send_message(
+            agent_id, data.recipient, data.text, request_reply=data.request_reply
         )
         return {"status": "delivered", "correlation_id": str(correlation)}
 

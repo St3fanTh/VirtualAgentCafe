@@ -71,7 +71,7 @@ def test_observer_evidence_and_redaction():
         EventType.THINKING,
         EventType.CODING,
         EventType.TESTING,
-        EventType.WAITING,
+        EventType.TESTING,
         EventType.MESSAGE,
     ]
     assert "SECRET" not in repr(events)
@@ -382,3 +382,37 @@ async def test_adapter_completes_recovered_user_transcript_with_warning(tmp_path
     result = await CodexAdapter(cli).run("task", tmp_path, lambda *_: None)
     assert result.success
     assert "warnings" in result.reason
+
+
+async def test_shell_file_edits_are_observed_as_coding(tmp_path):
+    body = (
+        "from pathlib import Path\n"
+        "workspace = Path(sys.argv[sys.argv.index('-C') + 1])\n"
+        "(workspace / 'feature.py').write_text('def ready(): return True\\n')\n"
+        "print(json.dumps({'type':'item.completed','item':{'type':'command_execution',"
+        "'command':'python3 -c PRIVATE','exit_code':0}}), flush=True)\n"
+        "print(json.dumps({'type':'turn.completed'}), flush=True)\n"
+    )
+    events = []
+    result = await CodexAdapter(fake_cli(tmp_path, body)).run(
+        "task", tmp_path, lambda kind, detail: events.append((kind, detail))
+    )
+    assert result.success
+    assert (EventType.CODING, "CLI wrote code files · 1 changes") in events
+    assert "PRIVATE" not in repr(events)
+
+
+async def test_runtime_files_are_not_invented_coding_activity(tmp_path):
+    body = (
+        "from pathlib import Path\n"
+        "workspace = Path(sys.argv[sys.argv.index('-C') + 1])\n"
+        "(workspace / '.cafe' / 'tool-state.json').write_text('{}')\n"
+        "print(json.dumps({'type':'item.completed','item':{'type':'command_execution',"
+        "'command':'ls','exit_code':0}}), flush=True)\n"
+        "print(json.dumps({'type':'turn.completed'}), flush=True)\n"
+    )
+    events = []
+    await CodexAdapter(fake_cli(tmp_path, body)).run(
+        "task", tmp_path, lambda kind, detail: events.append((kind, detail))
+    )
+    assert EventType.CODING not in [kind for kind, _ in events]

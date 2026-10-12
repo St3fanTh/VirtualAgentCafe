@@ -39,6 +39,7 @@ class AgentState(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
     agent_id: Literal["ada", "turing"]
     name: str
+    role: Literal["backend", "frontend"]
     status: EventType = EventType.WAITING
     sequence: int = 0
     correlation_id: UUID | None = None

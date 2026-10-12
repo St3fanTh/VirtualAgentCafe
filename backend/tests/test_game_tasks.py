@@ -23,7 +23,7 @@ def test_godot_task_ui_to_cli_process_and_back(tmp_path):
         "workspace = pathlib.Path(sys.argv[sys.argv.index('-C') + 1])\n"
         "def send(data):\n    print(json.dumps(data), flush=True)\n"
         "send({'type': 'turn.started'})\n"
-        "if prompt == 'fixture: wait': time.sleep(60)\n"
+        "if 'fixture: wait' in prompt: time.sleep(60)\n"
         "(workspace / 'result.txt').write_text('fixture output')\n"
         "send({'type': 'item.completed', 'item': {'type': 'file_change', 'status': 'completed'}})\n"
         "time.sleep(0.05)\n"

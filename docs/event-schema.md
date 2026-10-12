@@ -25,3 +25,10 @@ reasoning or outputs are part of this public schema.
 Clients discard duplicate/older sequences and reconnect on gaps. Snapshots always
 replace state and reset the sequence baseline. A snapshot after overflow intentionally
 skips intermediate animations. Status animations continue until the next observed event.
+
+Snapshots additionally carry role: backend (Ada) or frontend (Turing). Activity
+summaries identify test framework and exit result without publishing CLI arguments.
+Peer delivery uses recipient and actual inbox/outbox evidence; model response events
+without recipient are displayed as Response. agent.waiting represents Idle unless
+detail starts CLI:, in which case a shell command is active. Completed tasks emit
+Finished, then a system Waiting/Idle event when no CLI job is running.

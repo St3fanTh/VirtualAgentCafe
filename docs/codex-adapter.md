@@ -26,7 +26,9 @@ saved CLI authentication is still used. No bypass flag is supplied.
 | turn.started | agent.thinking (model turn active) |
 | file_change started/completed | agent.coding |
 | command_execution started, recognized test invocation | agent.testing |
-| Other command starts / successful command ends | agent.waiting |
+| Other command starts | agent.waiting (CLI active) |
+| Successful test command ends | agent.testing (PASS + exit code) |
+| Other command ends while turn is active | agent.thinking |
 | agent_message or collab_tool_call completed | agent.message (content private) |
 | Runtime/tool/command failure | agent.error |
 | Process exits 0 + turn.completed + no fatal/unresolved test/edit failure | agent.finished |
@@ -36,8 +38,10 @@ verified per-request API trace; the CLI does not expose an exact model-call life
 Reasoning items do not trigger animations or expose text. Unknown event types are
 ignored; malformed/oversized JSONL fails the task. Tests are recognized from parsed
 command tokens, including shell wrappers, rather than from arbitrary output text.
-Editing via general shell commands is not labeled coding: only file_change evidence
-produces that state. Nonzero tests require a subsequent observed successful test
+File-change events produce coding. Code-file metadata snapshots before/after
+completed tools also detect actual writes through shell commands (up to 512 code
+files/directories; caches, .git, .cafe, virtual environments and symlinks excluded).
+Only safe counts are published; paths and file contents stay private. Nonzero tests require a subsequent observed successful test
 run before success. Non-test command failures remain visible as error events and are
 counted as warnings, but do not alone invalidate a completed model turn: discovery
 commands such as `rg --files` can legitimately return 1 in a new empty workspace.
@@ -52,8 +56,9 @@ finishes its turn with a polite explanation.
 - `POST /agents/ada/cancel` stops the process group and its children.
 - `POST /agents/ada/messages` with `{ "recipient": "turing", "text": "Please review" }`
   emits an actual delivery event and receiving-agent event with shared correlation ID.
-  Both must be idle. This is an explicit user message, not invented model dialogue.
-  It does not automatically start another model turn.
+  This is explicit public delivery, not invented model dialogue. Messages can arrive
+  while agents are busy. Add request_reply:true to request one real Codex reply;
+  otherwise no model turn is started.
 
 Each agent has a persistent separate Git workspace: `.runtime/workspaces/ada` and
 `.runtime/workspaces/turing`. New tasks on the same agent can build on earlier files;
@@ -101,3 +106,13 @@ It asks the real CLI to create a Python function and unittest in a temporary Git
 workspace, observes editing/testing/completion and independently reruns the created
 tests. Normal CI uses a subprocess JSONL fixture for adapter behavior and performs
 no billable model calls. Never present fixture/demo events as a completed live run.
+
+## Roles and live activity (updated)
+
+Ada's task context identifies her as backend engineer; Turing's as frontend engineer.
+See [roles and communication](agent-roles.md) for the local public-message helper
+and bounded actual Codex replies. Messages can be delivered while a task is active.
+CLI test events now show a safe framework label and RUNNING/PASS/FAIL + exit code.
+Successful test completion remains a testing event; other command completion resumes
+Thinking while the observed model turn is still active. No raw arguments are shown.
+A successful different test framework cannot clear a known failed framework.

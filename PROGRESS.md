@@ -240,3 +240,28 @@
   https://github.com/St3fanTh/VirtualAgentCafe/actions/runs/38303574178
 - Keine offenen Implementierungsfehler. Die bereits vorhandene lokale Szenen-UID-
   Änderung bleibt erhalten und uncommitted. Nach pull Godot-Spiel neu starten/F5.
+
+## Rollen-/Aktivitäts-Meilenstein — Echte Backend-/Frontend-Zusammenarbeit
+- Nutzerauftrag: feste Backend-/Frontend-Agenten und deutlich sichtbare echte Aktionen.
+- Ada=Backend, Turing=Frontend in Snapshots, Jobmetadaten und tatsächlichem Codex-Prompt.
+- CLI-Observer liefert sichere Frameworknamen, RUNNING/PASS/FAIL und Exitcode;
+  Fehltests werden je Framework geführt, andere grüne Frameworks verdecken sie nicht.
+  Dateiänderungen über Shell werden zusätzlich anhand begrenzter Metadaten-Snapshots
+  erkannt; keine Rohbefehle/Argumente, Pfade oder Datei-Inhalte veröffentlicht.
+- Public-Message-Helper in .cafe, validierte/korrelierte Outbox→Inbox-Zustellung,
+  ein echter Antwortlauf beim anderen Agenten, bis vier Warteschlangenplätze,
+  keine rekursive Antwortschleife. Fehlende öffentliche Antwort wird als Fehler erkannt.
+  Keine Netzwerkfreigabe oder Sandbox-Umgehung erforderlich. Artefakte begrenzt,
+  Symlink-Escapes abgewiesen, private Prompts weiterhin nicht geloggt.
+- API request_reply optional (standardmäßig false), native UI fordert eine echte
+  Antwort an. Nach erfolgreicher Arbeit tatsächlicher Idle-Zustand nach 3 Sekunden.
+- Geändert: Backendmodelle/Bus/Jobs/API/Observer, messaging.py, Simulator,
+  Backendtests, collaboration_smoke.py/-smoke.sh und Protokoll-/Agentendokumentation.
+- Tests: scripts/check.sh vollständig grün, 68 pytest-Tests, Godot Import/Zustände/
+  Headless/Livetest, Aufgaben-/Abbruch-E2E und Reconnect. Fixtures ohne externe LLMs.
+- Tatsächlich ausgeführt: scripts/collaboration-smoke.sh mit ZWEI echten Codex-Läufen;
+  Backend→Frontend-API-Vertrag und echte Antwort→Backend, beide Inboxdateien und
+  Aufgabenabschlüsse geprüft: Real backend/frontend collaboration smoke: PASS.
+  scripts/codex-smoke.sh für tatsächliche Dateiänderung/unittest ebenfalls PASS.
+- Offene Schritte: 4K-UI/Grafik separat committen und finalen Grafik-CI-Lauf prüfen.
+- Commit-ID: `git log --format='%h %s' --grep='implement agent roles and real CLI collaboration'`.
