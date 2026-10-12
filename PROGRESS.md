@@ -308,3 +308,13 @@
 - Offene Prüfung: finalen GitHub-Actions-Lauf bestätigen; Windows-GPU-Leistung
   nicht gemessen. Nutzer lädt Branch, startet Backend für neue Rollenlogik erneut
   und öffnet Godot/F5 (F11 bei 4K-Monitor); keine neuen Python-Abhängigkeiten nötig.
+
+### Abschluss 4K und Rollen-Aktionen
+- Rollen-/Zusammenarbeitscommit: 1800b93; Queue-Korrektur: b9db572;
+  4K-/Aktionsansicht: 651c788. Alle erfolgreich gepusht.
+- Finale GitHub Actions vollständig grün: Unit-/Integrations-/Godot-Checks,
+  echter 4K-Shader-Render, Screenshot-Artefakte, Compose und Container-Smoke:
+  https://github.com/St3fanTh/VirtualAgentCafe/actions/runs/38310655093
+- Beide echten Codex-Smokes bestanden; keine offenen Implementierungsfehler.
+- Nutzer: Branch pullen, Backend neu starten (neue Rollenlogik), Godot-Spiel mit F5
+  starten und F11 für Vollbild nutzen. Bestehende lokale Szenen-UID erhalten.
