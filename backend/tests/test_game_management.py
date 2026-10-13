@@ -14,7 +14,8 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 @pytest.mark.skipif(shutil.which("godot") is None, reason="Godot CLI unavailable")
-def test_native_management_ui_to_isolated_runtime(tmp_path):
+@pytest.mark.parametrize("script", ["test_management.gd", "test_gui_input.gd"])
+def test_native_management_ui_to_isolated_runtime(tmp_path, script):
     with socket.socket() as reserve:
         reserve.bind(("127.0.0.1", 0))
         port = reserve.getsockname()[1]
@@ -24,6 +25,7 @@ def test_native_management_ui_to_isolated_runtime(tmp_path):
         "VAC_MANAGEMENT_TOKEN": "fixture-management-token-32-characters",
         "VAC_FIXTURE_ROOT": str(tmp_path / "work"),
         "VAC_BACKEND_URL": url,
+        "VAC_GUI_DELAY": "0.5" if script == "test_gui_input.gd" else "0",
     }
     server = subprocess.Popen(
         [
@@ -53,19 +55,29 @@ def test_native_management_ui_to_isolated_runtime(tmp_path):
             except (urllib.error.URLError, TimeoutError):
                 assert time.monotonic() < deadline, "Fixture backend readiness timeout"
                 time.sleep(0.05)
+        display_args = ["--headless"]
+        if script == "test_gui_input.gd" and os.getenv("VAC_GUI_RENDERED") == "1":
+            display_args = [
+                "--audio-driver",
+                "Dummy",
+                "--rendering-method",
+                "gl_compatibility",
+                "--resolution",
+                os.getenv("VAC_GUI_RESOLUTION", "1920x1080"),
+            ]
         result = subprocess.run(
             [
                 "godot",
-                "--headless",
+                *display_args,
                 "--path",
                 str(ROOT / "game"),
                 "--script",
-                "res://tests/test_management.gd",
+                "res://tests/" + script,
             ],
             env=env,
             capture_output=True,
             text=True,
-            timeout=35,
+            timeout=270 if os.getenv("VAC_GUI_RENDERED") == "1" else 60,
             check=False,
         )
         output = result.stdout + result.stderr

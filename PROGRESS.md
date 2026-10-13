@@ -420,3 +420,32 @@
 - Finale Validierung nach dieser Korrektur: scripts/check.sh, 94 pytest-Tests und
   sämtliche Godot-/Integrationsprüfungen bestanden. Commit-ID: git log --format='%h %s'
   --grep='bound managed role summaries in realtime snapshots'. Kein Push.
+
+## GUI M1 — Übersichtliche Oberfläche und tatsächliche Eingabetests
+- Nutzerauftrag: Verwaltungsoberfläche schöner machen, fehlerhafte Klicks beheben,
+  echte GUI-Tests ergänzen. Kein Push gemäß fortgeltender letzter Nutzeranweisung.
+- Neue Karten, Mint-Aktionen, konsistente Labels/Abstände, separate Scrollbereiche,
+  fixierte Agentenaktionsleiste, lesbare Listen/Details und 4K-Dropdowns.
+- Behoben: verlorene Klicks während HTTP-Polls, zurückgesetzte Auswahl, verschwundene
+  Fehlerhinweise, Überschreiben neuer Eingaben durch verspätete Save-Antworten,
+  doppelte Submits und fehlende Auswahl nach Agentenerstellung. Aktionen anhand
+  Backend-Capabilities/Lifecycle deaktiviert; verständliche lokale Validierung.
+- Café: Klickposition aus InputEvent statt Cursor-Polling; neuer Taskdialogstil,
+  gemeinsamer Pending-/Offline-Zustand aller Aktionen, modale Hintergründe und Escape.
+- Echte GUI-Szenarien: MouseMotion/Press/Release, Tastatur, Dropdowns/Tabwechsel,
+  verzögerte HTTP-Anfragen, Markdown/Rollen, Create/Edit/Start/Stop, Logs/Review,
+  Git init/branch/stage/commit/diff und originale Avatar-/Task-/Nachrichten-/Cancel-Klicks.
+- Dateien: management.gd, cafe.gd, character.gd, project.godot, Management-API-
+  Capabilities; GUI-/Café-Input-/Render-Skripte und UIDs, Backend-Testharness/Fixture,
+  bestehender Managementtest, CI sowie docs/gui-testing.md und Vorschau.
+- Validierung: vollständige scripts/check.sh PASS, 96 pytest-Tests inkl. beider
+  Input-Szenarien und aller bisherigen Tests; Godot Import/Zustände/Headless/Live PASS.
+  Gerenderter OpenGL-GUI-Test zusätzlich PASS (Mesa llvmpipe, fester 4K-Viewport).
+- Vorschauen aller vier Seiten und Dropdowns tatsächlich gerendert und visuell
+  geprüft; zu kleine/abgeschnittene Popup-Schrift erkannt und Dimensionen korrigiert.
+  Der neue Taskdialog wird zusätzlich gerendert. Vorschauen verwenden Beispieldaten.
+- Neue Änderungen an Test-Randfällen (Validation/Poll/Doppelklick) nochmals durch
+  Abschlussprüfung abgesichert. Keine echten LLM-Aufrufe für diese GUI-Tests nötig.
+- Commit-ID: git log --format='%h %s' --grep='polish cafe management and test real GUI input'.
+- Grenzen: Windows-DPI/GPU noch nicht auf Zielgerät getestet; CI aktualisiert, aber
+  mangels Push hier noch nicht auf GitHub gelaufen. Vorhandene Szenen-UID ungestagt.

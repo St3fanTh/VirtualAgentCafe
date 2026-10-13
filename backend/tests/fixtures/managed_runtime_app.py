@@ -1,5 +1,6 @@
 """Namespace-confined CLI fixture; no external model calls."""
 
+import asyncio
 import os
 from pathlib import Path
 
@@ -40,3 +41,10 @@ app = create_app(
     management_root=Path(os.environ["VAC_FIXTURE_ROOT"]) / "management",
     managed_adapter=FixtureRuntime(Sandbox(), timeout=10),
 )
+
+
+@app.middleware("http")
+async def delay_overview_for_gui_race(request, call_next):
+    if request.url.path == "/management" or request.method in {"POST", "PUT"}:
+        await asyncio.sleep(float(os.getenv("VAC_GUI_DELAY", "0")))
+    return await call_next(request)

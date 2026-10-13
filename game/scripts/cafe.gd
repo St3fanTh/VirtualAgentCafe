@@ -21,6 +21,7 @@ var task_panel: PanelContainer
 var task_input: TextEdit
 var task_info: Label
 var task_button: Button
+var task_actions: Array[Button] = []
 var selected_id := "ada"
 var backend_url := "http://127.0.0.1:8000"
 var mode := "unknown"
@@ -156,6 +157,7 @@ func build_ui() -> void:
 	result_label.modulate = Color("9eacb0")
 	ui.add_child(result_label)
 	task_panel = PanelContainer.new()
+	task_panel.theme = management.theme
 	task_panel.position = Vector2(430, 230)
 	task_panel.size = Vector2(1060, 600)
 	task_panel.visible = false
@@ -179,20 +181,45 @@ func build_ui() -> void:
 	column.add_child(row)
 	task_button = Button.new()
 	task_button.text = "Run with Codex"
+	task_button.add_theme_stylebox_override("normal", management.panel_style(Color("75d9bb"), Color("75d9bb"), 12))
+	task_button.add_theme_color_override("font_color", Color("10292c"))
 	task_button.pressed.connect(submit_task)
 	row.add_child(task_button)
+	task_actions.append(task_button)
 	var message_button := Button.new()
 	message_button.text = "Ask other agent"
 	message_button.pressed.connect(send_peer_message)
 	row.add_child(message_button)
+	task_actions.append(message_button)
 	var cancel_button := Button.new()
 	cancel_button.text = "Cancel task"
 	cancel_button.pressed.connect(cancel_running_task)
 	row.add_child(cancel_button)
+	task_actions.append(cancel_button)
 	var close := Button.new()
 	close.text = "Close"
 	close.pressed.connect(func(): task_panel.hide())
 	row.add_child(close)
+	var scrim := ColorRect.new()
+	scrim.name = "ManagementBackdrop"
+	scrim.position = Vector2.ZERO
+	scrim.size = Vector2(1920, 1080)
+	scrim.color = Color(0.02, 0.06, 0.09, 0.76)
+	scrim.visible = false
+	ui.add_child(scrim)
+	var update_modal := func():
+		scrim.visible = management.visible or task_panel.visible
+		if management.visible:
+			ui.move_child(scrim, -1)
+			ui.move_child(management, -1)
+		elif task_panel.visible:
+			ui.move_child(scrim, -1)
+			ui.move_child(task_panel, -1)
+	management.visibility_changed.connect(func():
+		if management.visible:
+			task_panel.hide()
+		update_modal.call())
+	task_panel.visibility_changed.connect(update_modal)
 
 func ensure_character(id: String, data: Dictionary) -> void:
 	if characters.has(id):
@@ -232,6 +259,7 @@ func on_frame(frame: Dictionary) -> void:
 
 func on_connection(online: bool) -> void:
 	connection_label.text = "ONLINE · syncing…" if online else "OFFLINE · reconnecting…"
+	update_task_actions()
 	connection_label.modulate = Color("8dd7b6") if online else Color("ef8290")
 	if online:
 		health_request.request(backend_url + "/health")
@@ -242,6 +270,7 @@ func on_health(_result: int, code: int, _headers: PackedStringArray, body: Packe
 	var health = JSON.parse_string(body.get_string_from_utf8())
 	if health is Dictionary:
 		mode = str(health.get("mode", "unknown"))
+		update_task_actions()
 		connection_label.text = "ONLINE · " + ("DEMO (simulated)" if mode == "demo" else "CODEX (live)")
 
 func select_agent(id: String) -> void:
@@ -252,7 +281,7 @@ func select_agent(id: String) -> void:
 	for key in characters:
 		characters[key].is_selected = key == id
 	task_info.text = "Task for " + id.capitalize() + (" / Backend" if id == "ada" else " / Frontend") + (" · Codex" if mode == "codex" else " · start backend in Codex mode to run tasks")
-	task_button.disabled = mode != "codex" or not network.online
+	update_task_actions()
 	if mode == "codex":
 		task_info.text += "\n" + str(state.agents.get(id, {}).get("detail", "Ready"))
 	task_panel.show()
@@ -276,14 +305,15 @@ func send_action(action: String, path: String, body: Dictionary) -> void:
 		task_info.text = "A request is still pending."
 		return
 	request_action = action
-	task_button.disabled = true
+	for button in task_actions:
+		button.disabled = true
 	var headers := PackedStringArray(["Content-Type: application/json"])
 	if not management.token.text.is_empty():
 		headers.append("Authorization: Bearer " + management.token.text.strip_edges())
 	var result := task_request.request(backend_url + "/agents/" + selected_id + path, headers, HTTPClient.METHOD_POST, JSON.stringify(body))
 	if result != OK:
 		task_info.text = "Request could not be sent."
-		task_button.disabled = false
+		update_task_actions()
 
 func submit_task() -> void:
 	var prompt := task_input.text.strip_edges()
@@ -292,8 +322,14 @@ func submit_task() -> void:
 		return
 	send_action("task", "/tasks", {"prompt": prompt})
 
+func update_task_actions() -> void:
+	var ready: bool = mode == "codex" and network.online and task_request.get_http_client_status() == HTTPClient.STATUS_DISCONNECTED
+	for button in task_actions:
+		button.disabled = not ready
+
 func on_task_result(_result: int, code: int, _headers: PackedStringArray, body: PackedByteArray) -> void:
-	task_button.disabled = mode != "codex" or not network.online
+	update_task_actions()
+	call_deferred("update_task_actions")
 	if code == 202 or (request_action == "cancel" and code == 200):
 		var accepted = JSON.parse_string(body.get_string_from_utf8())
 		if request_action == "task" and accepted is Dictionary:
@@ -307,6 +343,10 @@ func on_task_result(_result: int, code: int, _headers: PackedStringArray, body: 
 
 
 func _unhandled_input(event: InputEvent) -> void:
+	if event is InputEventKey and event.pressed and event.keycode == KEY_ESCAPE and task_panel.visible:
+		task_panel.hide()
+		get_viewport().set_input_as_handled()
+		return
 	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_F11:
 		var window := get_window()
 		window.mode = Window.MODE_WINDOWED if window.mode == Window.MODE_FULLSCREEN else Window.MODE_FULLSCREEN

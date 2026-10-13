@@ -14,7 +14,8 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 @pytest.mark.skipif(shutil.which("godot") is None, reason="Godot CLI unavailable")
-def test_godot_task_ui_to_cli_process_and_back(tmp_path):
+@pytest.mark.parametrize("script", ["test_tasks.gd", "test_cafe_input.gd"])
+def test_godot_task_ui_to_cli_process_and_back(tmp_path, script):
     cli = tmp_path / "fixture-codex"
     cli.write_text(
         "#!/usr/bin/env python3\n"
@@ -80,12 +81,12 @@ def test_godot_task_ui_to_cli_process_and_back(tmp_path):
                 "--path",
                 str(ROOT / "game"),
                 "--script",
-                "res://tests/test_tasks.gd",
+                "res://tests/" + script,
             ],
             env=env,
             capture_output=True,
             text=True,
-            timeout=20,
+            timeout=60,
             check=False,
         )
         output = result.stdout + result.stderr

@@ -254,3 +254,11 @@ it is deliberately excluded from ordinary tests.
 | `scripts/management_smoke.py` | Created |
 
 The pre-existing local scene UID changes in `game/scenes/cafe.tscn` were preserved and excluded.
+
+## Interface and input regression coverage
+
+The management surface now uses separately scrolling cards and a fixed agent action
+bar. Refresh retains selection and unsaved text; delayed HTTP actions are queued,
+and duplicate clicks are blocked. New agents become selected when saved. Embedded
+4K dropdowns, local validation and server-derived action states improve operation.
+See [GUI design, screenshots and actual mouse/keyboard tests](gui-testing.md).

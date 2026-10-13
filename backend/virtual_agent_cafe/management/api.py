@@ -54,7 +54,14 @@ def management_router(manager: ExecutionManager, validated_body, mode: str) -> A
 
     @router.get("")
     async def overview():
-        return await guarded(lambda: asyncio.to_thread(manager.overview))
+        result = await guarded(lambda: asyncio.to_thread(manager.overview))
+        return {
+            **result,
+            "capabilities": {
+                "can_start": mode == "codex",
+                "remote_git": os.getenv("VAC_ALLOW_REMOTE_GIT") == "1",
+            },
+        }
 
     @router.post("/agents", status_code=201)
     async def create(request: Request):

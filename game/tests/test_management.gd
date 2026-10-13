@@ -90,7 +90,7 @@ func _process(_delta: float) -> bool:
 			ui.call_api("logs", "/executions/" + execution_id + "/logs")
 			stage = 8
 		8:
-			if not "agent.coding" in ui.logs.text or not "agent.testing" in ui.logs.text:
+			if not "CODING" in ui.logs.text or not "TESTING" in ui.logs.text:
 				return false
 			ui.review_note.text = "Reviewed fixture result and recorded test evidence."
 			ui.review(true)

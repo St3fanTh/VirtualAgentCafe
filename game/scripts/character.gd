@@ -85,7 +85,8 @@ func _process(delta: float) -> void:
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
-		if get_local_mouse_position().length() < 12:
+		var local_point: Vector2 = get_global_transform_with_canvas().affine_inverse() * event.position
+		if local_point.length() < 12:
 			selected.emit(agent_id)
 			get_viewport().set_input_as_handled()
 
