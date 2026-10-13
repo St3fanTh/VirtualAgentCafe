@@ -318,3 +318,19 @@
 - Beide echten Codex-Smokes bestanden; keine offenen Implementierungsfehler.
 - Nutzer: Branch pullen, Backend neu starten (neue Rollenlogik), Godot-Spiel mit F5
   starten und F11 für Vollbild nutzen. Bestehende lokale Szenen-UID erhalten.
+
+## Management M1 — Persistente Konfigurationen, Markdown-Aufgaben und Rollen
+- Bestehende Architektur untersucht: FastAPI/EventBus/Codex/Godot weiterverwendet;
+  bisher keine Datenbank, nur flüchtige Ausführungsmetadaten und Runtime-Volume.
+- SQLite (Python-Standardbibliothek) für Registry, Zustände und Aktivitätslogs;
+  lesbare JSON-Konfigurationen; Markdown-Dateien bleiben Quelle der Anweisungen.
+- Validierte Agenten-/Git-/Ausführungskonfiguration; austauschbare Aufgaben und
+  mehrere Rollen; genehmigter Workspace-Root, Symlink-/Traversal-Abweisung.
+- Dateien: management/{config,storage,files,registry,__init__}.py und
+  tests/test_management_definitions.py. Bestehende Szenen-UID bleibt ungestagt.
+- Validierung: scripts/check.sh PASS, 80 pytest-Tests, Godot Import/Zustände/
+  Headless/WebSocket sowie bestehende Aufgaben-/Reconnect-Integration bestanden.
+- Commit-ID dieses Eintrags: git log --format='%h %s' --grep='persist agent configurations and Markdown definitions'.
+- Push: gemäß neuem Nutzerauftrag nicht ausgeführt; explizite Freigabe erforderlich.
+- Nächste Schritte: GitService/Worktrees, echte Dateisystemisolation, Lifecycle,
+  Management-API und Godot-Oberfläche. Neue Management-Module noch nicht angeschlossen.
