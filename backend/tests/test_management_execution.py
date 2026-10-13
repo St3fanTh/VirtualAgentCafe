@@ -303,3 +303,24 @@ def test_second_controller_cannot_recover_or_corrupt_active_store(tmp_path):
     # Graceful shutdown releases the lock for the next backend instance.
     with TestClient(second) as client:
         assert client.get("/health").status_code == 200
+
+
+async def test_large_role_assignments_fit_realtime_snapshot_budget(tmp_path):
+    import json
+
+    runtime = ControlledRuntime()
+    manager = configured(tmp_path, runtime)
+    names = []
+    for index in range(16):
+        name = f"role-{index:02d}-" + "x" * 48 + ".md"
+        manager.roles.save(name, "# Role\nFollow the system security policy.")
+        names.append(name)
+    config = manager.registry.get("backend-agent")["config"]
+    config["roles"] = names
+    manager.configure(AgentConfig.model_validate(config))
+    await manager.start("backend-agent")
+    snapshot = manager.bus.snapshot()
+    assert len(json.dumps(snapshot).encode()) < 65536
+    assert len(snapshot["agents"][-1]["role"]) <= 120
+    assert len(manager.registry.get("backend-agent")["config"]["roles"]) == 16
+    await manager.close()

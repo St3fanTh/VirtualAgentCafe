@@ -398,3 +398,25 @@
 - Nächste Schritte beim Nutzer: Backend neu bauen, Verwaltungstoken lokal lesen,
   Godot/F5 → Manage agents, Workspace/Rollen/Task konfigurieren; vollständige Anleitung
   und Dateiliste stehen in docs/agent-management.md.
+
+### Abschluss Management-Erweiterung
+- Implementierungscommits: 84748a7 (Registry/Markdown), 84abb98 (Isolation/Git/
+  Lifecycle), 360127b (Godot-Verwaltung, Beispiele, Sicherheit, Ende-zu-Ende-Workflow).
+- Finale Checks: 93 pytest-Tests bestanden, Ruff und vollständige Godot-Headless-/
+  HTTP-/WebSocket-/Verwaltungsintegration bestanden; echter isolierter Codex-Smoke
+  mit unabhängig geprüften unittest/Funktion/Agenten-Commit bestanden.
+- Keine Pushes, Merges, Änderungen an Credentials oder destruktiven Git-Operationen.
+  Einzige verbleibende lokale Änderung: vorherige Nutzer-UIDs in game/scenes/cafe.tscn.
+- Für den Nutzer bereit: docs/agent-management.md inklusive aller geänderten/neuen
+  Dateien, Start-/Token-/Workspace-/Git-Anleitung, Konfigurationsbeispiel und Grenzen.
+- Noch extern zu prüfen: frisch gebautes Docker-/Podman-Image und Darstellung auf
+  der Windows-GPU. Neues Backend und Genehmigung für Push sind separate nächste Schritte.
+
+### Snapshot-Grenzprüfung
+- Abschließende Prüfung großer Rollenzuweisungen: sichtbare Rollen-Zusammenfassung
+  auch beim Start auf 120 Zeichen begrenzt; vollständige 16 Rollen bleiben in der
+  persistenten Konfiguration erhalten. Verhindert übergroße WebSocket-Snapshots.
+- Neuer Regressionstest prüft tatsächlichen Start, Snapshot-Budget und Rollenpersistenz.
+- Finale Validierung nach dieser Korrektur: scripts/check.sh, 94 pytest-Tests und
+  sämtliche Godot-/Integrationsprüfungen bestanden. Commit-ID: git log --format='%h %s'
+  --grep='bound managed role summaries in realtime snapshots'. Kein Push.

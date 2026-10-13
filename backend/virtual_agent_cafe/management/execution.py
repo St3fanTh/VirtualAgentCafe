@@ -219,7 +219,9 @@ class ExecutionManager:
             )
             self.claims[config.workspace] = identifier
             self.bus.agents[identifier] = ManagedState(
-                agent_id=identifier, name=config.name, role=", ".join(config.roles) or "custom"
+                agent_id=identifier,
+                name=config.name,
+                role=(", ".join(config.roles) or "custom")[:120],
             )
             self.broadcast_snapshot()
             self.running[identifier] = asyncio.create_task(
