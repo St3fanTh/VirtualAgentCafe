@@ -7,3 +7,10 @@ services:
     volumes:
       - ${SSH_AUTH_SOCK:?Start an SSH agent first}:/run/host-ssh-agent
       - ${HOME}/.ssh/known_hosts:/home/node/.ssh/known_hosts:ro
+
+  backend:
+    environment:
+      SSH_AUTH_SOCK: /run/host-ssh-agent
+    volumes:
+      - ${SSH_AUTH_SOCK:?Start an SSH agent first}:/run/host-ssh-agent
+      - ${HOME}/.ssh/known_hosts:/home/node/.ssh/known_hosts:ro

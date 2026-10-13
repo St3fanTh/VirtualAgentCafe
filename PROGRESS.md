@@ -334,3 +334,34 @@
 - Push: gemäß neuem Nutzerauftrag nicht ausgeführt; explizite Freigabe erforderlich.
 - Nächste Schritte: GitService/Worktrees, echte Dateisystemisolation, Lifecycle,
   Management-API und Godot-Oberfläche. Neue Management-Module noch nicht angeschlossen.
+
+## Management M2 — Isolierte Workspaces, GitService und persistente Laufzeiten
+- M1-Commit: 84748a7 (lokal, nicht gepusht).
+- Dedicated GitService: init/connect/clone, Branchwechsel, Stage/Commit, Diff/History,
+  parallele Worktrees; isolierte Git-Prozesse, argumentbasierte Befehle, keine Hooks,
+  keine destruktiven Operationen, Remote-Opt-in und ausdrückliche Einzelbestätigung.
+- Bubblewrap-Mount-/PID-/IPC-/UTS-Isolation zusätzlich zum Codex-Sandbox;
+  genehmigter Workspace, readonly Git-Metadaten und Markdown-Snapshots; kein Zugriff
+  auf andere Workspace-Dateien, Controller-Daten oder SSH-Sockets durch Agenten.
+- Ausführungsspezifischer Git-Helper erlaubt Agenten Stage/Commit auf ihrem Worktree,
+  ohne Git-Metadaten frei schreiben oder Remote-Credentials erhalten zu müssen.
+- Persistente Lifecycle-/Task-/Abnahmestatus, Logs/Hashes, Timeout/Abbruch/Retry,
+  Restart-Recovery; Workspace-Sperren, eigener Verwaltungstoken und Legacy-API-
+  Bypassschutz während verwalteter Ausführungen. Erfolgreicher Prozess != Aufgabenabnahme.
+- Dateien: management/{git,sandbox,execution,api,security,git_helper}.py,
+  main.py/config.py, test_management_git.py/test_management_execution.py,
+  Dockerfile, Compose/SSH-Override und CI-Bubblewrap-Installation.
+- Validierung: scripts/check.sh vollständig PASS, 91 pytest-Tests einschließlich
+  aktueller (für M3 vorbereiteter) nativer Godot-Verwaltungsintegration; Godot
+  Import/Zustände/Headless/WebSocket/Tasks/Abbruch/Restart bestanden. Keine Skips.
+- Echte Namespace-Tests: fremde Dateien unsichtbar, Git-Metadaten und Markdown
+  tatsächlich schreibgeschützt. Temporäre Repo-/Worktree-/Commit-Integration PASS.
+- Echter Codex-Probelauf: Markdown/Python-Code/unittest/Git-Helper-Commit PASS;
+  Funktion und Tests unabhängig erneut geprüft, nur Agenten-Branch geändert.
+  Ein gewöhnlicher CLI-Fehler wurde vom Modell behoben; Test-/Runtimeabschluss
+  sowie unabhängige Prüfung waren erfolgreich. Keine Remote-Git-Operation.
+- Compose/CI YAML lokal geparst und Mounts/Loopback geprüft. Docker CLI/Daemon
+  hier nicht vorhanden; Image-Rebuild und Compose-Start daher nicht lokal getestet.
+- Commit-ID: git log --format='%h %s' --grep='isolate managed agents and coordinate Git worktree execution'.
+- Push: nicht ausgeführt (neueste Nutzeranweisung). Nächster Meilenstein: native
+  Godot-Verwaltung, Beispiele, ausführbare Dokumentation und finaler Regressionstest.

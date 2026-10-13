@@ -20,9 +20,12 @@ services:
       - .:/workspace
       - codex_home:/home/node/.codex
       - runtime:/workspace/.runtime
+      - agent_workspaces:/workspaces
     environment:
       VAC_BIND_HOST: "0.0.0.0"
       VAC_MODE: "${VAC_MODE:-demo}"
+      VAC_WORKSPACE_ROOT: "/workspaces"
+      VAC_ALLOW_REMOTE_GIT: "${VAC_ALLOW_REMOTE_GIT:-0}"
       VAC_DEMO_INTERVAL: "${VAC_DEMO_INTERVAL:-1}"
     ports:
       - "127.0.0.1:8000:8000"
@@ -35,3 +38,4 @@ services:
 volumes:
   codex_home:
   runtime:
+  agent_workspaces:

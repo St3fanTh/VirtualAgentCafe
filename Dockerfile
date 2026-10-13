@@ -14,6 +14,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python3-dev \
     git \
     openssh-client \
+    bubblewrap \
     curl \
     wget \
     unzip \
@@ -65,10 +66,12 @@ RUN pip install --no-cache-dir --no-deps /opt/vac/backend
 # --------------------------------------------------
 RUN mkdir -p \
       /workspace/.runtime \
+      /workspaces \
       /home/node/.ssh \
       /home/node/.codex \
     && chown -R node:node \
       /workspace/.runtime \
+      /workspaces \
       /home/node \
     && chmod 700 /home/node/.ssh
 

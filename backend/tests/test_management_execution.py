@@ -1,0 +1,269 @@
+import asyncio
+
+import pytest
+from fastapi.testclient import TestClient
+
+from virtual_agent_cafe.adapters.base import RunResult
+from virtual_agent_cafe.bus import EventBus
+from virtual_agent_cafe.main import create_app
+from virtual_agent_cafe.management.config import AgentConfig
+from virtual_agent_cafe.management.execution import ExecutionManager
+from virtual_agent_cafe.models import EventType
+
+
+class ControlledRuntime:
+    def __init__(self, success=True):
+        self.started = asyncio.Event()
+        self.release = asyncio.Event()
+        self.contexts = []
+        self.success = success
+
+    async def run(self, prompt, workspace, emit):
+        self.contexts.append(prompt)
+        self.started.set()
+        emit(EventType.CODING, "Editing code")
+        await self.release.wait()
+        (workspace / "result.txt").write_text("changed")
+        emit(EventType.TESTING, "CLI: pytest · PASS (exit 0)")
+        return RunResult(self.success, "Runtime completed" if self.success else "Tests failed")
+
+
+def configured(tmp_path, runtime):
+    manager = ExecutionManager(tmp_path, EventBus(), runtime)
+    manager.workspaces.create("project")
+    manager.tasks.save("task.md", "# Task\n## Acceptance Criteria\nTests pass.")
+    manager.roles.save("backend.md", "# Backend\nUse existing architecture.")
+    manager.configure(
+        AgentConfig(
+            id="backend-agent",
+            name="Backend",
+            workspace="project",
+            task="task.md",
+            roles=["backend.md"],
+        )
+    )
+    return manager
+
+
+async def completed(manager):
+    for _ in range(100):
+        if not manager.running:
+            return
+        await asyncio.sleep(0.01)
+    raise AssertionError("Runtime did not complete")
+
+
+async def test_lifecycle_context_snapshot_logs_and_separate_acceptance(tmp_path):
+    runtime = ControlledRuntime()
+    manager = configured(tmp_path, runtime)
+    run = await manager.start("backend-agent")
+    await runtime.started.wait()
+    with pytest.raises(ValueError):
+        await manager.start("backend-agent")
+    assert manager.registry.get("backend-agent")["state"] == "RUNNING"
+    manager.tasks.save("task.md", "# Replacement task\nNew objective.")
+    assert "Replacement" not in runtime.contexts[0]
+    assert "SYSTEM SECURITY" in runtime.contexts[0]
+    assert "Use existing architecture" in runtime.contexts[0]
+    runtime.release.set()
+    await completed(manager)
+    result = manager.store.get("executions", run["id"])
+    assert result["status"] == "COMPLETED"
+    assert result["acceptance"] == "REVIEW_REQUIRED"
+    assert result["task_state"] != "COMPLETED"
+    assert len(manager.store.logs(run["id"])) >= 3
+    manager.review(run["id"], True, "Reviewed generated changes and tests")
+    assert manager.registry.get("backend-agent")["task_state"] == "COMPLETED"
+    restarted = ExecutionManager(tmp_path, EventBus(), runtime)
+    assert restarted.store.get("executions", run["id"])["acceptance"] == "ACCEPTED"
+    assert (manager.workspaces.get("project") / "result.txt").read_text() == "changed"
+
+
+async def test_shared_workspace_lock_cancellation_and_independent_parallelism(tmp_path):
+    runtime = ControlledRuntime()
+    manager = configured(tmp_path, runtime)
+    manager.configure(
+        AgentConfig(id="other-agent", name="Other", workspace="project", task="task.md")
+    )
+    await manager.start("backend-agent")
+    with pytest.raises(ValueError, match="Workspace"):
+        await manager.start("other-agent")
+    manager.workspaces.create("isolated")
+    manager.configure(
+        AgentConfig(id="other-agent", name="Other", workspace="isolated", task="task.md")
+    )
+    await manager.start("other-agent")
+    assert len(manager.running) == 2
+    await manager.stop("backend-agent")
+    await manager.stop("other-agent")
+    assert not manager.claims
+    assert manager.registry.get("backend-agent")["state"] == "CANCELLED"
+    assert manager.registry.get("other-agent")["state"] == "CANCELLED"
+
+
+async def test_failure_timeout_and_restart_recovery(tmp_path):
+    runtime = ControlledRuntime(success=False)
+    runtime.release.set()
+    manager = configured(tmp_path, runtime)
+    run = await manager.start("backend-agent")
+    await completed(manager)
+    assert manager.store.get("executions", run["id"])["status"] == "FAILED"
+    with pytest.raises(ValueError):
+        manager.review(run["id"], True, "Cannot accept failed runtime")
+    runtime.release.clear()
+    record = manager.registry.get("backend-agent")["config"]
+    record["execution"]["timeout_seconds"] = 1
+    manager.configure(AgentConfig.model_validate(record))
+    run = await manager.start("backend-agent")
+    await asyncio.sleep(1.1)
+    assert manager.store.get("executions", run["id"])["detail"] == "Execution timed out"
+    manager.store.put("executions", "interrupted", {**run, "id": "interrupted"})
+    manager.registry.update("backend-agent", state="RUNNING")
+    restarted = ExecutionManager(tmp_path, EventBus(), runtime)
+    assert restarted.store.get("executions", "interrupted")["status"] == "FAILED"
+    assert restarted.registry.get("backend-agent")["state"] == "FAILED"
+
+
+def test_management_api_editable_assignments_security_and_persistence(tmp_path):
+    root = tmp_path / "management"
+    app = create_app("codex", management_root=root)
+    with TestClient(app) as client:
+        client.headers["Authorization"] = "Bearer " + app.state.management.access.token
+        assert client.post("/management/workspaces", json={"id": "project"}).status_code == 201
+        for kind, file in [("tasks", "task.md"), ("roles", "backend.md")]:
+            assert (
+                client.put(
+                    f"/management/definitions/{kind}/{file}",
+                    json={"content": "# Instructions\nWrite tests."},
+                ).status_code
+                == 200
+            )
+        config = {
+            "id": "backend-agent",
+            "name": "Backend",
+            "workspace": "project",
+            "task": "task.md",
+            "roles": ["backend.md"],
+        }
+        assert client.post("/management/agents", json=config).status_code == 201
+        assert client.post("/management/agents", json=config).status_code == 409
+        config["name"] = "Updated Backend"
+        assert client.put("/management/agents/backend-agent", json=config).status_code == 200
+        assert client.post("/management/workspaces", json={"id": "../escape"}).status_code == 422
+        assert (
+            client.post(
+                "/management/workspaces",
+                json={"id": "blocked"},
+                headers={"Origin": "https://evil.test"},
+            ).status_code
+            == 403
+        )
+        assert (
+            client.post(
+                "/management/workspaces/project/git", json={"operation": "reset"}
+            ).status_code
+            == 422
+        )
+        assert (
+            client.post(
+                "/management/workspaces/project/git",
+                json={"operation": "clone", "remote": "git@example.com:project.git"},
+            ).status_code
+            == 409
+        )
+    restarted_app = create_app("codex", management_root=root)
+    with TestClient(restarted_app) as client:
+        assert client.get("/management").status_code == 401
+        client.headers["Authorization"] = "Bearer " + restarted_app.state.management.access.token
+        overview = client.get("/management").json()
+        assert overview["agents"][0]["config"]["name"] == "Updated Backend"
+        assert overview["tasks"][0]["content"].startswith("# Instructions")
+
+
+class GitHelperRuntime:
+    async def run(self, prompt, workspace, emit):
+        from virtual_agent_cafe.management.sandbox import Sandbox
+
+        sandbox = Sandbox()
+        (workspace / "feature.py").write_text("def feature():\n    return 'implemented'\n")
+        for operation in [["stage", "feature.py"], ["commit", "feat: implement feature"]]:
+            process = await asyncio.create_subprocess_exec(
+                *sandbox.command(
+                    workspace, ["python3", ".cafe/git.py", *operation], writable_git=False
+                ),
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            output, error = await process.communicate()
+            assert process.returncode == 0, (output + error).decode()
+        return RunResult(True, "Git helper completed")
+
+
+async def test_runtime_git_helper_commits_only_assigned_branch(tmp_path):
+    manager = configured(tmp_path, GitHelperRuntime())
+    await manager.git.init("project")
+    (manager.workspaces.get("project") / "readme.md").write_text("# Project")
+    await manager.git.stage("project", ["readme.md"])
+    await manager.git.commit("project", "feat: initial project")
+    manager.workspaces.create("backend")
+    record = manager.registry.get("backend-agent")["config"]
+    record.update(workspace="backend", git={"enabled": True, "repository": "project"})
+    manager.configure(AgentConfig.model_validate(record))
+    run = await manager.start("backend-agent")
+    for _ in range(200):
+        if not manager.running:
+            break
+        await asyncio.sleep(0.02)
+    result = manager.store.get("executions", run["id"])
+    assert result["status"] == "COMPLETED", result
+    assert len((await manager.git.info("backend"))["history"]) == 2
+    assert len((await manager.git.info("project"))["history"]) == 1
+    assert any("Git: commit" in log["detail"] for log in manager.store.logs(run["id"]))
+    for sensitive in [".env", ".cafe/git.py", "private.key"]:
+        with pytest.raises(ValueError):
+            await manager.git.stage("backend", [sensitive])
+
+
+async def test_unavailable_isolation_fails_before_runtime_and_git(tmp_path):
+    runtime = ControlledRuntime()
+    manager = configured(tmp_path, runtime)
+
+    async def unavailable(_workspace):
+        raise ValueError("Filesystem isolation unavailable")
+
+    manager.sandbox.validate = unavailable
+    with pytest.raises(ValueError, match="isolation"):
+        await manager.start("backend-agent")
+    assert not manager.running
+    assert not runtime.contexts
+    assert manager.registry.get("backend-agent")["state"] == "CONFIGURED"
+
+
+def test_managed_worker_cannot_use_management_or_legacy_api_without_token(tmp_path):
+    runtime = ControlledRuntime()
+    root = tmp_path / "management"
+    app = create_app("codex", management_root=root, managed_adapter=runtime)
+    manager = app.state.management
+    manager.workspaces.create("project")
+    manager.tasks.save("task.md", "# Task\nWait for review.")
+    manager.configure(AgentConfig(id="agent", name="Agent", workspace="project", task="task.md"))
+    with TestClient(app) as client:
+        client.headers["Authorization"] = "Bearer " + manager.access.token
+        response = client.post("/management/agents/agent/start", json={})
+        assert response.status_code == 202
+        del client.headers["Authorization"]
+        assert client.get("/management").status_code == 401
+        assert (
+            client.post("/agents/ada/tasks", json={"prompt": "Attempt legacy bypass"}).status_code
+            == 401
+        )
+        assert (
+            client.post(
+                "/agents/ada/messages", json={"recipient": "turing", "text": "Bypass"}
+            ).status_code
+            == 401
+        )
+        client.headers["Authorization"] = "Bearer " + manager.access.token
+        assert client.post("/management/agents/agent/stop", json={}).status_code == 202
+        assert client.post("/management/agents/agent/restart", json={}).status_code == 202
+        assert client.post("/management/agents/agent/stop", json={}).status_code == 202

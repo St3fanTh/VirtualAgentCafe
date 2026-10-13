@@ -12,6 +12,8 @@ from .adapters.base import AgentAdapter
 from .adapters.codex import CodexAdapter
 from .bus import EventBus
 from .jobs import BusyError, JobManager
+from .management.api import management_router
+from .management.execution import ExecutionManager
 from .simulator import simulate
 
 
@@ -64,6 +66,8 @@ def create_app(
     *,
     adapter: AgentAdapter | None = None,
     workspace_root: Path | None = None,
+    management_root: Path | None = None,
+    managed_adapter: AgentAdapter | None = None,
 ) -> FastAPI:
     if mode not in {"demo", "codex"}:
         raise ValueError("mode must be demo or codex")
@@ -76,12 +80,24 @@ def create_app(
         workspace_root or Path(os.getenv("VAC_TASK_ROOT", ".runtime/workspaces")),
     )
 
+    management = ExecutionManager(
+        management_root
+        or (
+            workspace_root.parent / "management"
+            if workspace_root
+            else Path(os.getenv("VAC_MANAGEMENT_ROOT", ".runtime/management"))
+        ),
+        bus,
+        managed_adapter,
+    )
+
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         demo = asyncio.create_task(simulate(bus, interval)) if mode == "demo" else None
         try:
             yield
         finally:
+            await management.close()
             await jobs.close()
             if demo:
                 demo.cancel()
@@ -92,12 +108,14 @@ def create_app(
     app.state.bus = bus
     app.state.mode = mode
     app.state.jobs = jobs
+    app.state.management = management
+    app.include_router(management_router(management, validated_body, mode))
     app.add_middleware(
         TrustedHostMiddleware, allowed_hosts=["127.0.0.1", "localhost", "[::1]", "testserver"]
     )
 
     def live_agent(agent_id: str):
-        if agent_id not in bus.agents:
+        if agent_id not in {"ada", "turing"}:
             raise HTTPException(404, "Unknown agent")
         if mode != "codex":
             raise HTTPException(409, "Start backend in Codex mode to submit tasks")
@@ -105,6 +123,8 @@ def create_app(
     @app.post("/agents/{agent_id}/tasks", status_code=202)
     async def submit_task(agent_id: str, request: Request):
         live_agent(agent_id)
+        if management.running:
+            management.access.require(request)
         data = await validated_body(request, TaskInput)
         try:
             return jobs.submit(agent_id, data.prompt)
@@ -121,6 +141,8 @@ def create_app(
     @app.post("/agents/{agent_id}/cancel")
     async def cancel_task(agent_id: str, request: Request):
         live_agent(agent_id)
+        if management.running:
+            management.access.require(request)
         if request.headers.get("origin") is not None:
             raise HTTPException(403, "Browser task submission is disabled")
         if not await jobs.cancel(agent_id):
@@ -130,6 +152,8 @@ def create_app(
     @app.post("/agents/{agent_id}/messages", status_code=202)
     async def send_message(agent_id: str, request: Request):
         live_agent(agent_id)
+        if management.running:
+            management.access.require(request)
         data = await validated_body(request, MessageInput)
         if data.recipient == agent_id:
             raise HTTPException(422, "Choose the other agent")

@@ -68,6 +68,8 @@ class AgentConfig(StrictModel):
             raise ValueError("Legacy café IDs are reserved")
         if len(self.roles) != len(set(self.roles)):
             raise ValueError("Duplicate role")
+        if self.git.enabled and not self.git.worktree and self.git.repository != self.workspace:
+            raise ValueError("Ordinary Git workspace must be its configured repository")
         return self
 
 
