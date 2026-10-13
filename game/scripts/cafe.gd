@@ -4,6 +4,9 @@ const EventState = preload("res://scripts/event_state.gd")
 const Network = preload("res://scripts/network.gd")
 const Character = preload("res://scripts/character.gd")
 const ActivityCard = preload("res://scripts/activity_card.gd")
+const Management = preload("res://scripts/management.gd")
+var management = Management.new()
+
 const World = preload("res://scripts/world.gd")
 var ui_font := FontFile.new()
 var world = World.new()
@@ -100,6 +103,13 @@ func build_ui() -> void:
 	theme.set_stylebox("focus", "TextEdit", ui_style(Color(0, 0, 0, 0), Color("a5bfa7")))
 	ui.theme = theme
 	layer.add_child(ui)
+	management.backend_url = backend_url
+	ui.add_child(management)
+	var manage_button := Button.new()
+	manage_button.text = "Manage agents"
+	manage_button.position = Vector2(1280, 84)
+	manage_button.pressed.connect(management.show_management)
+	ui.add_child(manage_button)
 	var title := label("VIRTUAL AGENT CAFE", 46)
 	title.position = Vector2(44, 20)
 	ui.add_child(title)
@@ -184,20 +194,38 @@ func build_ui() -> void:
 	close.pressed.connect(func(): task_panel.hide())
 	row.add_child(close)
 
+func ensure_character(id: String, data: Dictionary) -> void:
+	if characters.has(id):
+		return
+	var character = Character.new()
+	character.agent_id = id
+	character.role_label = str(data.get("role", "custom")).trim_suffix(".md")
+	character.position = Vector2(145 + (characters.size() - 2) % 5 * 20, 140)
+	character.tint = Color.from_hsv(float(characters.size()) * 0.15, 0.4, 0.9)
+	character.z_index = 3
+	character.selected.connect(select_agent)
+	world.add_child(character)
+	characters[id] = character
+
 func on_frame(frame: Dictionary) -> void:
 	if state.apply(frame):
 		if frame.get("kind") == "snapshot":
 			for id in state.agents:
+				ensure_character(id, state.agents[id])
 				characters[id].reset_state(state.agents[id])
-				world.set_agent_status(id, state.agents[id].status, state.agents[id].get("detail", ""))
-				activity_cards[id].history.clear()
-				activity_cards[id].history_label.text = "Snapshot synchronized"
-				activity_cards[id].update_state(state.agents[id])
+				if id in ["ada", "turing"]:
+					world.set_agent_status(id, state.agents[id].status, state.agents[id].get("detail", ""))
+				if activity_cards.has(id):
+					activity_cards[id].history.clear()
+					activity_cards[id].history_label.text = "Snapshot synchronized"
+					activity_cards[id].update_state(state.agents[id])
 		else:
 			var id: String = frame.event.agent_id
 			characters[id].enqueue_state(state.agents[id])
-			world.set_agent_status(id, state.agents[id].status, state.agents[id].get("detail", ""))
-			activity_cards[id].update_state(state.agents[id], frame.event)
+			if id in ["ada", "turing"]:
+				world.set_agent_status(id, state.agents[id].status, state.agents[id].get("detail", ""))
+			if activity_cards.has(id):
+				activity_cards[id].update_state(state.agents[id], frame.event)
 		status_label.text = "Ada / Backend · %s     |     Turing / Frontend · %s" % [state.state_label("ada"), state.state_label("turing")]
 	elif state.needs_snapshot:
 		network.force_reconnect()
@@ -217,6 +245,9 @@ func on_health(_result: int, code: int, _headers: PackedStringArray, body: Packe
 		connection_label.text = "ONLINE · " + ("DEMO (simulated)" if mode == "demo" else "CODEX (live)")
 
 func select_agent(id: String) -> void:
+	if id not in ["ada", "turing"]:
+		management.show_agent(id)
+		return
 	selected_id = id
 	for key in characters:
 		characters[key].is_selected = key == id
@@ -246,7 +277,10 @@ func send_action(action: String, path: String, body: Dictionary) -> void:
 		return
 	request_action = action
 	task_button.disabled = true
-	var result := task_request.request(backend_url + "/agents/" + selected_id + path, ["Content-Type: application/json"], HTTPClient.METHOD_POST, JSON.stringify(body))
+	var headers := PackedStringArray(["Content-Type: application/json"])
+	if not management.token.text.is_empty():
+		headers.append("Authorization: Bearer " + management.token.text.strip_edges())
+	var result := task_request.request(backend_url + "/agents/" + selected_id + path, headers, HTTPClient.METHOD_POST, JSON.stringify(body))
 	if result != OK:
 		task_info.text = "Request could not be sent."
 		task_button.disabled = false

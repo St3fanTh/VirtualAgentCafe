@@ -365,3 +365,36 @@
 - Commit-ID: git log --format='%h %s' --grep='isolate managed agents and coordinate Git worktree execution'.
 - Push: nicht ausgeführt (neueste Nutzeranweisung). Nächster Meilenstein: native
   Godot-Verwaltung, Beispiele, ausführbare Dokumentation und finaler Regressionstest.
+
+## Management M3 — Native Verwaltung, Konfigurationsbeispiele und Ende-zu-Ende-Nachweis
+- Backend-/Isolation-Meilenstein: 84abb98; Registry-/Markdown-Meilenstein: 84748a7.
+- Godot-Panel: Agenten erstellen/editieren, Workspace/Task/mehrere Rollen auswählen,
+  Git/Timeout/Retry konfigurieren, Markdown-Editor, Workspace-/Git-Verwaltung,
+  Start/Stop/Restart, Status/live Logs, Ausführungshistorie und separate Aufgabenabnahme.
+- Zusätzliche Figuren folgen demselben echten Eventstream und öffnen beim Anklicken
+  ihre Konfiguration. Bestehende Ada-/Turing-Karten, Demo und Task-UI bleiben erhalten.
+- Sicherheit nach Prüfung ergänzt: exklusiver Controller-Lock vor Recovery,
+  HTTP-Verwaltungstoken nicht im Worker verfügbar, einzelne Dateipfade statt Verzeichnis-
+  Staging (keine versehentliche Aufnahme von .env/.cafe), read-only Markdown-Snapshots,
+  Abnahme bleibt an exakte Aufgabenfassung gebunden; Restart auch nach Abschluss.
+  Git-Remotes lassen sich ohne Netzwerkaufruf konfigurieren; Auswahl pro Agent.
+- Neu: management.gd/.uid, test_management.gd/.uid, native Godot-/Backend-Fixture,
+  test_game_management.py, docs/agent-management.md, examples/backend-agent.json,
+  vier Rollenbeispiele und Beispieltask; management_smoke.py/-smoke.sh.
+- Geändert: cafe.gd/character.gd/event_state.gd/test_states.gd, README und Architektur,
+  main.py/management APIs/Execution/Git und passende Regressionstests.
+- Tests: scripts/check.sh PASS, 93 pytest-Tests ohne Skips; Godot Import/Zustände/
+  Headless sowie reale HTTP/WebSocket/Verwaltungs-/Aufgaben-/Abbruch-/Reconnect-Integration.
+- Echte Codex-Probe erneut PASS: eingefrorene Markdown-Aufgabe, isolierter Worktree,
+  tatsächliche Python-Codeänderung, unittest, Git-Helper Stage/Commit; unabhängige
+  Funktions-/Testprüfung und zwei Commits nur auf Agenten-Branch. Keine Remote-Aktion.
+- Compose/CI-YAML parse PASS. Lokaler Container-Rebuild und neuer GPU-UI-Render
+  nicht ausgeführt (Docker/Xvfb hier nicht verfügbar); native Oberfläche headless geprüft.
+- Bekannte Grenzen: Linux/Bubblewrap mit funktionierenden Namespaces; ein Controller;
+  keine automatische Aufgabenabnahme/Merges, Remote-Git standardmäßig deaktiviert;
+  Legacy Ada/Turing bleibt vertrauensbasierter Kompatibilitätspfad.
+- Commit-ID: git log --format='%h %s' --grep='add native agent management and verified execution workflow'.
+- Push/Merge nicht ausgeführt; Nutzerfreigabe für Push fehlt gemäß neuester Vorgabe.
+- Nächste Schritte beim Nutzer: Backend neu bauen, Verwaltungstoken lokal lesen,
+  Godot/F5 → Manage agents, Workspace/Rollen/Task konfigurieren; vollständige Anleitung
+  und Dateiliste stehen in docs/agent-management.md.

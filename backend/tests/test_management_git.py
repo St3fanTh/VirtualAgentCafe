@@ -34,7 +34,7 @@ async def test_git_init_commit_branches_worktrees_and_path_validation(tmp_path):
     assert await git.worktree("project", "frontend", "agent/frontend/task") == front
     await git.branch("backend", "agent/backend/next")
     await git.branch("backend", "agent/backend/task", create=False)
-    for malicious in ["../../secret", "/etc/passwd", ":(glob)**", ".git/config"]:
+    for malicious in ["../../secret", "/etc/passwd", ":(glob)**", ".git/config", "."]:
         with pytest.raises(ValueError):
             await git.stage("frontend", [malicious])
     with pytest.raises(ValueError):
@@ -107,3 +107,18 @@ async def test_runtime_readonly_git_metadata_and_markdown_mounts(tmp_path):
     assert await process.wait() == 0
     assert (instructions / "task.md").read_text() == "# Exact task"
     assert (workspace / ".git/config").read_text() == "original"
+
+
+async def test_git_remotes_are_configurable_without_network_or_credentials(tmp_path):
+    workspaces = WorkspaceManager(tmp_path / "workspaces", Store(tmp_path))
+    workspaces.create("project")
+    git = GitService(workspaces)
+    await git.init("project")
+    assert (await git.set_remote("project", "team", "git@example.com:team/project.git"))[
+        "remotes"
+    ] == ["team"]
+    await git.set_remote("project", "team", "https://example.com/team/project.git")
+    with pytest.raises(ValueError):
+        await git.set_remote("project", "--force", "git@example.com:team/project.git")
+    with pytest.raises(ValueError):
+        await git.set_remote("project", "team", "https://user:secret@example.com/project.git")

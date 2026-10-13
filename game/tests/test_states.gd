@@ -58,5 +58,12 @@ func _init() -> void:
 	check(visual.presentation_queue.is_empty(), "Snapshot clears stale animation queue")
 	check(visual.status == "agent.error", "Snapshot immediately authoritative")
 	visual.free()
+	check(state.apply({"kind": "snapshot", "version": 1, "sequence": 0, "agents": [
+		{"agent_id": "ada", "status": "agent.waiting"},
+		{"agent_id": "turing", "status": "agent.waiting"},
+		{"agent_id": "backend-agent", "status": "agent.coding"}
+	]}), "Managed agent snapshot accepted")
+	check(state.state_label("backend-agent") == "Coding", "Managed agent observed state mapped")
+	check(not state.valid_agent({"agent_id": "../escape", "status": "agent.waiting"}), "Invalid managed ID rejected")
 	print("Godot state tests: ", "PASS" if failures == 0 else "FAIL")
 	quit(0 if failures == 0 else 1)

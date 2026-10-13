@@ -1,0 +1,20 @@
+{
+  "id": "backend-agent",
+  "name": "Backend Developer",
+  "provider": "codex",
+  "workspace": "backend",
+  "task": "implement-api.md",
+  "roles": ["backend-developer.md", "security-guidelines.md"],
+  "git": {
+    "enabled": true,
+    "repository": "project",
+    "branch": "agent/backend-agent/implement-api",
+    "worktree": true,
+    "remote_name": "origin",
+    "auto_commit": false,
+    "allow_push": false,
+    "allow_pull": false,
+    "allow_fetch": false
+  },
+  "execution": {"timeout_seconds": 900, "max_retries": 0}
+}

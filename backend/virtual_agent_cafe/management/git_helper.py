@@ -80,6 +80,10 @@ async def watch(manager, config, run: dict, workspace: Path):
                     result = await git.branch(config.workspace, arguments[0], operation == "branch")
                 else:
                     raise ValueError("Operation is not authorized")
+                if operation in {"branch", "switch"}:
+                    run["branch"] = result["branch"]
+                    manager.store.put("executions", run["id"], run)
+                    manager.registry.update(config.id, branch=result["branch"])
                 response = {"ok": True, "result": result}
                 from ..models import EventType
 

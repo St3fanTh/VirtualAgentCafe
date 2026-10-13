@@ -1,4 +1,5 @@
 import asyncio
+import fcntl
 import hashlib
 import os
 from datetime import UTC, datetime
@@ -38,7 +39,14 @@ def now() -> str:
 
 
 class ExecutionManager:
-    def __init__(self, root: Path, bus: EventBus, adapter: AgentAdapter | None = None):
+    def __init__(
+        self,
+        root: Path,
+        bus: EventBus,
+        adapter: AgentAdapter | None = None,
+        *,
+        recover: bool = True,
+    ):
         self.store = Store(root)
         self.access = ManagementAccess(root)
         self.tasks = MarkdownManager(
@@ -59,11 +67,30 @@ class ExecutionManager:
         self.sandbox = Sandbox()
         self.running: dict[str, asyncio.Task] = {}
         self.claims: dict[str, str] = {}
+        self.external_claims = lambda: set()
         self.control = asyncio.Lock()
         self.closing = False
-        self.recover()
+        self.controller_lock = None
+        if recover:
+            self.recover()
         for record in self.store.list("agents"):
             self.register(AgentConfig.model_validate(record["config"]))
+
+    def acquire_controller(self):
+        lock_path = self.contexts.root.parent / "controller.lock"
+        descriptor = os.open(lock_path, os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
+        try:
+            fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except OSError:
+            os.close(descriptor)
+            raise RuntimeError("Another controller already owns this management store") from None
+        self.controller_lock = descriptor
+        self.recover()
+
+    def release_controller(self):
+        if self.controller_lock is not None:
+            os.close(self.controller_lock)
+            self.controller_lock = None
 
     def recover(self):
         # Single controller only; interrupted work is never mistaken for completion.
@@ -124,7 +151,7 @@ class ExecutionManager:
             task = self.tasks.load(config.task)
             roles = [self.roles.load(name) for name in config.roles]
             workspace = self.workspaces.get(config.workspace)
-            if config.workspace in self.claims:
+            if config.workspace in self.claims or str(workspace) in self.external_claims():
                 raise ValueError("Workspace is already used by a running agent")
             # Validate confinement BEFORE any Git preparation or runtime start.
             await self.sandbox.validate(workspace)
@@ -213,7 +240,8 @@ class ExecutionManager:
             "A successful runtime requires separate human acceptance of the task.\n"
             "The exact Markdown task/role snapshots are mounted read-only at "
             ".cafe/instructions/task.md and .cafe/instructions/roles/. Read them before editing.\n"
-            "Precedence: system security > validated configuration > roles (listed order) > task.\n"
+            "Precedence: system security > validated configuration > "
+            "roles (first listed has highest priority) > task.\n"
         )
         system += (
             f"Agent: {config.id}\nWorkspace: {workspace}\nGit branch: {branch}\n"
@@ -359,7 +387,19 @@ class ExecutionManager:
         )
         self.store.put("executions", execution, run)
         agent = self.registry.get(run["agent_id"])
-        if agent.get("last_execution") == execution and agent["state"] != State.RUNNING:
+        current_task = agent["config"].get("task")
+        try:
+            unchanged = (
+                current_task == run["task"]
+                and self.tasks.load(current_task)["sha256"] == run["task_sha256"]
+            )
+        except (OSError, ValueError):
+            unchanged = False
+        if (
+            agent.get("last_execution") == execution
+            and agent["state"] != State.RUNNING
+            and unchanged
+        ):
             self.registry.update(run["agent_id"], task_state=run["task_state"])
         return run
 

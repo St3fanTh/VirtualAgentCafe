@@ -15,10 +15,21 @@ class EmptyInput(StrictModel):
 
 class GitInput(StrictModel):
     operation: Literal[
-        "init", "connect", "clone", "branch", "switch", "stage", "commit", "fetch", "pull", "push"
+        "init",
+        "connect",
+        "clone",
+        "branch",
+        "switch",
+        "stage",
+        "commit",
+        "remote",
+        "fetch",
+        "pull",
+        "push",
     ]
     branch: str = Field(default="", max_length=160)
     remote: str = Field(default="", max_length=512)
+    remote_name: str = Field(default="origin", pattern=r"^[A-Za-z][A-Za-z0-9_-]{0,31}$")
     files: list[str] = Field(default_factory=list, max_length=100)
     message: str = Field(default="", max_length=256)
     agent_id: str | None = None
@@ -74,7 +85,16 @@ def management_router(manager: ExecutionManager, validated_body, mode: str) -> A
     async def save_definition(kind: Literal["tasks", "roles"], filename: str, request: Request):
         data = await validated_body(request, MarkdownInput)
         files = manager.tasks if kind == "tasks" else manager.roles
-        return await guarded(lambda: asyncio.to_thread(files.save, filename, data.content))
+
+        async def save():
+            result = await asyncio.to_thread(files.save, filename, data.content)
+            if kind == "tasks":
+                for agent in manager.store.list("agents"):
+                    if agent["config"].get("task") == filename and agent["state"] != "RUNNING":
+                        manager.registry.update(agent["config"]["id"], task_state="ASSIGNED")
+            return result
+
+        return await guarded(save)
 
     @router.post("/workspaces", status_code=201)
     async def create_workspace(request: Request):
@@ -105,8 +125,8 @@ def management_router(manager: ExecutionManager, validated_body, mode: str) -> A
     @router.get("/executions/{execution}/logs")
     async def logs(execution: str, after: int = 0):
         async def read():
-            manager.store.get("executions", execution)
-            return {"logs": manager.store.logs(execution, max(0, after))}
+            record = manager.store.get("executions", execution)
+            return {"logs": manager.store.logs(execution, max(0, after)), "execution": record}
 
         return await guarded(read)
 
@@ -148,6 +168,8 @@ def management_router(manager: ExecutionManager, validated_body, mode: str) -> A
                     if os.getenv("VAC_ALLOW_REMOTE_GIT") != "1" or not data.confirmed:
                         raise ValueError("Remote Git requires controller opt-in and confirmation")
                     return await git.clone(identifier, data.remote)
+                if data.operation == "remote":
+                    return await git.set_remote(identifier, data.remote_name, data.remote)
                 if data.operation in {"branch", "switch"}:
                     return await git.branch(identifier, data.branch, data.operation == "branch")
                 if data.operation == "stage":
@@ -165,14 +187,14 @@ def management_router(manager: ExecutionManager, validated_body, mode: str) -> A
                     raise ValueError("Remote operation is not authorized")
                 path = await git.repository(identifier)
                 if data.operation == "pull":
-                    await git.run(path, "pull", "--ff-only", "origin")
+                    await git.run(path, "pull", "--ff-only", config.git.remote_name)
                 elif data.operation == "push":
                     branch = (await git.info(identifier))["branch"]
                     if branch in {"main", "master"}:
                         raise ValueError("Pushing protected branches is disabled")
-                    await git.run(path, "push", "origin", branch)
+                    await git.run(path, "push", config.git.remote_name, branch)
                 else:
-                    await git.run(path, "fetch", "origin")
+                    await git.run(path, "fetch", config.git.remote_name)
                 return await git.info(identifier)
 
         return await guarded(operate)

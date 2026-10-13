@@ -3,6 +3,7 @@ extends Node2D
 signal selected(agent_id: String)
 
 var agent_id := "ada"
+var role_label := ""
 var status := "agent.waiting"
 var detail := "Ready"
 var source := "system"
@@ -55,7 +56,7 @@ func update_state(state: Dictionary) -> void:
 	queue_redraw()
 
 func destination() -> Vector2:
-	var second := agent_id == "turing"
+	var second := agent_id == "turing" or "frontend" in role_label.to_lower()
 	match status:
 		"agent.coding", "agent.thinking", "agent.started":
 			return Vector2(112 if second else 60, 63)
@@ -158,7 +159,7 @@ func _draw() -> void:
 	draw_string(font, Vector2.ZERO, badge, HORIZONTAL_ALIGNMENT_LEFT, -1, 36, tint.lightened(0.25))
 	draw_set_transform(Vector2.ZERO)
 	draw_set_transform(Vector2(-9, 15), 0.0, Vector2.ONE / draw_scale)
-	draw_string(font, Vector2.ZERO, agent_id.capitalize() + (" · Backend" if agent_id == "ada" else " · Frontend"), HORIZONTAL_ALIGNMENT_LEFT, -1, 36, Color("f2e9dc"))
+	draw_string(font, Vector2.ZERO, agent_id.capitalize() + (" · " + role_label if not role_label.is_empty() else (" · Backend" if agent_id == "ada" else " · Frontend")), HORIZONTAL_ALIGNMENT_LEFT, -1, 36, Color("f2e9dc"))
 	draw_set_transform(Vector2.ZERO)
 	if bubble != "" and bubble_left > 0:
 		var text := bubble.left(42)

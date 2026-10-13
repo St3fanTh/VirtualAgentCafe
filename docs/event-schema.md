@@ -32,3 +32,17 @@ Peer delivery uses recipient and actual inbox/outbox evidence; model response ev
 without recipient are displayed as Response. agent.waiting represents Idle unless
 detail starts CLI:, in which case a shell command is active. Completed tasks emit
 Finished, then a system Waiting/Idle event when no CLI job is running.
+
+## Managed agent extension
+
+Protocol version 1 is preserved. Besides reserved `ada` and `turing`, the management
+coordinator registers configured IDs matching `^[a-z][a-z0-9_-]{0,63}$` before emitting
+activity. A snapshot announces new agents; clients must use the snapshot registry
+instead of assuming exactly two agents. At most 64 characters (two reserved plus
+62 managed) are published. Managed snapshot `role` is a bounded display summary of
+assigned role filenames; the configuration API holds actual role assignments.
+
+Managed events use the same types, correlation UUIDs, global sequence, sanitized
+payload details and Codex/system source markers. Private definitions and controller
+tokens are never carried by this stream. Runtime `agent.finished` means the observed
+runtime completed; task acceptance remains a separate management record.

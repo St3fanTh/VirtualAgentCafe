@@ -42,14 +42,16 @@ class GitService:
             "GIT_TERMINAL_PROMPT": "0",
             "GIT_CONFIG_NOSYSTEM": "1",
             "GIT_CONFIG_GLOBAL": "/dev/null",
-            "GIT_SSH_COMMAND": "ssh -o BatchMode=yes -o StrictHostKeyChecking=yes",
+            "GIT_SSH_COMMAND": "ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "
+            "-o UserKnownHostsFile=/home/agent/.ssh/known_hosts",
         }
         if os.getenv("SSH_AUTH_SOCK"):
             env["SSH_AUTH_SOCK"] = os.environ["SSH_AUTH_SOCK"]
         command = [
             "git",
             "-c",
-            "core.sshCommand=ssh -o BatchMode=yes -o StrictHostKeyChecking=yes",
+            "core.sshCommand=ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "
+            "-o UserKnownHostsFile=/home/agent/.ssh/known_hosts",
             "-c",
             "credential.helper=",
             "-c",
@@ -143,6 +145,19 @@ class GitService:
         await self.run(path, "clone", "--", remote, ".")
         return await self.info(identifier)
 
+    async def set_remote(self, identifier: str, name: str, url: str) -> dict:
+        if not re.fullmatch(r"[A-Za-z][A-Za-z0-9_-]{0,31}", name):
+            raise ValueError("Invalid remote name")
+        if not (
+            re.fullmatch(r"git@[A-Za-z0-9.-]+:[A-Za-z0-9_./-]+", url)
+            or re.fullmatch(r"https://[A-Za-z0-9.-]+/[A-Za-z0-9_./-]+", url)
+        ):
+            raise ValueError("Use an SSH or credential-free HTTPS repository URL")
+        path = await self.repository(identifier)
+        names = (await self.run(path, "remote")).splitlines()
+        await self.run(path, "remote", "set-url" if name in names else "add", name, url)
+        return await self.info(identifier)
+
     async def info(self, identifier: str) -> dict:
         path = await self.repository(identifier)
         branch = (await self.run(path, "symbolic-ref", "--short", "HEAD")).strip()
@@ -151,7 +166,9 @@ class GitService:
             history = await self.run(path, "log", "-20", "--format=%h %s")
         except ValueError:
             history = ""
+        remotes = await self.run(path, "remote")
         return {
+            "remotes": remotes.splitlines(),
             "workspace": identifier,
             "repository": str(path),
             "branch": branch,
@@ -176,7 +193,7 @@ class GitService:
             if (
                 any(part in {".git", ".cafe", ".ssh", ".codex"} for part in Path(filename).parts)
                 or Path(filename).name.startswith(".env")
-                or Path(filename).suffix in {".pem", ".key"}
+                or Path(filename).suffix.lower() in {".pem", ".key"}
                 or Path(filename).name.startswith("id_ed25519")
                 or Path(filename).name.startswith("id_rsa")
             ):
@@ -184,6 +201,8 @@ class GitService:
             target = self.workspaces.files.path(
                 str(path.relative_to(self.workspaces.files.root) / filename)
             )
+            if target.is_dir():
+                raise ValueError("Stage individual files, not directories")
             if not target.resolve().is_relative_to(path) or ".git" in Path(filename).parts:
                 raise ValueError("Invalid file path")
 

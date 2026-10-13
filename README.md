@@ -1,7 +1,7 @@
 # VirtualAgentCafe
 
-A Godot 4 pixel café that shows observable activity from two agents. Click Ada or
-Turing to give a task to Codex. Animation state follows backend events, never a
+A Godot 4 pixel café that shows observable activity from Ada, Turing and configurable
+managed agents. Click a character to assign tasks through Codex. Animation state follows backend events, never a
 random timer. Demo mode is deterministic and clearly marked **DEMO (simulated)**.
 Live mode shows **CODEX (live)**. No private reasoning is exposed.
 
@@ -128,3 +128,12 @@ Milestone evidence: [PROGRESS.md](PROGRESS.md).
 
 MVP state is in memory and resets on restart. Run one backend worker. Current
 snapshots recover state; transient animation history is deliberately bounded.
+
+## Configurable agent management
+
+Open **Manage agents** in the Godot café to create agents with editable Markdown
+tasks and roles, select persistent isolated workspaces/worktrees, inspect Git changes,
+start/stop/restart Codex and review execution history. Managed execution requires
+Bubblewrap and working Linux namespaces. A private management token protects the API.
+See the [complete setup, configuration example and workflow](docs/agent-management.md).
+Rebuild the backend image for Bubblewrap and the new approved `/workspaces` volume.

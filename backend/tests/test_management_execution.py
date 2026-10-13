@@ -73,7 +73,8 @@ async def test_lifecycle_context_snapshot_logs_and_separate_acceptance(tmp_path)
     assert result["task_state"] != "COMPLETED"
     assert len(manager.store.logs(run["id"])) >= 3
     manager.review(run["id"], True, "Reviewed generated changes and tests")
-    assert manager.registry.get("backend-agent")["task_state"] == "COMPLETED"
+    assert manager.registry.get("backend-agent")["task_state"] == "ASSIGNED"
+    # Accepting an old execution must not accept instructions edited during that run.
     restarted = ExecutionManager(tmp_path, EventBus(), runtime)
     assert restarted.store.get("executions", run["id"])["acceptance"] == "ACCEPTED"
     assert (manager.workspaces.get("project") / "result.txt").read_text() == "changed"
@@ -138,6 +139,22 @@ def test_management_api_editable_assignments_security_and_persistence(tmp_path):
                 ).status_code
                 == 200
             )
+        assert (
+            client.post(
+                "/management/workspaces/project/git", json={"operation": "init"}
+            ).status_code
+            == 200
+        )
+        remote = client.post(
+            "/management/workspaces/project/git",
+            json={
+                "operation": "remote",
+                "remote_name": "team",
+                "remote": "git@example.com:team/project.git",
+            },
+        )
+        assert remote.status_code == 200
+        assert remote.json()["remotes"] == ["team"]
         config = {
             "id": "backend-agent",
             "name": "Backend",
@@ -186,7 +203,11 @@ class GitHelperRuntime:
 
         sandbox = Sandbox()
         (workspace / "feature.py").write_text("def feature():\n    return 'implemented'\n")
-        for operation in [["stage", "feature.py"], ["commit", "feat: implement feature"]]:
+        for operation in [
+            ["branch", "agent/backend-agent/feature"],
+            ["stage", "feature.py"],
+            ["commit", "feat: implement feature"],
+        ]:
             process = await asyncio.create_subprocess_exec(
                 *sandbox.command(
                     workspace, ["python3", ".cafe/git.py", *operation], writable_git=False
@@ -216,6 +237,8 @@ async def test_runtime_git_helper_commits_only_assigned_branch(tmp_path):
         await asyncio.sleep(0.02)
     result = manager.store.get("executions", run["id"])
     assert result["status"] == "COMPLETED", result
+    assert result["branch"] == "agent/backend-agent/feature"
+    assert manager.registry.get("backend-agent")["branch"] == result["branch"]
     assert len((await manager.git.info("backend"))["history"]) == 2
     assert len((await manager.git.info("project"))["history"]) == 1
     assert any("Git: commit" in log["detail"] for log in manager.store.logs(run["id"]))
@@ -267,3 +290,16 @@ def test_managed_worker_cannot_use_management_or_legacy_api_without_token(tmp_pa
         assert client.post("/management/agents/agent/stop", json={}).status_code == 202
         assert client.post("/management/agents/agent/restart", json={}).status_code == 202
         assert client.post("/management/agents/agent/stop", json={}).status_code == 202
+
+
+def test_second_controller_cannot_recover_or_corrupt_active_store(tmp_path):
+    root = tmp_path / "management"
+    first = create_app("codex", management_root=root)
+    second = create_app("codex", management_root=root)
+    with TestClient(first):
+        with pytest.raises(RuntimeError, match="Another controller"):
+            with TestClient(second):
+                pass
+    # Graceful shutdown releases the lock for the next backend instance.
+    with TestClient(second) as client:
+        assert client.get("/health").status_code == 200

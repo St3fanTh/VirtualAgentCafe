@@ -19,3 +19,20 @@ Presentation uses a separate bounded queue (16 observed states per character) an
 collapses stale presentation to recent evidence. The HUD continues to show current
 backend state. Snapshots immediately clear pending animations and replace state.
 Final Codex responses are written privately into the workspace, never broadcast.
+
+## Persistent management extension
+
+The legacy JobManager keeps its compatibility behavior. The separate management
+coordinator reuses CodexAdapter and EventBus, adds validated JSON agent configurations,
+Markdown managers, an approved WorkspaceManager, GitService and SQLite persistence.
+Its native Godot panel uses authenticated HTTP for administration; observed managed
+activity joins the existing WebSocket stream and dynamically creates café characters.
+
+Managed executions validate actual mount-namespace isolation before preparation,
+claim a workspace, prepare an independent Git worktree and freeze Markdown context.
+The Codex namespace exposes only runtime files, model authentication and assigned
+workspace/instruction mounts. Git metadata is read-only there. Scoped file requests
+let the controller perform authorized Git operations without giving workers controller
+API credentials or SSH agent access. Runtime completion and task acceptance are
+separate durable fields. See [agent management](agent-management.md) for boundaries,
+configuration, APIs, startup and operational limits.

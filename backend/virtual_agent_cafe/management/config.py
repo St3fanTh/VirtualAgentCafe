@@ -35,6 +35,7 @@ class GitConfig(StrictModel):
     repository: Identifier | None = None
     branch: str | None = Field(default=None, max_length=160)
     worktree: bool = True
+    remote_name: str = Field(default="origin", pattern=r"^[A-Za-z][A-Za-z0-9_-]{0,31}$")
     auto_commit: Literal[False] = False
     allow_push: bool = False
     allow_pull: bool = False

@@ -89,16 +89,23 @@ def create_app(
         ),
         bus,
         managed_adapter,
+        recover=False,
     )
+
+    management.external_claims = lambda: {str(jobs.root / agent) for agent in jobs.running}
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
+        management.acquire_controller()
         demo = asyncio.create_task(simulate(bus, interval)) if mode == "demo" else None
         try:
             yield
         finally:
-            await management.close()
-            await jobs.close()
+            try:
+                await management.close()
+                await jobs.close()
+            finally:
+                management.release_controller()
             if demo:
                 demo.cancel()
                 with suppress(asyncio.CancelledError):
@@ -117,6 +124,11 @@ def create_app(
     def live_agent(agent_id: str):
         if agent_id not in {"ada", "turing"}:
             raise HTTPException(404, "Unknown agent")
+        if any(
+            str(jobs.root / agent_id) == str(management.workspaces.get(workspace))
+            for workspace in management.claims
+        ):
+            raise HTTPException(409, "Workspace already claimed by a managed agent")
         if mode != "codex":
             raise HTTPException(409, "Start backend in Codex mode to submit tasks")
 

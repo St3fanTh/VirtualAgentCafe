@@ -19,7 +19,7 @@ func apply(frame: Dictionary) -> bool:
 			if not agent is Dictionary or not valid_agent(agent):
 				return false
 			incoming[agent.agent_id] = agent.duplicate(true)
-		if incoming.size() != 2:
+		if incoming.size() < 2 or incoming.size() > 64:
 			return false
 		agents = incoming
 		sequence = int(frame.get("sequence", 0))
@@ -36,6 +36,9 @@ func apply(frame: Dictionary) -> bool:
 		return false
 	if not valid_agent({"agent_id": event.get("agent_id"), "status": event.get("type")}):
 		return false
+	if not agents.has(event.agent_id):
+		needs_snapshot = true
+		return false
 	var payload: Dictionary = event.get("payload", {})
 	var agent: Dictionary = agents[event.agent_id].duplicate(true)
 	agent.status = event.type
@@ -49,7 +52,13 @@ func apply(frame: Dictionary) -> bool:
 	return true
 
 func valid_agent(agent: Dictionary) -> bool:
-	return agent.get("agent_id") in ["ada", "turing"] and STATES.has(agent.get("status"))
+	var id = agent.get("agent_id")
+	if not id is String or id.is_empty() or id.length() > 64:
+		return false
+	for character in id:
+		if not character in "abcdefghijklmnopqrstuvwxyz0123456789_-":
+			return false
+	return STATES.has(agent.get("status"))
 
 func state_label(agent_id: String) -> String:
 	var agent: Dictionary = agents.get(agent_id, {})
