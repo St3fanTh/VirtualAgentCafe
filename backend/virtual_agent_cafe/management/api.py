@@ -7,6 +7,7 @@ from pydantic import Field
 
 from .config import AgentConfig, MarkdownInput, ReviewInput, StrictModel, WorkspaceInput
 from .execution import ExecutionManager
+from .project_documents import ProjectDocumentInput, load_documents, save_document
 from .setup import ProjectSetup, SetupCheck, SetupInput
 
 
@@ -63,6 +64,37 @@ def management_router(manager: ExecutionManager, validated_body, mode: str) -> A
     async def setup_check(request: Request):
         data = await validated_body(request, SetupCheck)
         return await guarded(lambda: setup.inspect(data.project, data.check_remote))
+
+    @router.post("/setup/documents/load")
+    async def project_documents(request: Request):
+        data = await validated_body(request, SetupCheck)
+
+        async def read():
+            path = manager.workspaces.files.path(data.project)
+            if not path.is_dir() or not (path / ".git").is_dir():
+                raise ValueError("Select an approved Git project")
+            return {"project": data.project, "documents": load_documents(path)}
+
+        return await guarded(read)
+
+    @router.put("/setup/documents")
+    async def edit_project_document(request: Request):
+        data = await validated_body(request, ProjectDocumentInput)
+
+        async def save():
+            async with manager.control:
+                path = manager.workspaces.files.path(data.project)
+                if not path.is_dir() or not (path / ".git").is_dir():
+                    raise ValueError("Select an approved Git project")
+                for identifier in manager.running:
+                    config = manager.registry.get(identifier)["config"]
+                    if data.project in {config["workspace"], config["git"].get("repository")}:
+                        raise ValueError(
+                            "Stop the project's agents before editing project instructions"
+                        )
+                return {"project": data.project, "documents": save_document(path, data)}
+
+        return await guarded(save)
 
     @router.post("/setup/team", status_code=201)
     async def setup_team(request: Request):

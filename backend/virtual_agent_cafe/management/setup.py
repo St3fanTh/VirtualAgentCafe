@@ -261,6 +261,7 @@ class ProjectSetup:
                         (
                             f"# Task: {config.name}\n\n## Objective\n{record['objective']}\n\n"
                             f"## Scope\nImplement the {config.id.rsplit('-', 1)[1]} part only. "
+                            "Read .cafe/instructions/project/AGENTS.md and PLANNING.md if present. "
                             "Inspect the existing architecture first. "
                             "Document the interface contract. "
                             "Do not assume another agent's branch is already integrated.\n\n"

@@ -62,6 +62,11 @@ var setup_result: TextEdit
 var setup_remote: CheckBox
 var setup_ready := false
 var setup_checked_project := ""
+var setup_documents: Dictionary = {}
+var setup_document_project := ""
+var setup_document: OptionButton
+var setup_document_editor: TextEdit
+var setup_file_dialog: FileDialog
 
 const INK := Color("e4ece6")
 const MUTED := Color("92a9aa")
@@ -499,6 +504,13 @@ func received(_result: int, code: int, _headers: PackedStringArray, body: Packed
 			choose(setup_project, OS.get_environment("VAC_SETUP_PROJECT"))
 		setup_ready = false
 		setup_result.text = "Select your project, describe the goal and run Check project.\n\nApproved folder: " + str(data.get("approved_root", "")) + "\n\nProject missing? Run scripts/setup-project.py on your Docker host to select and mount its folder."
+	elif finished_action in ["setup_docs_load", "setup_docs_save"]:
+		if str(data.get("project", "")) == chosen(setup_project):
+			setup_documents = data.get("documents", {})
+			setup_document_project = str(data.project)
+			if finished_action == "setup_docs_load":
+				show_setup_document()
+			set_notice("Project documents loaded." if finished_action == "setup_docs_load" else "Project document saved. Next agent runs receive the new snapshot.")
 	elif finished_action == "setup_check":
 		setup_checked_project = str(data.get("project", ""))
 		setup_ready = bool(data.get("ready", false)) and setup_checked_project == chosen(setup_project)
@@ -582,6 +594,10 @@ func update_buttons() -> void:
 	if setup_project != null:
 		buttons["Create backend + frontend team"].disabled = busy or not setup_ready or chosen(setup_project) != setup_checked_project or setup_objective.text.strip_edges().length() < 10
 		buttons["Check project"].disabled = busy or chosen(setup_project).is_empty()
+		buttons["Load project documents"].disabled = busy or chosen(setup_project).is_empty()
+		buttons["Save project document"].disabled = busy or setup_document_project != chosen(setup_project) or setup_documents.is_empty()
+		buttons["Import Markdown file"].disabled = busy or setup_document_project != chosen(setup_project) or setup_documents.is_empty()
+		setup_document_editor.editable = not busy and setup_document_project == chosen(setup_project) and not setup_documents.is_empty()
 	var running := false
 	var ready := false
 	var selected: Dictionary = {}
@@ -888,7 +904,62 @@ func build_setup(parent_tabs: TabContainer) -> void:
 	setup_result = TextEdit.new()
 	setup_result.editable = false
 	setup_result.wrap_mode = TextEdit.LINE_WRAPPING_BOUNDARY
-	setup_result.custom_minimum_size = Vector2(600, 490)
-	setup_result.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	setup_result.custom_minimum_size = Vector2(600, 170)
+	setup_result.size_flags_vertical = Control.SIZE_FILL
 	setup_result.text = "LOCAL STARTER\n\nRun python3 scripts/setup-project.py on Linux/WSL. Select your repository folder. The starter mounts only that project, connects Godot and opens this assistant.\n\nCODEX\n\nBoth agents use the backend's Codex login, with separate roles, tasks and worktrees. Use starter --login if needed.\n\nSSH\n\nThe starter forwards an existing SSH-agent socket and known_hosts to the Git service. It never copies private keys. Remote checks are optional and do not test push permission."
 	results.add_child(setup_result)
+	setup_document = option(results, "Project instructions · saved to the selected source repository")
+	setup_document.add_item("AGENTS.md")
+	setup_document.add_item("PLANNING.md")
+	setup_document.item_selected.connect(func(_index): show_setup_document())
+	var document_actions := HBoxContainer.new()
+	document_actions.add_theme_constant_override("separation", 12)
+	results.add_child(document_actions)
+	button(document_actions, "Load project documents", func(): call_api("setup_docs_load", "/setup/documents/load", HTTPClient.METHOD_POST, {"project": chosen(setup_project)}))
+	button(document_actions, "Save project document", save_setup_document)
+	button(document_actions, "Import Markdown file", func():
+		setup_file_dialog.title = "Import " + chosen(setup_document)
+		setup_file_dialog.popup_centered(Vector2i(1400, 900)))
+	setup_file_dialog = FileDialog.new()
+	setup_file_dialog.file_mode = FileDialog.FILE_MODE_OPEN_FILE
+	setup_file_dialog.access = FileDialog.ACCESS_FILESYSTEM
+	setup_file_dialog.filters = PackedStringArray(["*.md ; Markdown"])
+	setup_file_dialog.use_native_dialog = true
+	setup_file_dialog.theme = theme
+	setup_file_dialog.content_scale_factor = 2.0
+	setup_file_dialog.file_selected.connect(import_setup_document)
+	add_child(setup_file_dialog)
+	setup_document_editor = TextEdit.new()
+	setup_document_editor.wrap_mode = TextEdit.LINE_WRAPPING_BOUNDARY
+	setup_document_editor.custom_minimum_size = Vector2(600, 230)
+	results.add_child(setup_document_editor)
+	results.add_child(caption("Load before editing. Saving changes the project file without committing. Next agent runs read a protected snapshot; security rules always take priority."))
+
+
+func show_setup_document() -> void:
+	var name := chosen(setup_document)
+	var document: Dictionary = setup_documents.get(name, {})
+	if document.get("exists", false):
+		setup_document_editor.text = str(document.get("content", ""))
+	elif name == "AGENTS.md":
+		setup_document_editor.text = "# Project agent instructions\n\n## Architecture\nFollow the existing project architecture and conventions.\n\n## Quality\nRun relevant tests and document results.\n\n## Collaboration\nBackend and frontend use separate branches. Agree on the interface contract.\n\n## Restrictions\nDo not push or merge automatically. Never expose credentials.\n"
+	else:
+		setup_document_editor.text = "# Project planning\n\n## Objective\n" + setup_objective.text.strip_edges() + "\n\n## Milestones\n- [ ] Agree on the API contract\n- [ ] Implement backend with tests\n- [ ] Implement frontend with tests\n- [ ] Review both branches and run integration tests\n\n## Acceptance Criteria\n- Tests pass\n- Changes reviewed by the user\n"
+
+func save_setup_document() -> void:
+	var name := chosen(setup_document)
+	var document: Dictionary = setup_documents.get(name, {})
+	call_api("setup_docs_save", "/setup/documents", HTTPClient.METHOD_PUT, {"project": chosen(setup_project), "name": name, "content": setup_document_editor.text, "expected_sha256": str(document.get("sha256", ""))})
+
+
+func import_setup_document(path: String) -> void:
+	var file := FileAccess.open(path, FileAccess.READ)
+	if file == null or file.get_length() > 12000:
+		set_notice("Choose a readable Markdown file of at most 12 KiB.", true)
+		return
+	var content := file.get_as_text().trim_prefix("\ufeff")
+	if not content.strip_edges().begins_with("#"):
+		set_notice("The Markdown file needs a heading.", true)
+		return
+	setup_document_editor.text = content
+	set_notice("File imported into editor. Review it, then Save project document to apply.")

@@ -22,11 +22,14 @@ def test_native_management_ui_to_isolated_runtime(tmp_path, script):
         reserve.bind(("127.0.0.1", 0))
         port = reserve.getsockname()[1]
     url = f"http://127.0.0.1:{port}"
+    import_file = tmp_path / "instructions.md"
+    import_file.write_text("# Imported project agents\nUse the shared API contract and run tests.")
     env = {
         **os.environ,
         "VAC_MANAGEMENT_TOKEN": "fixture-management-token-32-characters",
         "VAC_FIXTURE_ROOT": str(tmp_path / "work"),
         "VAC_BACKEND_URL": url,
+        "VAC_GUI_IMPORT_FILE": str(import_file),
         "VAC_OPEN_SETUP": "1" if script == "test_setup_input.gd" else "",
         "VAC_SETUP_PROJECT": "wizard-project" if script == "test_setup_input.gd" else "",
         "VAC_SETUP_FIXTURE": "1" if script == "test_setup_input.gd" else "0",

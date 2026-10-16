@@ -18,8 +18,9 @@ im VirtualAgentCafe-Checkout auf dem Host aus, nicht im Backend-Container:
 python3 scripts/setup-project.py
 ```
 
-Ein Ordnerdialog öffnet sich, sofern Python-Tk und eine grafische Sitzung verfügbar
-sind. Andernfalls fragt der Starter den Projektpfad im Terminal ab. Du kannst ihn
+Unter WSL öffnet sich über Windows PowerShell die native Windows-Ordnerauswahl.
+Unter Linux verwendet der Starter Python-Tk, sofern eine grafische Sitzung verfügbar
+ist. Ohne grafischen Dialog fragt er den Projektpfad im Terminal ab. Du kannst ihn
 auch direkt angeben:
 
 ```bash
@@ -65,7 +66,12 @@ F5 ist dabei nicht nötig. Der Managementtoken wird nur im Prozessspeicher an Go
 4. **Create backend + frontend team** erstellt beide Worktrees und Konfigurationen.
    Agenten heißen `PROJEKT-backend` und `PROJEKT-frontend`; ihre Branches liegen
    unter `agent/AGENT/implementation`. Aufgaben und Rollen sind weiterhin Markdown.
-5. Unter **Markdown** die Aufgaben prüfen/anpassen. Unter **Agents** jeden Agenten
+5. Im Setup über **Load project documents** gemeinsame Projektdateien laden.
+   `AGENTS.md` und `PLANNING.md` auswählen, bearbeiten oder mit **Import Markdown file**
+   eine lokale Datei über den nativen Windows-Dateidialog auswählen. Erst
+   **Save project document** schreibt ins Projekt. Fehlende Dateien erhalten
+   Vorlagen; vorhandene `agents.md`/`planning.md` werden ebenfalls erkannt und
+   unter ihrem bisherigen Dateinamen gespeichert. Danach unter **Markdown** die Aufgaben prüfen/anpassen. Unter **Agents** jeden Agenten
    auswählen und **Start agent** klicken. Die Einrichtung allein startet keine
    kostenpflichtigen Modellaufgaben.
 6. Ergebnisse, Tests und Diffs prüfen. Annahme und späterer Merge erfolgen bewusst;
@@ -75,6 +81,30 @@ Uncommittete Änderungen bleiben im Quellrepository. Die Agentenworktrees beginn
 bei dessen HEAD; der Assistent zeigt diesen Unterschied an und erstellt selbst
 keinen initialen Commit. Für einen neuen Ausgangsstand zuerst deine gewünschten
 Änderungen selbst prüfen und committen.
+
+## Gemeinsame Projektdateien
+
+`AGENTS.md` enthält die Projektkonventionen und gemeinsamen Agentenregeln.
+`PLANNING.md` enthält Plan, Meilensteine und Abnahmekriterien. Die Auswahl im
+Dateidialog überträgt nur den Inhalt in den Editor. Vor dem Speichern kannst du
+alles prüfen. Der Backend-Server erhält keinen frei wählbaren lokalen Dateipfad.
+
+Gespeicherte Dateien bleiben normale Projektdateien und werden nicht automatisch
+committed. Beide Agenten erhalten vor jedem Lauf den aktuellen Stand aus dem
+Quellprojekt als schreibgeschützten Snapshot unter
+`.cafe/instructions/project/AGENTS.md` beziehungsweise `PLANNING.md` — auch wenn
+die Quelldateien noch nicht committed wurden oder die Worktrees ältere Versionen
+enthalten. Ausführungsaufzeichnungen enthalten die SHA-256-Hashes dieser Stände.
+Ein laufender Auftrag behält seinen Snapshot; Änderungen gelten für folgende Läufe.
+
+Die Rangfolge lautet: System-Sicherheit > validierte Konfiguration > Rollen >
+Projekt-AGENTS.md > Projekt-PLANNING.md > einzelne Aufgabe. Die Dateien verleihen
+keine zusätzlichen Sicherheitsrechte. Speichern ist während zugehöriger laufender
+Agenten gesperrt. Zwischenzeitliche Änderungen auf der Festplatte führen zu einem
+Konflikthinweis statt stillem Überschreiben; lade dann die Dateien erneut.
+Pro Datei sind 12 KiB erlaubt. Symlinks und mehrdeutige Groß-/Kleinschreibung
+werden abgewiesen. Den nativen Windows-Dialog musst du auf deinem Zielhost prüfen;
+der automatisierte Godot-Test bedient den eingebetteten Dateidialog über Eingaben.
 
 ## SSH und Remote-Prüfung
 
@@ -133,6 +163,8 @@ Alle Routen benötigen den vorhandenen Managementtoken:
 
 - `GET /management/setup`: freigegebene Hauptrepositories auflisten.
 - `POST /management/setup/check`: `{ "project": "ID", "check_remote": false }`.
+- `POST /management/setup/documents/load`: Projektdateien laden.
+- `PUT /management/setup/documents`: Dateiinhalt mit erwartetem SHA-256 speichern.
 - `POST /management/setup/team`: `{ "project": "ID", "objective": "Ziel …" }`.
 
 `scripts/check.sh` prüft Backend, Git-Worktrees, fehlende Voraussetzungen,

@@ -484,3 +484,35 @@
   game/project.godot und game/scenes/cafe.tscn bleiben ungestagt.
 - Nächste Schritte: Hostlauf anhand docs/project-setup.md; automatische Aufgaben-
   abhängigkeiten und Integration der getrennten Branches sind weiterhin separat.
+
+## Setup M2 — Native Dateiauswahl und gemeinsame Projekt-Markdown-Dateien
+- Nutzerauftrag: AGENTS.md/PLANNING.md im Assistenten nutzen und Dateien/Projekt
+  über Windows-Dialoge auswählen. SSH-Schlüsselauswahl auf Nutzerkorrektur entfernt;
+  bestehendes SSH-Agent-Forwarding bleibt unverändert.
+- Starter: unter WSL nativer Windows-Ordnerdialog über konstanten PowerShell-Code,
+  UTF-8-Ausgabe und wslpath-Argumentübergabe ohne interpolierte Benutzereingaben.
+- Godot: native Markdown-Dateiauswahl, Import zur Vorschau im Editor, explizites
+  Laden/Speichern für AGENTS.md/PLANNING.md und Vorlagen für fehlende Dateien.
+  Der Import allein schreibt keine Projektdatei und überträgt keinen lokalen Pfad.
+- Backend: feste Dokumentnamen, Unterstützung existierender Kleinbuchstaben-Dateien,
+  12-KiB-Limit, Symlink-/Pfadschutz, SHA-256-Konfliktprüfung und Schreibsperre bei
+  laufenden Projektagenten. Windows-UTF-8-BOM wird unterstützt.
+- Runtime: beide Agenten erhalten vor jedem Lauf aktuelle Projektdateien aus dem
+  Quellrepository als schreibgeschützte Snapshots unter .cafe/instructions/project/.
+  Uncommittete Quelldateien funktionieren auch mit älteren Worktrees. Hashes werden
+  je Lauf gespeichert; vorherige Snapshots bleiben erhalten. System-Sicherheit und
+  validierte Konfiguration haben weiter Vorrang vor Markdown-Anweisungen.
+- Dateien: scripts/setup-project.py, management/project_documents.py, api.py,
+  execution.py, setup.py, game/scripts/management.gd, Setup-Input-/Render-Test,
+  Backend-Dokument-/Starter-/GUI-Tests, Setup-/Management-Dokumentation und Vorschau.
+- Validierung: scripts/check.sh mit 113 pytest-Tests plus Ruff/Format, Godot-Import,
+  Headless-, Zustands- und Live-WebSocket-Prüfungen. Gerenderter OpenGL-Setup-Test
+  zusätzlich bestanden. Echte GUI-Eingaben prüfen Dateidialog, Import ohne Schreiben,
+  explizites Speichern beider Dateien und erneutes Laden. Namespace-Test bestätigt
+  schreibgeschützte Snapshots für beide Agenten; Konflikt-/Alias-/BOM-Tests bestanden.
+- Grenzen: nativer Windows-Dialog und vollständiger WSL/Docker-Hostlauf sind hier
+  nicht direkt ausführbar. Der Dialogvertrag ist getestet; GUI-Automatisierung nutzt
+  den eingebetteten Godot-Dateidialog. Keine realen Modellaufrufe für diese Tests.
+- Commit-ID: git log --format='%h %s' --grep='add project instruction editors and native file selection'.
+  Feature-Branch wird gemäß Freigabe synchronisiert; kein weiterer Main-Merge.
+  Vorhandene Änderungen in game/project.godot und game/scenes/cafe.tscn bleiben lokal.

@@ -244,3 +244,21 @@ def test_launcher_dry_run_never_invokes_docker_or_writes_config(tmp_path, monkey
     launcher.main()
     assert str(repo) in capsys.readouterr().out
     assert not (root / ".runtime").exists()
+
+
+def test_wsl_folder_picker_keeps_selected_windows_paths_out_of_shell_code(tmp_path, monkeypatch):
+    repo = tmp_path / "My Project"
+    (repo / ".git").mkdir(parents=True)
+    calls = []
+    windows_path = "C:\\Projects\\User's project $name"
+    monkeypatch.setattr(launcher.shutil, "which", lambda _name: "/fake/powershell.exe")
+
+    def run(command, **kwargs):
+        calls.append(command)
+        return SimpleNamespace(returncode=0, stdout=windows_path if len(calls) == 1 else str(repo))
+
+    monkeypatch.setattr(launcher.subprocess, "run", run)
+    assert launcher.selected_project(None) == repo
+    assert calls[0][:4] == ["powershell.exe", "-NoProfile", "-STA", "-Command"]
+    assert windows_path not in calls[0][4]
+    assert calls[1] == ["wslpath", "-u", windows_path]

@@ -22,18 +22,46 @@ def project_id(path: Path) -> str:
 
 def selected_project(value: str | None) -> Path:
     if not value:
-        try:
-            import tkinter
-            from tkinter import filedialog
+        if shutil.which("powershell.exe"):
+            # A constant PowerShell program: selected paths are output, never shell code.
+            script = """
+[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new()
+Add-Type -AssemblyName System.Windows.Forms
+$dialog = New-Object System.Windows.Forms.FolderBrowserDialog
+$dialog.Description = 'VirtualAgentCafe: Git-Projektordner auswählen'
+$dialog.ShowNewFolderButton = $false
+if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
+    [Console]::Write($dialog.SelectedPath)
+}
+$dialog.Dispose()
+"""
+            result = subprocess.run(
+                ["powershell.exe", "-NoProfile", "-STA", "-Command", script],
+                capture_output=True,
+                text=True,
+                encoding="utf-8-sig",
+                check=True,
+            )
+            windows_path = result.stdout.strip()
+            if not windows_path:
+                raise ValueError("Kein Projekt ausgewählt")
+            value = subprocess.run(
+                ["wslpath", "-u", windows_path], capture_output=True, text=True, check=True
+            ).stdout.strip()
+        else:
+            try:
+                import tkinter
+                from tkinter import filedialog
 
-            window = tkinter.Tk()
-            window.withdraw()
-            value = filedialog.askdirectory(title="VirtualAgentCafe – Git-Projekt auswählen")
-            window.destroy()
-        except Exception:
-            # Tk availability/display varies across WSL hosts. A path prompt is the fallback.
-            print("Ordnerdialog nicht verfügbar. Projektpfad eingeben (oder --project verwenden).")
-            value = input("Projektordner: ").strip()
+                window = tkinter.Tk()
+                window.withdraw()
+                value = filedialog.askdirectory(title="VirtualAgentCafe – Git-Projekt auswählen")
+                window.destroy()
+            except Exception:
+                print(
+                    "Ordnerdialog nicht verfügbar. Projektpfad eingeben (oder --project verwenden)."
+                )
+                value = input("Projektordner: ").strip()
     if not value:
         raise ValueError("Kein Projekt ausgewählt")
     path = Path(value).expanduser().resolve(strict=True)

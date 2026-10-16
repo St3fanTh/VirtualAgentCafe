@@ -9,7 +9,10 @@ approved workspaces, Git worktrees and persistent execution records.
 
 Use the [project setup assistant](project-setup.md) for folder selection, automatic
 local connection, readiness checks and a two-agent frontend/backend team. The
-manual configuration below remains available.
+manual configuration below remains available. Project-wide AGENTS.md and PLANNING.md
+can be loaded, imported through a native file chooser and saved in Setup. Every
+managed run receives read-only snapshots from its source repository; see the setup
+guide for conflict handling and lowercase filename support.
 
 ## Storage and configuration
 
@@ -173,7 +176,7 @@ with hooks/external diff/fsmonitor/global config disabled and argument-based com
 Git helper requests have separate bounded directories for each execution.
 Raw CLI output, prompts, reasoning and credentials never enter persistent activity logs.
 
-Precedence: system security > validated configuration > roles (first listed has highest priority) > task.
+Precedence: system security > validated configuration > roles (first listed has highest priority) > project AGENTS.md > project PLANNING.md > task.
 Timeouts/cancellation terminate processes. Failed runtimes can retry at most twice;
 retries preserve files for inspection and are explicit configuration. A controller
 restart marks interrupted executions FAILED, rather than pretending they finished.

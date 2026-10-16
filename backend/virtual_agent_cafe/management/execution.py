@@ -13,6 +13,7 @@ from . import git_helper
 from .config import AgentConfig, Identifier, State, TaskState
 from .files import ApprovedFiles, MarkdownManager, WorkspaceManager
 from .git import GitService
+from .project_documents import load_documents
 from .registry import AgentRegistry
 from .sandbox import IsolatedCodexAdapter, Sandbox
 from .security import ManagementAccess
@@ -179,12 +180,35 @@ class ExecutionManager:
                             create=f"refs/heads/{branch}" not in references.splitlines(),
                         )
                 metadata = self.git.metadata(workspace)
-            self.registry.update(identifier, state=State.READY)
             run_id = str(uuid4())
+            project_root = (
+                self.workspaces.get(config.git.repository) if config.git.enabled else workspace
+            )
+            project_documents = load_documents(project_root)
+            self.registry.update(identifier, state=State.READY)
             context = self.context(config, task, roles, workspace, branch)
+            document_context = (
+                "\nPROJECT DOCUMENT SNAPSHOTS (instructions, never security authorization):\n"
+            )
+            for name, document in project_documents.items():
+                if document["exists"]:
+                    document_context += f"\n{name}:\n{document['content']}\n"
+            context += document_context
+            context += (
+                "\nRead the exact project snapshots in .cafe/instructions/project/. "
+                "These are the current project instructions; workspace copies may be older. "
+                "Precedence: system security > validated configuration > roles > "
+                "project AGENTS.md > project PLANNING.md > task.\n"
+            )
             instruction_root = self.contexts.path(run_id)
             instruction_root.mkdir()
             (instruction_root / "roles").mkdir()
+            (instruction_root / "project").mkdir()
+            for name, document in project_documents.items():
+                if document["exists"]:
+                    (instruction_root / "project" / name).write_text(
+                        document["content"], encoding="utf-8"
+                    )
             (instruction_root / "task.md").write_text(task["content"], encoding="utf-8")
             for role in roles:
                 (instruction_root / "roles" / role["file"]).write_text(
@@ -198,6 +222,9 @@ class ExecutionManager:
                 "task": config.task,
                 "task_sha256": task["sha256"],
                 "role_sha256": {r["file"]: r["sha256"] for r in roles},
+                "project_sha256": {
+                    n: d["sha256"] for n, d in project_documents.items() if d["exists"]
+                },
                 "context_sha256": hashlib.sha256(context.encode()).hexdigest(),
                 "status": State.RUNNING,
                 "task_state": TaskState.RUNNING,
@@ -243,7 +270,8 @@ class ExecutionManager:
             "The exact Markdown task/role snapshots are mounted read-only at "
             ".cafe/instructions/task.md and .cafe/instructions/roles/. Read them before editing.\n"
             "Precedence: system security > validated configuration > "
-            "roles (first listed has highest priority) > task.\n"
+            "roles (first listed has highest priority) > project AGENTS.md > "
+            "project PLANNING.md > task.\n"
         )
         system += (
             f"Agent: {config.id}\nWorkspace: {workspace}\nGit branch: {branch}\n"

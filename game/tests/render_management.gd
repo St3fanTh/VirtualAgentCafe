@@ -23,6 +23,7 @@ func render() -> void:
 	ui.setup_project.add_item("my-project")
 	ui.setup_objective.text = "Build a task tracker. Backend: task API. Frontend: task list and creation form. Shared contract: GET /api/tasks and POST /api/tasks."
 	ui.setup_result.text = "DESIGN PREVIEW · example data\n\n1. Choose the project folder using the local starter.\n\n2. Run Check project to verify Codex login, namespace sandbox and Git.\n\n3. Create your team. Each agent gets editable Markdown roles/tasks and its own worktree and branch.\n\n4. Review the tasks and start each agent from Agents.\n\nNo automatic model task, push or merge."
+	ui.show_setup_document()
 	ui.populate()
 	ui.load_agent(0)
 	ui.show_management()
