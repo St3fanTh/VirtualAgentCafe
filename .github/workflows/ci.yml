@@ -39,7 +39,7 @@ jobs:
         run: |
           xvfb-run -a env VAC_PREVIEW_DIR=/tmp/cafe-previews godot --path game --audio-driver Dummy --rendering-method gl_compatibility --script res://tests/render_management.gd 2>&1 | tee /tmp/management-render.log
           if rg -q 'SCRIPT ERROR|Parse Error|ERROR:' /tmp/management-render.log; then exit 1; fi
-          xvfb-run -a env VAC_GUI_RENDERED=1 VAC_GUI_RESOLUTION=1920x1080 python -m pytest backend/tests/test_game_management.py -q -k gui_input
+          xvfb-run -a env VAC_GUI_RENDERED=1 VAC_GUI_RESOLUTION=1920x1080 python -m pytest backend/tests/test_game_management.py -q -k "gui_input or setup_input"
       - uses: actions/upload-artifact@v4
         with:
           name: cafe-rendered-previews

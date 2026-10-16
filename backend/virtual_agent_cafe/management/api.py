@@ -7,6 +7,7 @@ from pydantic import Field
 
 from .config import AgentConfig, MarkdownInput, ReviewInput, StrictModel, WorkspaceInput
 from .execution import ExecutionManager
+from .setup import ProjectSetup, SetupCheck, SetupInput
 
 
 class EmptyInput(StrictModel):
@@ -51,6 +52,22 @@ def management_router(manager: ExecutionManager, validated_body, mode: str) -> A
                 else "Operation rejected; check configuration, paths, locks and isolation"
             )
             raise HTTPException(409, detail) from None
+
+    setup = ProjectSetup(manager, mode)
+
+    @router.get("/setup")
+    async def setup_projects():
+        return await guarded(lambda: asyncio.to_thread(setup.projects))
+
+    @router.post("/setup/check")
+    async def setup_check(request: Request):
+        data = await validated_body(request, SetupCheck)
+        return await guarded(lambda: setup.inspect(data.project, data.check_remote))
+
+    @router.post("/setup/team", status_code=201)
+    async def setup_team(request: Request):
+        data = await validated_body(request, SetupInput)
+        return await guarded(lambda: setup.create(data))
 
     @router.get("")
     async def overview():

@@ -449,3 +449,38 @@
 - Commit-ID: git log --format='%h %s' --grep='polish cafe management and test real GUI input'.
 - Grenzen: Windows-DPI/GPU noch nicht auf Zielgerät getestet; CI aktualisiert, aber
   mangels Push hier noch nicht auf GitHub gelaufen. Vorhandene Szenen-UID ungestagt.
+
+## Setup M1 — Lokaler Projektstarter und Team-Assistent
+- Nutzerauftrag: Inbetriebnahme mit Auswahl eines bestehenden Git-Projektordners
+  vereinfachen; Codex und SSH für zwei Agenten anbinden.
+- Architektur: vorhandene Registry, MarkdownManager, GitService, Sandbox und
+  SQLite weiterverwendet. ProjectSetup ergänzt geschützte Projekt-/Check-/Team-
+  Endpunkte; keine neue Datenbank und keine freie Hostpfad-API.
+- Starter scripts/setup-project.py: nativer Ordnerdialog mit Terminal-Fallback,
+  gezielter Compose-Bind-Mount, kollisionsarme Projekt-ID, SSH-Agent/known_hosts
+  ohne private Schlüssel, Codex-Anmeldung, Healthcheck, Godot-/WSL-Start mit Token
+  ausschließlich im Prozessspeicher. Privileged-/Remote-Optionen explizit.
+- Godot: Setup-Seite mit Zielbeschreibung, Prüfbericht, fest sichtbaren Aktionen,
+  automatischem Öffnen/Vorauswahl durch Starter und Frontend-/Backend-Team.
+- Teamerstellung: echte getrennte Worktrees/Branches, editierbare Markdown-Aufgaben
+  und Rollen, persistente Projektzuordnung, Wiederaufnahme unterbrochener Schritte
+  und Erhalt nachträglicher Änderungen. Keine automatischen Agentenstarts,
+  initialen Commits, Pushes oder Merges. Uncommittete Quelldateien bleiben erhalten.
+- Geänderte/erstellte Dateien: management/setup.py, api.py, git.py,
+  scripts/setup-project.py, game/scripts/management.gd, Setup-Input-Test und UID,
+  Render-Preview-Skript, Backend-Setup-/Launcher-/GUI-Tests und Fixture, CI,
+  README.md, docs/project-setup.md, docs/agent-management.md, Setup-PNG.
+- Tests: scripts/check.sh mit 105 pytest-Tests, Ruff/Format sowie Godot-Import,
+  Zustands-, Headless- und Live-WebSocket-Prüfungen. Zusätzlicher gerenderter
+  OpenGL-Setup-Klicktest bestanden; tatsächliche 4K-Vorschau visuell geprüft.
+  Testdaten verwenden temporäre Git-Repositories; Codex-Login wird im Fixture
+  ersetzt, keine Modellkosten und keine externen Git-Operationen im Testlauf.
+- Grenzen: Docker-Hostlauf, nativer Ordnerdialog und Windows-/WSL-Godot-Übergabe
+  benötigen Zielhostprüfung; hier keine Docker-CLI verfügbar. Ein externes
+  Quellprojekt pro Starterlauf, bestehendes Hauptrepository/initialer Commit nötig.
+  Remote-Prüfung belegt nur lesenden Zugriff, keine Push-Berechtigung.
+- Commit-ID: git log --format='%h %s' --grep='add guided project and agent setup'.
+  Kein Push gemäß fortgeltender Nutzeranweisung. Vorhandene Nutzeränderungen an
+  game/project.godot und game/scenes/cafe.tscn bleiben ungestagt.
+- Nächste Schritte: Hostlauf anhand docs/project-setup.md; automatische Aufgaben-
+  abhängigkeiten und Integration der getrennten Branches sind weiterhin separat.

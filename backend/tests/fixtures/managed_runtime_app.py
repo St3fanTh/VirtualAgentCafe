@@ -48,3 +48,42 @@ async def delay_overview_for_gui_race(request, call_next):
     if request.url.path == "/management" or request.method in {"POST", "PUT"}:
         await asyncio.sleep(float(os.getenv("VAC_GUI_DELAY", "0")))
     return await call_next(request)
+
+
+# Wizard tests exercise real Git/worktrees and namespace checks without model login.
+if os.getenv("VAC_SETUP_FIXTURE") == "1":
+    import subprocess
+    from types import SimpleNamespace
+
+    from virtual_agent_cafe.management import setup as setup_module
+
+    setup_module.shutil = SimpleNamespace(which=lambda _name: "/usr/bin/true")
+    original_check = setup_module.ProjectSetup.command_ok
+
+    async def fixture_login(self, command):
+        if command[-2:] == ["login", "status"]:
+            return True
+        return await original_check(self, command)
+
+    setup_module.ProjectSetup.command_ok = fixture_login
+    manager = app.state.management
+    manager.workspaces.create("wizard-project")
+    source = manager.workspaces.get("wizard-project")
+    subprocess.run(["git", "init", "-q", "--initial-branch=main", str(source)], check=True)
+    (source / "README.md").write_text("# Wizard fixture\n")
+    subprocess.run(["git", "-C", str(source), "add", "README.md"], check=True)
+    subprocess.run(
+        [
+            "git",
+            "-C",
+            str(source),
+            "-c",
+            "user.name=Fixture",
+            "-c",
+            "user.email=fixture@localhost",
+            "commit",
+            "-qm",
+            "feat: fixture project",
+        ],
+        check=True,
+    )

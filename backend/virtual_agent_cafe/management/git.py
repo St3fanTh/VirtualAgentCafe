@@ -75,7 +75,7 @@ class GitService:
             path,
             command,
             metadata=[*self.metadata(path), *extra_mounts],
-            ssh=arguments[:1] in [("clone",), ("fetch",), ("pull",), ("push",)],
+            ssh=arguments[:1] in [("clone",), ("fetch",), ("pull",), ("push",), ("ls-remote",)],
         )
         process = await asyncio.create_subprocess_exec(
             *isolated,

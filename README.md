@@ -5,6 +5,17 @@ managed agents. Click a character to assign tasks through Codex. Animation state
 random timer. Demo mode is deterministic and clearly marked **DEMO (simulated)**.
 Live mode shows **CODEX (live)**. No private reasoning is exposed.
 
+## Eigenes Projekt mit zwei Agenten starten
+
+```bash
+python3 scripts/setup-project.py
+```
+
+Auf dem Linux-/WSL-Docker-Host einen Git-Projektordner wählen. Der Starter verbindet
+Backend und Godot; **Setup project** prüft Zugänge und erstellt das Backend-/Frontend-
+Team mit getrennten Worktrees. [Schritt-für-Schritt-Anleitung und Windows-Godot](docs/project-setup.md).
+Für die bisherige Umgebung mit Namespace-Override: `python3 scripts/setup-project.py --privileged`.
+
 ## Graphics
 
 The café now renders at **3840×2160 (4K UHD, 16:9)** with a 1920×1080 initial

@@ -55,7 +55,13 @@ var form_status: Label
 var agent_summary: Label
 var workspace_id: LineEdit
 var remote_name: LineEdit
-var tab_keys := ["Agents", "Markdown", "Workspaces", "Executions"]
+var tab_keys := ["Agents", "Markdown", "Workspaces", "Executions", "Setup"]
+var setup_project: OptionButton
+var setup_objective: TextEdit
+var setup_result: TextEdit
+var setup_remote: CheckBox
+var setup_ready := false
+var setup_checked_project := ""
 
 const INK := Color("e4ece6")
 const MUTED := Color("92a9aa")
@@ -96,13 +102,13 @@ func button(parent: Node, text: String, callback: Callable) -> Button:
 	result.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 	result.pressed.connect(callback)
 	parent.add_child(result)
-	if text in ["Save configuration", "Save Markdown"]:
+	if text in ["Save configuration", "Save Markdown", "Create backend + frontend team"]:
 		result.add_theme_stylebox_override("normal", panel_style(MINT, MINT, 12))
 		result.add_theme_stylebox_override("hover", panel_style(Color("a0ead3"), MINT, 12))
 		result.add_theme_color_override("font_color", Color("10292c"))
 		result.add_theme_color_override("font_hover_color", Color("10292c"))
 	buttons[text] = result
-	if text not in ["Close", "Connect / Refresh", "New agent", "New definition", "Load selected", "Refresh execution history"]:
+	if text not in ["Close", "Connect / Refresh", "New agent", "New definition", "Load selected", "Refresh execution history", "Setup project", "Find projects"]:
 		mutation_buttons.append(result)
 	return result
 
@@ -213,6 +219,7 @@ func _ready() -> void:
 	token.text_submitted.connect(func(_text): refresh())
 	connection.add_child(token)
 	button(connection, "Connect / Refresh", refresh)
+	button(connection, "Setup project", open_setup)
 	button(connection, "Close", hide)
 	notice = caption("Enter your access token, then connect to manage your team.")
 	notice.custom_minimum_size.y = 28
@@ -226,6 +233,7 @@ func _ready() -> void:
 	build_definitions(tabs)
 	build_git(tabs)
 	build_executions(tabs)
+	build_setup(tabs)
 	bind_form_changes()
 	update_buttons()
 	add_child(poll)
@@ -233,6 +241,8 @@ func _ready() -> void:
 	poll.timeout.connect(poll_updates)
 	poll.start()
 	hide()
+	if OS.get_environment("VAC_OPEN_SETUP") == "1":
+		call_deferred("open_setup")
 
 func page(parent_tabs: TabContainer, title: String) -> HBoxContainer:
 	var page_margin := MarginContainer.new()
@@ -483,7 +493,25 @@ func received(_result: int, code: int, _headers: PackedStringArray, body: Packed
 		call_deferred("after_response")
 		return
 	var finished_action: String = completed.get("action", action)
-	if finished_action == "overview":
+	if finished_action == "setup_projects":
+		fill_options(setup_project, data.get("projects", []))
+		if not OS.get_environment("VAC_SETUP_PROJECT").is_empty():
+			choose(setup_project, OS.get_environment("VAC_SETUP_PROJECT"))
+		setup_ready = false
+		setup_result.text = "Select your project, describe the goal and run Check project.\n\nApproved folder: " + str(data.get("approved_root", "")) + "\n\nProject missing? Run scripts/setup-project.py on your Docker host to select and mount its folder."
+	elif finished_action == "setup_check":
+		setup_checked_project = str(data.get("project", ""))
+		setup_ready = bool(data.get("ready", false)) and setup_checked_project == chosen(setup_project)
+		setup_result.text = "PROJECT · " + setup_checked_project + "\n\n"
+		for entry in data.get("checks", []):
+			setup_result.text += ("PASS · " if entry.get("ok", false) else "FIX · ") + str(entry.get("detail", "")) + "\n\n"
+		setup_result.text += "Branch: " + str(data.get("git", {}).get("branch", "")) + "\nOrigin: " + str(data.get("remote", "")) + "\n" + str(data.get("remote_status", "")) + "\n\n" + str(data.get("dirty_warning", ""))
+	elif finished_action == "setup_team":
+		setup_result.text = "TEAM READY\n\n" + "\n".join(data.get("agents", [])) + "\n\nTwo separate worktrees and branches are ready. No agent has started.\n\nNext: open Agents, review each Markdown task and its interface contract, then Start agent. Review diffs and tests before accepting results. No automatic push or merge."
+		setup_ready = false
+		pending_refresh = true
+		set_notice("Project configured. Review tasks, then start your team in Agents.")
+	elif finished_action == "overview":
 		cache = data
 		populate()
 		if not bool(completed.get("background", false)) or not notice_is_error:
@@ -551,6 +579,9 @@ func update_buttons() -> void:
 			busy = true
 	for node in mutation_buttons:
 		node.disabled = busy
+	if setup_project != null:
+		buttons["Create backend + frontend team"].disabled = busy or not setup_ready or chosen(setup_project) != setup_checked_project or setup_objective.text.strip_edges().length() < 10
+		buttons["Check project"].disabled = busy or chosen(setup_project).is_empty()
 	var running := false
 	var ready := false
 	var selected: Dictionary = {}
@@ -816,3 +847,48 @@ func _unhandled_key_input(event: InputEvent) -> void:
 	if visible and event is InputEventKey and event.pressed and event.keycode == KEY_ESCAPE:
 		hide()
 		get_viewport().set_input_as_handled()
+
+
+func open_setup() -> void:
+	show_management()
+	tabs.current_tab = 4
+	if token.text.strip_edges().is_empty():
+		set_notice("Connect with your local management token first. The project starter connects automatically.", true)
+		return
+	call_api("setup_projects", "/setup")
+
+func build_setup(parent_tabs: TabContainer) -> void:
+	var row := page(parent_tabs, "Setup")
+	var form := card(row, "1 · Your project and goal", 700)
+	form.add_child(caption("Choose an existing Git project. The assistant prepares two independent agents; it never starts a model task or publishes changes automatically."))
+	setup_project = option(form, "Approved Git project")
+	setup_project.item_selected.connect(func(_index):
+		setup_ready = false
+		update_buttons())
+	button(form, "Find projects", func(): call_api("setup_projects", "/setup"))
+	form.add_child(caption("What should your team implement? Define the shared API contract when possible. Tasks remain editable Markdown."))
+	setup_objective = TextEdit.new()
+	setup_objective.placeholder_text = "Build a task tracker. Backend: task API. Frontend: task list and creation form. Shared contract: GET /api/tasks → [{id, title}], POST /api/tasks accepts {title}."
+	setup_objective.custom_minimum_size = Vector2(500, 170)
+	setup_objective.wrap_mode = TextEdit.LINE_WRAPPING_BOUNDARY
+	setup_objective.text_changed.connect(update_buttons)
+	form.add_child(setup_objective)
+	setup_remote = CheckBox.new()
+	setup_remote.text = "Also check remote access (read only)"
+	form.add_child(setup_remote)
+	var actions := HBoxContainer.new()
+	actions.add_theme_constant_override("separation", 12)
+	form.get_parent().get_parent().add_child(actions)
+	button(actions, "Check project", func():
+		setup_ready = false
+		call_api("setup_check", "/setup/check", HTTPClient.METHOD_POST, {"project": chosen(setup_project), "check_remote": setup_remote.button_pressed}))
+	button(actions, "Create backend + frontend team", func():
+		call_api("setup_team", "/setup/team", HTTPClient.METHOD_POST, {"project": chosen(setup_project), "objective": setup_objective.text.strip_edges()}))
+	var results := card(row, "2 · Readiness and next steps", 750)
+	setup_result = TextEdit.new()
+	setup_result.editable = false
+	setup_result.wrap_mode = TextEdit.LINE_WRAPPING_BOUNDARY
+	setup_result.custom_minimum_size = Vector2(600, 490)
+	setup_result.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	setup_result.text = "LOCAL STARTER\n\nRun python3 scripts/setup-project.py on Linux/WSL. Select your repository folder. The starter mounts only that project, connects Godot and opens this assistant.\n\nCODEX\n\nBoth agents use the backend's Codex login, with separate roles, tasks and worktrees. Use starter --login if needed.\n\nSSH\n\nThe starter forwards an existing SSH-agent socket and known_hosts to the Git service. It never copies private keys. Remote checks are optional and do not test push permission."
+	results.add_child(setup_result)

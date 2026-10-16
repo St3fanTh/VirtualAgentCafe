@@ -14,7 +14,9 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 @pytest.mark.skipif(shutil.which("godot") is None, reason="Godot CLI unavailable")
-@pytest.mark.parametrize("script", ["test_management.gd", "test_gui_input.gd"])
+@pytest.mark.parametrize(
+    "script", ["test_management.gd", "test_gui_input.gd", "test_setup_input.gd"]
+)
 def test_native_management_ui_to_isolated_runtime(tmp_path, script):
     with socket.socket() as reserve:
         reserve.bind(("127.0.0.1", 0))
@@ -25,6 +27,9 @@ def test_native_management_ui_to_isolated_runtime(tmp_path, script):
         "VAC_MANAGEMENT_TOKEN": "fixture-management-token-32-characters",
         "VAC_FIXTURE_ROOT": str(tmp_path / "work"),
         "VAC_BACKEND_URL": url,
+        "VAC_OPEN_SETUP": "1" if script == "test_setup_input.gd" else "",
+        "VAC_SETUP_PROJECT": "wizard-project" if script == "test_setup_input.gd" else "",
+        "VAC_SETUP_FIXTURE": "1" if script == "test_setup_input.gd" else "0",
         "VAC_GUI_DELAY": "0.5" if script == "test_gui_input.gd" else "0",
     }
     server = subprocess.Popen(
@@ -56,7 +61,10 @@ def test_native_management_ui_to_isolated_runtime(tmp_path, script):
                 assert time.monotonic() < deadline, "Fixture backend readiness timeout"
                 time.sleep(0.05)
         display_args = ["--headless"]
-        if script == "test_gui_input.gd" and os.getenv("VAC_GUI_RENDERED") == "1":
+        if (
+            script in {"test_gui_input.gd", "test_setup_input.gd"}
+            and os.getenv("VAC_GUI_RENDERED") == "1"
+        ):
             display_args = [
                 "--audio-driver",
                 "Dummy",

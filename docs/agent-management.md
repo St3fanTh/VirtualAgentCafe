@@ -5,6 +5,12 @@ café remain available. **Manage agents** opens the new native Godot interface.
 Managed agents have configurable Markdown tasks, multiple Markdown roles,
 approved workspaces, Git worktrees and persistent execution records.
 
+## Guided project setup
+
+Use the [project setup assistant](project-setup.md) for folder selection, automatic
+local connection, readiness checks and a two-agent frontend/backend team. The
+manual configuration below remains available.
+
 ## Storage and configuration
 
 The backend uses Python's built-in SQLite, without an external database server.
