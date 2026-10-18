@@ -122,3 +122,29 @@ async def test_git_remotes_are_configurable_without_network_or_credentials(tmp_p
         await git.set_remote("project", "--force", "git@example.com:team/project.git")
     with pytest.raises(ValueError):
         await git.set_remote("project", "team", "https://user:secret@example.com/project.git")
+
+
+async def test_approved_bind_mount_with_different_owner(tmp_path, monkeypatch):
+    workspaces = WorkspaceManager(tmp_path / "workspaces", Store(tmp_path))
+    workspaces.create("project")
+    git = GitService(workspaces)
+    await git.init("project")
+    path = workspaces.get("project")
+    (path / "README.md").write_text("# Host-owned repository\n")
+    await git.stage("project", ["README.md"])
+    await git.commit("project", "feat: initial host project")
+    original = Sandbox.command
+
+    def host_owned(self, workspace, command, **kwargs):
+        return original(
+            self,
+            workspace,
+            ["/usr/bin/env", "GIT_TEST_ASSUME_DIFFERENT_OWNER=1", *command],
+            **kwargs,
+        )
+
+    monkeypatch.setattr(Sandbox, "command", host_owned)
+    assert (await git.info("project"))["history"]
+    workspaces.create("agent")
+    await git.worktree("project", "agent", "agent/worker/task")
+    assert (await git.info("agent"))["branch"] == "agent/worker/task"

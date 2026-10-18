@@ -516,3 +516,35 @@
 - Commit-ID: git log --format='%h %s' --grep='add project instruction editors and native file selection'.
   Feature-Branch wird gemäß Freigabe synchronisiert; kein weiterer Main-Merge.
   Vorhandene Änderungen in game/project.godot und game/scenes/cafe.tscn bleiben lokal.
+
+## Setup M3 — Sichtbare Projektprüfung und Freischaltung aus dem Projektplan
+- Nutzerfehlerbericht: Check project wirkt ohne Reaktion, Team-Erstellung bleibt
+  gesperrt trotz geladener Projektdateien.
+- Reproduziert: ausstehende Anfragen verändern den Prüfbericht nicht; HTTP-Fehler
+  erscheinen nur in einer schmalen, gekürzten Kopfzeile. Neuer echter GUI-Test
+  scheiterte vor der Korrektur an fehlender unmittelbarer Prüf-Rückmeldung.
+- Godot: sofortiges Checking-Feedback, dauerhaft sichtbarer Status oberhalb des
+  Scrollbereichs, vollständige Fehlermeldung im Prüfbericht, Timeout-Erklärung,
+  lesbare Gründe für gesperrte Team-Erstellung. Fehler löschen keine Markdown-Edits.
+- Leeres Ziel mit geladener PLANNING.md verwendet deren nächsten offenen Meilenstein
+  als Auftrag; kurzer ausdrücklich eingegebener Text bleibt validierungspflichtig.
+  Team-Erstellung verlangt weiterhin erfolgreiche Sandbox-/Codex-/Git-Prüfungen.
+- Zusätzlich reproduzierter Git-Fehler: abweichender Repository-Eigentümer wird bei
+  eingebundenen Host-Projekten abgelehnt. GitService setzt safe.directory nur für
+  den jeweils validierten Workspace, nur pro Prozess, ohne globale Änderung oder
+  Wildcard. Echter Git-Test mit simulierter abweichender Ownership war zuvor rot
+  und prüft nun Repository-Information sowie Worktree-Erstellung erfolgreich.
+- Backend: gesamte Prüfung auf 30 Sekunden begrenzt; Git-Inspektionsfehler ergeben
+  einen strukturierten FIX-Bericht. Prozessbereinigung bleibt erhalten.
+- Dateien: game/scripts/management.gd, game/tests/test_setup_input.gd,
+  management/setup.py und git.py, Backend-Setup-/Git-Tests, GUI-Fixture,
+  docs/project-setup.md, PROGRESS.md.
+- Tests: scripts/check.sh PASS, 116 pytest-Tests, Ruff/Format, Godot-Import,
+  Headless-/Zustands-/Live-WebSocket-Prüfungen. Separater OpenGL-Setup-GUI-Test PASS.
+  GUI deckt verzögerte Prüfung, tatsächliche 409-Antwort, sichtbaren Fehler,
+  erneute erfolgreiche Prüfung und Team-Erstellung allein aus dem geladenen Plan ab.
+- Grenzen: konkrete Host-Ursache des Nutzers ist ohne dessen Laufzeitbericht noch
+  nicht bestätigt; Windows-/Docker-Zielhostlauf hier nicht ausführbar. Der neue
+  Bericht macht fehlende Voraussetzungen sichtbar, umgeht sie aber nicht.
+- Commit-ID: git log --format='%h %s' --grep='fix project setup feedback and plan-based team creation'.
+  Feature-Branch wird synchronisiert; kein automatischer Main-Merge.

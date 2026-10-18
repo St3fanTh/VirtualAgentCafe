@@ -47,6 +47,8 @@ app = create_app(
 async def delay_overview_for_gui_race(request, call_next):
     if request.url.path == "/management" or request.method in {"POST", "PUT"}:
         await asyncio.sleep(float(os.getenv("VAC_GUI_DELAY", "0")))
+    if request.url.path == "/management/setup/check":
+        await asyncio.sleep(0.3)
     return await call_next(request)
 
 

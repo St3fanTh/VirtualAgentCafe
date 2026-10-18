@@ -77,6 +77,16 @@ class ProjectSetup:
             await process.wait()
 
     async def inspect(self, project: str, check_remote: bool = False):
+        try:
+            # Bound the whole inspection below the native client's 40-second timeout.
+            async with asyncio.timeout(30):
+                return await self.inspect_project(project, check_remote)
+        except TimeoutError:
+            raise ValueError(
+                "Project check timed out. Check sandbox/Git access; retry without remote checks."
+            ) from None
+
+    async def inspect_project(self, project: str, check_remote: bool = False):
         manager = self.manager
         TypeAdapter(Identifier).validate_python(project)
         path = manager.workspaces.files.path(project)
@@ -142,7 +152,26 @@ class ProjectSetup:
                 "remote_status": "Not checked",
                 "dirty_warning": "",
             }
-        info = await manager.git.info(project)
+        try:
+            info = await manager.git.info(project)
+        except (ValueError, OSError):
+            checks.append(
+                {
+                    "name": "repository",
+                    "ok": False,
+                    "detail": "Git inspection failed. "
+                    "Check repository metadata and workspace permissions.",
+                }
+            )
+            return {
+                "project": project,
+                "checks": checks,
+                "ready": False,
+                "git": {},
+                "remote": "",
+                "remote_status": "Not checked",
+                "dirty_warning": "",
+            }
         committed = bool(info["history"])
         checks.append(
             {

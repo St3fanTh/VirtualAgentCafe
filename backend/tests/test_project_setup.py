@@ -262,3 +262,24 @@ def test_wsl_folder_picker_keeps_selected_windows_paths_out_of_shell_code(tmp_pa
     assert calls[0][:4] == ["powershell.exe", "-NoProfile", "-STA", "-Command"]
     assert windows_path not in calls[0][4]
     assert calls[1] == ["wslpath", "-u", windows_path]
+
+
+async def test_corrupt_repository_returns_actionable_failed_check(tmp_path, monkeypatch):
+    manager, setup, source = await project(tmp_path, monkeypatch)
+    (source / ".git/HEAD").write_text("invalid metadata")
+    report = await setup.inspect("sample")
+    assert not report["ready"]
+    failure = next(c for c in report["checks"] if c["name"] == "repository")
+    assert not failure["ok"] and "metadata" in failure["detail"]
+    with pytest.raises(ValueError, match="failed project checks"):
+        await setup.create(
+            SetupInput(project="sample", objective="Implement backend and frontend.")
+        )
+    assert not manager.store.list("agents")
+
+
+async def test_project_check_timeout_is_reported_not_an_internal_error(tmp_path, monkeypatch):
+    _, setup, _ = await project(tmp_path, monkeypatch)
+    monkeypatch.setattr(setup, "inspect_project", AsyncMock(side_effect=TimeoutError))
+    with pytest.raises(ValueError, match="Project check timed out"):
+        await setup.inspect("sample")

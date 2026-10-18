@@ -59,6 +59,7 @@ var tab_keys := ["Agents", "Markdown", "Workspaces", "Executions", "Setup"]
 var setup_project: OptionButton
 var setup_objective: TextEdit
 var setup_result: TextEdit
+var setup_status: Label
 var setup_remote: CheckBox
 var setup_ready := false
 var setup_checked_project := ""
@@ -475,12 +476,13 @@ func dispatch_next() -> void:
 	var result := request.request(backend_url + "/management" + str(active_request.path), headers, method,
 		"" if method == HTTPClient.METHOD_GET else JSON.stringify(active_request.body))
 	if result != OK:
+		var failed := active_request.duplicate(true)
 		active_request = {}
-		set_notice("Unable to contact backend. Check the connection and try again.", true)
+		request_error(failed, "Unable to contact backend. Check the connection and try again.")
 		call_deferred("dispatch_next")
 	else:
 		if method != HTTPClient.METHOD_GET:
-			set_notice("Applying your changes…")
+			set_notice("Checking project…" if action == "setup_check" else "Applying your changes…")
 	update_buttons()
 
 func set_notice(message: String, error := false) -> void:
@@ -493,7 +495,10 @@ func received(_result: int, code: int, _headers: PackedStringArray, body: Packed
 	active_request = {}
 	var data = JSON.parse_string(body.get_string_from_utf8())
 	if code < 200 or code >= 300 or not data is Dictionary:
-		set_notice("Access token not accepted. Check your token and reconnect." if code == 401 else "Request failed: " + str(data.get("detail", "Backend unavailable") if data is Dictionary else "Backend unavailable"), true)
+		var message := "Access token not accepted. Check your token and reconnect." if code == 401 else "Request failed: " + str(data.get("detail", "Backend unavailable") if data is Dictionary else "Backend unavailable")
+		if _result == HTTPRequest.RESULT_TIMEOUT:
+			message = "Request timed out. Check the backend and retry; disable the optional remote check first."
+		request_error(completed, message)
 		update_buttons()
 		call_deferred("after_response")
 		return
@@ -514,11 +519,13 @@ func received(_result: int, code: int, _headers: PackedStringArray, body: Packed
 	elif finished_action == "setup_check":
 		setup_checked_project = str(data.get("project", ""))
 		setup_ready = bool(data.get("ready", false)) and setup_checked_project == chosen(setup_project)
+		setup_feedback("Checks passed." if setup_ready else "Project blocked: resolve the FIX items in the report.", not setup_ready)
 		setup_result.text = "PROJECT · " + setup_checked_project + "\n\n"
 		for entry in data.get("checks", []):
 			setup_result.text += ("PASS · " if entry.get("ok", false) else "FIX · ") + str(entry.get("detail", "")) + "\n\n"
 		setup_result.text += "Branch: " + str(data.get("git", {}).get("branch", "")) + "\nOrigin: " + str(data.get("remote", "")) + "\n" + str(data.get("remote_status", "")) + "\n\n" + str(data.get("dirty_warning", ""))
 	elif finished_action == "setup_team":
+		setup_feedback("Team ready. Open Agents to start each worker.")
 		setup_result.text = "TEAM READY\n\n" + "\n".join(data.get("agents", [])) + "\n\nTwo separate worktrees and branches are ready. No agent has started.\n\nNext: open Agents, review each Markdown task and its interface contract, then Start agent. Review diffs and tests before accepting results. No automatic push or merge."
 		setup_ready = false
 		pending_refresh = true
@@ -554,6 +561,8 @@ func received(_result: int, code: int, _headers: PackedStringArray, body: Packed
 		set_notice("Changes saved." if finished_action == "mutation" else "Action completed.")
 		# Re-fetch only after the next queued user action; keep actions ahead of polls.
 		pending_refresh = true
+	if finished_action.begins_with("setup"):
+		setup_result.scroll_vertical = 0
 	update_buttons()
 	call_deferred("after_response")
 
@@ -592,8 +601,18 @@ func update_buttons() -> void:
 	for node in mutation_buttons:
 		node.disabled = busy
 	if setup_project != null:
-		buttons["Create backend + frontend team"].disabled = busy or not setup_ready or chosen(setup_project) != setup_checked_project or setup_objective.text.strip_edges().length() < 10
+		buttons["Create backend + frontend team"].disabled = busy or not setup_ready or chosen(setup_project) != setup_checked_project or setup_goal().length() < 10
 		buttons["Check project"].disabled = busy or chosen(setup_project).is_empty()
+		var checking := str(active_request.get("action", "")) == "setup_check"
+		for queued in request_queue:
+			checking = checking or str(queued.action) == "setup_check"
+		buttons["Check project"].text = "Checking…" if checking else "Check project"
+		if setup_ready and not busy:
+			if setup_goal().length() < 10:
+				setup_feedback("Checks passed. Enter a goal (at least 10 characters) or load PLANNING.md.")
+			else:
+				setup_feedback("Checks passed. Create your team." + (" Using the next milestone from PLANNING.md." if setup_objective.text.strip_edges().is_empty() else ""))
+		buttons["Create backend + frontend team"].tooltip_text = "Run Check project and resolve all FIX items first." if not setup_ready else "Enter a goal or load PLANNING.md." if setup_goal().length() < 10 else "Create two independent workers."
 		buttons["Load project documents"].disabled = busy or chosen(setup_project).is_empty()
 		buttons["Save project document"].disabled = busy or setup_document_project != chosen(setup_project) or setup_documents.is_empty()
 		buttons["Import Markdown file"].disabled = busy or setup_document_project != chosen(setup_project) or setup_documents.is_empty()
@@ -882,7 +901,7 @@ func build_setup(parent_tabs: TabContainer) -> void:
 		setup_ready = false
 		update_buttons())
 	button(form, "Find projects", func(): call_api("setup_projects", "/setup"))
-	form.add_child(caption("What should your team implement? Define the shared API contract when possible. Tasks remain editable Markdown."))
+	form.add_child(caption("Optional goal override. A loaded PLANNING.md supplies the next incomplete milestone. Define the shared API contract when possible."))
 	setup_objective = TextEdit.new()
 	setup_objective.placeholder_text = "Build a task tracker. Backend: task API. Frontend: task list and creation form. Shared contract: GET /api/tasks → [{id, title}], POST /api/tasks accepts {title}."
 	setup_objective.custom_minimum_size = Vector2(500, 170)
@@ -895,12 +914,15 @@ func build_setup(parent_tabs: TabContainer) -> void:
 	var actions := HBoxContainer.new()
 	actions.add_theme_constant_override("separation", 12)
 	form.get_parent().get_parent().add_child(actions)
-	button(actions, "Check project", func():
-		setup_ready = false
-		call_api("setup_check", "/setup/check", HTTPClient.METHOD_POST, {"project": chosen(setup_project), "check_remote": setup_remote.button_pressed}))
+	button(actions, "Check project", check_setup_project)
 	button(actions, "Create backend + frontend team", func():
-		call_api("setup_team", "/setup/team", HTTPClient.METHOD_POST, {"project": chosen(setup_project), "objective": setup_objective.text.strip_edges()}))
+		call_api("setup_team", "/setup/team", HTTPClient.METHOD_POST, {"project": chosen(setup_project), "objective": setup_goal()}))
 	var results := card(row, "2 · Readiness and next steps", 750)
+	setup_status = caption("Choose your project, then Check project. A loaded plan can supply the goal.")
+	setup_status.custom_minimum_size.y = 56
+	var result_shell := results.get_parent().get_parent()
+	result_shell.add_child(setup_status)
+	result_shell.move_child(setup_status, 2)
 	setup_result = TextEdit.new()
 	setup_result.editable = false
 	setup_result.wrap_mode = TextEdit.LINE_WRAPPING_BOUNDARY
@@ -963,3 +985,31 @@ func import_setup_document(path: String) -> void:
 		return
 	setup_document_editor.text = content
 	set_notice("File imported into editor. Review it, then Save project document to apply.")
+
+
+func setup_goal() -> String:
+	var goal := setup_objective.text.strip_edges()
+	if goal.is_empty() and setup_document_project == chosen(setup_project) and setup_documents.get("PLANNING.md", {}).get("exists", false):
+		return "Implement the next incomplete milestone from PLANNING.md following AGENTS.md. Split backend and frontend responsibilities and document integration steps."
+	return goal
+
+func setup_feedback(message: String, error := false) -> void:
+	if setup_status != null:
+		setup_status.text = message
+		setup_status.add_theme_color_override("font_color", Color("f1959e") if error else MINT)
+
+func request_error(command: Dictionary, message: String) -> void:
+	set_notice(message, true)
+	if str(command.get("action", "")).begins_with("setup"):
+		if command.get("action") == "setup_check":
+			setup_ready = false
+		setup_feedback(message, true)
+		setup_result.text = "PROJECT ACTION FAILED\n\n" + message + "\n\nCorrect the issue and try again. Your Markdown files and edits are preserved."
+		setup_result.scroll_vertical = 0
+
+func check_setup_project() -> void:
+	setup_ready = false
+	setup_feedback("Checking project… Please wait for sandbox, Codex and Git results.")
+	setup_result.text = "Checking " + chosen(setup_project) + "…\n\nValidating workspace isolation, Codex login and Git."
+	setup_result.scroll_vertical = 0
+	call_api("setup_check", "/setup/check", HTTPClient.METHOD_POST, {"project": chosen(setup_project), "check_remote": setup_remote.button_pressed})

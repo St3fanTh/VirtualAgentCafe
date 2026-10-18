@@ -60,9 +60,16 @@ F5 ist dabei nicht nötig. Der Managementtoken wird nur im Prozessspeicher an Go
 1. **Setup project** öffnet die Seite. Beim Start über den Starter ist das gewählte
    Projekt bereits ausgewählt. Angezeigt werden nur freigegebene Hauptrepositories.
 2. Beschreibe das Ziel, die Aufteilung und möglichst den gemeinsamen API-Vertrag.
+   Alternativ lade deine vorhandene PLANNING.md über **Load project documents**;
+   bei leerer Zielbeschreibung wird ihr nächster offener Meilenstein verwendet.
 3. **Check project** prüft Sandbox, gespeicherte Codex-Anmeldung, Codex-Modus und
    initialen Commit. Fehler erscheinen mit Handlungshinweisen. Die Prüfung führt
    keinen Modellauftrag aus und bestätigt keine serverseitige Modellverfügbarkeit.
+   Der Prüfstatus bleibt über dem scrollbaren Bericht sichtbar. Ein Klick zeigt
+   sofort „Checking…“; Fehler inklusive Verbindungs- und Zeitüberschreitungen stehen
+   direkt im Bericht. Die Gesamtprüfung ist auf 30 Sekunden begrenzt. „FIX“ muss
+   behoben werden, bevor das Team erstellt werden kann. Nach erfolgreicher Prüfung
+   erklärt der Status auch, ob noch ein Ziel oder eine geladene PLANNING.md fehlt.
 4. **Create backend + frontend team** erstellt beide Worktrees und Konfigurationen.
    Agenten heißen `PROJEKT-backend` und `PROJEKT-frontend`; ihre Branches liegen
    unter `agent/AGENT/implementation`. Aufgaben und Rollen sind weiterhin Markdown.
@@ -126,6 +133,11 @@ zugangsdatenfreies `origin` und prüft lesenden Zugriff. Sie erzeugt keinen
 Testbranch und bestätigt keine Push-Berechtigung. Fehler weisen auf SSH-Agent,
 Host-Schlüssel oder Repository-Berechtigungen hin. Die neuen Agenten erhalten
 weiterhin keine Push-/Pull-/Fetch-Freigaben.
+
+Git vertraut bei eingebundenen Host-Repositories ausschließlich dem explizit
+freigegebenen Workspace-Pfad über eine pro Prozess gesetzte `safe.directory`.
+Es wird weder eine globale Git-Einstellung verändert noch ein Wildcard-Vertrauen
+aktiviert. Hooks und externe Git-Helfer bleiben deaktiviert.
 
 ## Dateien, Persistenz und Grenzen
 

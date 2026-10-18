@@ -35,6 +35,9 @@ class GitService:
         return []
 
     async def run(self, path: Path, *arguments: str, extra_mounts: tuple[Path, ...] = ()) -> str:
+        path = await asyncio.to_thread(path.resolve)
+        if not path.is_relative_to(self.workspaces.files.root):
+            raise ValueError("Git path is outside approved workspaces")
         env = {
             "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
             "HOME": str(Path.home()),
@@ -49,6 +52,8 @@ class GitService:
             env["SSH_AUTH_SOCK"] = os.environ["SSH_AUTH_SOCK"]
         command = [
             "git",
+            "-c",
+            f"safe.directory={path}",
             "-c",
             "core.sshCommand=ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "
             "-o UserKnownHostsFile=/home/agent/.ssh/known_hosts",
