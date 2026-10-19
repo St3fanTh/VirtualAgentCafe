@@ -835,6 +835,7 @@ func load_agent(index: int) -> void:
 		agent_id.text = config.id
 		agent_name.text = config.name
 		choose(workspace, config.workspace)
+		choose(git_workspace, config.workspace)
 		update_workspace_info()
 		choose(task_file, str(config.get("task", "")))
 		roles.deselect_all()
@@ -943,6 +944,9 @@ func save_definition() -> void:
 	call_api("mutation", "/definitions/" + chosen(definition_kind) + "/" + definition_file.text, HTTPClient.METHOD_PUT, {"content": markdown.text})
 
 func git_read(resource: String) -> void:
+	if chosen(git_workspace).is_empty():
+		set_notice("Select a workspace to inspect first.", true)
+		return
 	call_api("git", "/workspaces/" + chosen(git_workspace) + "/" + resource)
 
 func git_mutate(body: Dictionary) -> void:
@@ -1089,6 +1093,8 @@ func setup_feedback(message: String, error := false) -> void:
 
 func request_error(command: Dictionary, message: String) -> void:
 	set_notice(message, true)
+	if command.get("action") == "git":
+		git_result.text = "GIT ACTION FAILED\n\nWorkspace: " + str(command.get("path", "")) + "\n\n" + message
 	if str(command.get("action", "")).begins_with("setup"):
 		if command.get("action") == "setup_check":
 			setup_ready = false

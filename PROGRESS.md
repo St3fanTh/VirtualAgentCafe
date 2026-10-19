@@ -778,3 +778,26 @@
 - Abschlussprüfung: scripts/check.sh vollständig PASS — 156 pytest-Tests,
   Ruff/Format, Godot-Import, Zustands-/Headless- und Live-WebSocket-Tests.
   Bestehende Starlette/httpx-Abkündigungswarnung, keine Testfehler.
+
+## Git-Ansicht auf aktuellen Agenten-Workspace ausrichten — 2026-10-19
+
+- Befund: load_agent aktualisierte die Agenten-Konfiguration, aber nicht die
+  separate Git-Workspace-Auswahl. Alte Projekt-Mounts ohne .git konnten deshalb
+  weiterhin Ziel von View diff und Inspect repository bleiben.
+- Änderung: Agentenauswahl wählt dessen Workspace auch zur Git-Inspektion;
+  bewusste manuelle Workspace-Auswahl bleibt möglich. Fehlender Workspace wird
+  lokal abgefangen. Git-Fehler ersetzen alte Ergebnisse direkt im Git-Panel.
+- Backend nennt fehlendes .git mit konkretem Hinweis auf aktuelle Worker-Worktrees,
+  statt einer generischen Git-Fehlermeldung. Keine automatischen Init-/Git-Mutationen.
+- Dateien: management/git.py, game/scripts/management.gd, test_management_git.py,
+  game/tests/test_gui_input.gd, docs/agent-management.md und PROGRESS.md.
+- Gezielte Prüfung: 14 Tests PASS, einschließlich echter Git-Integration und
+  Godot-Maus-/Tastaturtest: alter leerer Mount → sichtbarer Diff-Fehler → Agent
+  auswählen → richtiger Workspace → Repository-Inspektion wieder erfolgreich.
+- Grenzen: View diff zeigt Änderungen gegen HEAD, keine bereits committierten
+  Änderungen relativ zu main. Diese stehen in der Commit-Historie.
+- Nächster Schritt: Nutzer aktualisiert Client/Backend und prüft aktuellen Worker.
+- Git-Commit-ID: git log --format='%h %s' --grep='inspect Git in the selected agent workspace'.
+- Vollständige Prüfung scripts/check.sh PASS: 157 pytest-Tests, Ruff/Format,
+  Godot-Import, Zustands-, Headless- und Live-WebSocket-Tests. Eine bestehende
+  Starlette/httpx-Abkündigungswarnung, keine Fehler.

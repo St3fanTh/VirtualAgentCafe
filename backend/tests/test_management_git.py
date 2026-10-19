@@ -219,3 +219,12 @@ async def test_real_ssh_resolves_user_inside_git_sandbox(tmp_path):
         timeout=10,
     )
     assert result.returncode == 0, result.stderr
+
+
+async def test_empty_former_project_mount_has_actionable_git_read_errors(tmp_path):
+    workspaces = WorkspaceManager(tmp_path / "workspaces", Store(tmp_path))
+    workspaces.create("old-project")
+    git = GitService(workspaces)
+    for read in (git.info, git.diff):
+        with pytest.raises(ValueError, match="Select the current agent worktree"):
+            await read("old-project")

@@ -229,6 +229,11 @@ class GitService:
 
     async def repository(self, identifier: str) -> Path:
         path = self.workspaces.get(identifier)
+        if not (path / ".git").exists():
+            raise ValueError(
+                "Selected workspace has no Git repository. Select the current agent worktree "
+                "in Workspaces; an old project mount may no longer be connected."
+            )
         # A connected repository must have its metadata under approved workspace roots.
         metadata = Path((await self.run(path, "rev-parse", "--absolute-git-dir")).strip())
         if not (await asyncio.to_thread(metadata.resolve)).is_relative_to(

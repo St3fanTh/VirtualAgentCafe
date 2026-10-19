@@ -317,3 +317,12 @@ be deleted. Deletion does not remove files or remote branches.
 Authenticated API clients can use `DELETE /management/agents/{id}` with JSON
 `{"confirmed": true}`. Missing confirmation is rejected; active execution blocks
 deletion. The refreshed WebSocket snapshot removes the character in connected clients.
+
+## Inspect an agent's Git changes
+
+Select the agent in **Agents**, then open **Workspaces**. Agent selection also
+selects its assigned workspace for Git inspection. You can still choose another
+workspace explicitly. Use the current worker worktree, not a disconnected project
+folder from an older setup. **View diff** shows tracked changes against HEAD;
+committed results appear in **Inspect repository** history instead. Errors replace
+stale results in the Git panel and identify the requested workspace.
