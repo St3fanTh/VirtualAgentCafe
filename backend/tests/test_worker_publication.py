@@ -80,7 +80,7 @@ async def test_successful_worker_commits_and_pushes_own_branch(tmp_path, monkeyp
     result = manager.store.get("executions", run["id"])
     assert result["publication"] == "PUSHED"
     assert result["status"] == "COMPLETED"
-    assert result["acceptance"] == "REVIEW_REQUIRED"
+    assert result["acceptance"] == "UNVERIFIED"
     ref = "refs/heads/agent/backend-agent/task"
     assert await manager.git.run(remote, "show", f"{ref}:result.txt") == "tested result"
     assert "refs/heads/main" not in await manager.git.run(remote, "show-ref")

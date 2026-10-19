@@ -105,15 +105,9 @@ func _process(_delta: float) -> bool:
 		8:
 			if not "CODING" in ui.logs.text or not "TESTING" in ui.logs.text:
 				return false
-			ui.review_note.text = "Reviewed fixture result and recorded test evidence."
-			ui.review(true)
+			check_no_manual_acceptance(ui)
 			stage = 9
 		9:
-			var accepted := false
-			for record in ui.cache.get("executions", []):
-				accepted = accepted or (record.id == execution_id and record.acceptance == "ACCEPTED")
-			if not accepted:
-				return false
 			ui.selected_execution = ""
 			ui.definition_kind.select(0)
 			ui.definition_file.text = "task.md"
@@ -134,3 +128,8 @@ func _process(_delta: float) -> bool:
 				print("Godot managed agent, Markdown, workspace, runtime, logs, acceptance and stop tests: PASS")
 				quit(0)
 	return false
+
+func check_no_manual_acceptance(ui: Node) -> void:
+	if ui.buttons.has("Accept task") or ui.buttons.has("Reject task"):
+		push_error("Executions must not require manual task acceptance")
+		quit(1)

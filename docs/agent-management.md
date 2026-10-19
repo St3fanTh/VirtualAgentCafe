@@ -93,15 +93,15 @@ be reused; assignment and task state belong to each agent/execution.
    café and receives real observed runtime states. **Stop** cancels and reaps its
    process tree; **Restart** stops the active run and reloads current Markdown.
 9. Inspect execution history, live activity logs, private workspace output,
-   modified files, diffs and commits. Enter review evidence and choose **Accept task**
-   or **Reject task**. Model completion alone never accepts the task.
+   modified files, diffs and commits. Automatic requirements validation replaces
+   manual acceptance buttons. Model completion alone never validates the project.
 
 Two agents can use the same source repository with separate workspace/worktree IDs
 and branches. Uncheck **Separate Git worktree** to use an ordinary repository workspace; select
 the same ID for source repository and workspace. Agents sharing an ordinary
 workspace run sequentially; the controller
 rejects concurrent claims. Persistent worktrees are kept for review and subsequent
-runs, rather than deleted with uncommitted work. No automatic merge is implemented.
+runs, rather than deleted with uncommitted work. Optional automatic feature integration and tested main promotion are described in [automatic integration](automatic-integration.md).
 
 ## HTTP API
 
@@ -186,9 +186,10 @@ restart marks interrupted executions FAILED, rather than pretending they finishe
 
 Agent lifecycle: CREATED (configuration being entered), CONFIGURED, READY (validated),
 RUNNING, COMPLETED/FAILED/CANCELLED. Task state: PENDING (no assignment), ASSIGNED,
-RUNNING, FAILED/CANCELLED, COMPLETED only after acceptance. Successful runtime returns
-task state ASSIGNED with `acceptance=REVIEW_REQUIRED`; rejection marks task FAILED.
-Acceptance is human review, not an automatically inferred proof of prose criteria.
+RUNNING, FAILED/CANCELLED and COMPLETED after automatic shared validation.
+A standalone runtime remains UNVERIFIED. An enabled team's worker results wait
+for shared integration; successful main promotion records AUTO_VALIDATED.
+The GUI has no manual acceptance gate. See [automatic integration](automatic-integration.md).
 
 Run **one Uvicorn worker/controller**. An exclusive filesystem lock rejects a second
 controller sharing the same management store before restart recovery. In-process
@@ -296,3 +297,6 @@ publication (`.cafe` runtime files are excluded). The configured push destinatio
 must be one credential-free HTTPS or SSH URL. No force, tags, mirror or merge.
 Publication status and the pushed commit are persisted separately from runtime
 success and task acceptance. See [setup instructions](project-setup.md#ergebnisse-automatisch-auf-github-hochladen).
+
+Automatic shared integration and main promotion are an additional explicit team opt-in;
+see [workflow, requirements manifest and safeguards](automatic-integration.md).

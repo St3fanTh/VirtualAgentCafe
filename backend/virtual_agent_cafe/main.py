@@ -97,6 +97,10 @@ def create_app(
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         management.acquire_controller()
+        if mode == "codex":
+            for project in management.store.list("projects"):
+                if project.get("auto_integrate"):
+                    management.integrations.schedule(project["agents"][0])
         demo = asyncio.create_task(simulate(bus, interval)) if mode == "demo" else None
         try:
             yield

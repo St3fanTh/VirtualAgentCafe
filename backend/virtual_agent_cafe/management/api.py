@@ -7,6 +7,7 @@ from pydantic import Field
 
 from .config import AgentConfig, MarkdownInput, ReviewInput, StrictModel, WorkspaceInput
 from .execution import ExecutionManager
+from .git import GitOperationError
 from .project_documents import ProjectDocumentInput, load_documents, save_document
 from .setup import ProjectSetup, SetupCheck, SetupInput
 
@@ -49,7 +50,7 @@ def management_router(manager: ExecutionManager, validated_body, mode: str) -> A
         except (ValueError, OSError) as error:
             detail = (
                 str(error)[:200]
-                if type(error) is ValueError
+                if type(error) is ValueError or isinstance(error, GitOperationError)
                 else "Operation rejected; check configuration, paths, locks and isolation"
             )
             raise HTTPException(409, detail) from None
@@ -100,6 +101,23 @@ def management_router(manager: ExecutionManager, validated_body, mode: str) -> A
     async def setup_team(request: Request):
         data = await validated_body(request, SetupInput)
         return await guarded(lambda: setup.create(data))
+
+    @router.post("/projects/{identifier}/integrate", status_code=202)
+    async def retry_integration(identifier: str, request: Request):
+        await validated_body(request, EmptyInput)
+        if mode != "codex":
+            raise HTTPException(409, "Integration requires Codex mode")
+
+        async def retry():
+            record = manager.store.get("projects", identifier)
+            if not record.get("auto_integrate"):
+                raise ValueError("Enable automatic team integration in Setup first")
+            if identifier in manager.integrations.running:
+                raise ValueError("Team integration is already running")
+            manager.integrations.schedule(record["agents"][0])
+            return {"project": identifier, "status": "QUEUED"}
+
+        return await guarded(retry)
 
     @router.get("")
     async def overview():
@@ -182,7 +200,11 @@ def management_router(manager: ExecutionManager, validated_body, mode: str) -> A
     async def logs(execution: str, after: int = 0):
         async def read():
             record = manager.store.get("executions", execution)
-            return {"logs": manager.store.logs(execution, max(0, after)), "execution": record}
+            return {
+                "logs": manager.store.logs(execution, max(0, after)),
+                "execution": record,
+                "projects": manager.store.list("projects"),
+            }
 
         return await guarded(read)
 

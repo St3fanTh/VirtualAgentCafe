@@ -148,3 +148,12 @@ start/stop/restart Codex and review execution history. Managed execution require
 Bubblewrap and working Linux namespaces. A private management token protects the API.
 See the [complete setup, configuration example and workflow](docs/agent-management.md).
 Rebuild the backend image for Bubblewrap and the new approved `/workspaces` volume.
+
+### Automatic team integration
+
+Enable **Integrate + requirements tests + promote green result to main** in Setup.
+After both workers commit and push, an integration/test worker merges their exact
+commits on its feature branch and creates a shared requirements test plan. The
+controller reruns those suites, publishes the feature and fast-forwards the exact
+tested commit to remote main only on success. No manual task acceptance or force-push.
+[Setup, requirements manifest, failure recovery and limits](docs/automatic-integration.md).

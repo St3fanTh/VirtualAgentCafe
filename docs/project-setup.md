@@ -83,8 +83,9 @@ F5 ist dabei nicht nötig. Der Managementtoken wird nur im Prozessspeicher an Go
    kostenpflichtigen Modellaufgaben.
 6. Ergebnisse, Tests und Diffs prüfen. Annahme und späterer Merge erfolgen bewusst;
    standardmäßig wird nicht gepusht. Optional kann der Controller erfolgreiche
-   Läufe auf eigene Agenten-Branches hochladen (siehe unten). Ein Merge erfolgt
-   weiterhin nicht automatisch.
+   Läufe auf eigene Agenten-Branches hochladen (siehe unten). Optional kann die
+   [automatische Integration mit Requirements-Tests und Main-Promotion](automatic-integration.md)
+   freigeschaltet werden; dann entfällt eine manuelle Aufgabenannahme.
 
 Uncommittete Änderungen bleiben im Quellrepository. Die Agentenworktrees beginnen
 bei dessen HEAD; der Assistent zeigt diesen Unterschied an und erstellt selbst
@@ -265,7 +266,7 @@ docker compose cp backend:/workspaces/simulationworld-9e6a873f-frontend ./fronte
 Diese Kopien dienen zur Dateiansicht. Ihre `.git`-Datei verweist weiterhin auf
 Containerpfade; Git-Status, Diffs und Commits deshalb über die Verwaltung oder im
 ursprünglichen Container prüfen. Die beiden Projektstände müssen nach Review
-bewusst integriert werden. Es gibt keinen automatischen Merge oder Push.
+bewusst integriert werden. Ohne entsprechende Freischaltung erfolgt kein automatischer Merge oder Push.
 
 `runtime` speichert Aufgaben, Rollen, Konfiguration und Ausführungshistorie;
 `agent_workspaces` speichert die bearbeiteten Projektdateien. Normale Container-
@@ -316,5 +317,11 @@ Remote-Name und Branch werden im Ausführungsdatensatz gespeichert. **FAILED**
 bedeutet, dass die Veröffentlichung scheiterte; **NOT_PUBLISHED**, dass der Lauf
 vor der Veröffentlichung abgebrochen/fehlgeschlagen ist. Dateien bleiben erhalten.
 Bei uncommitteten Änderungen, fehlenden Rechten oder abweichender Remote-Historie
-wird kein erfolgreicher Abschluss behauptet. Review und Integration bleiben eigene
-Schritte; GitHub zeigt die Ergebnisse auf den Agenten-Branches, nicht auf `main`.
+wird kein erfolgreicher Abschluss behauptet. Optional übernimmt die [Team-Automatik](automatic-integration.md) Integration und
+Requirements-Tests bis zur Main-Promotion; ohne diese Freischaltung bleiben es eigene Schritte; GitHub zeigt die Ergebnisse auf den Agenten-Branches, nicht auf `main`.
+
+## Automatisch zusammenführen, gemeinsam testen und nach main übernehmen
+
+Im Setup zusätzlich **Integrate + requirements tests + promote green result to main**
+aktivieren. Das ergänzt den Integrations-/Testworker und ersetzt die manuelle
+Aufgabenannahme. [Vollständiger Ablauf und Testplanformat](automatic-integration.md).

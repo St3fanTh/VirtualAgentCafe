@@ -52,6 +52,7 @@ class GitConfig(StrictModel):
 
 
 class ExecutionConfig(StrictModel):
+    integration_validation: bool = False
     timeout_seconds: int = Field(default=300, ge=1, le=3600)
     max_retries: int = Field(default=0, ge=0, le=2)
 

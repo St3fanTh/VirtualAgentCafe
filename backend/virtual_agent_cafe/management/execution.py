@@ -9,10 +9,11 @@ from uuid import UUID, uuid4
 from ..adapters.base import AgentAdapter
 from ..bus import EventBus
 from ..models import AgentState, Event, EventType, Payload
-from . import git_helper
+from . import git_helper, validation
 from .config import AgentConfig, Identifier, State, TaskState
 from .files import ApprovedFiles, MarkdownManager, WorkspaceManager
 from .git import GitOperationError, GitService
+from .integration import Integrations
 from .project_documents import load_documents
 from .registry import AgentRegistry
 from .sandbox import IsolatedCodexAdapter, Sandbox
@@ -72,6 +73,7 @@ class ExecutionManager:
         self.control = asyncio.Lock()
         self.closing = False
         self.controller_lock = None
+        self.integrations = Integrations(self)
         if recover:
             self.recover()
         for record in self.store.list("agents"):
@@ -107,6 +109,10 @@ class ExecutionManager:
                 self.store.log(
                     run["id"], {"timestamp": now(), "type": "agent.error", "detail": run["detail"]}
                 )
+        for project in self.store.list("projects"):
+            if project.get("integration", {}).get("status") == "RUNNING":
+                project["integration"]["status"] = "INTERRUPTED"
+                self.store.put("projects", project["id"], project)
         for agent in self.store.list("agents"):
             if agent["state"] == State.RUNNING:
                 self.registry.update(
@@ -120,6 +126,7 @@ class ExecutionManager:
             "roles": self.roles.list(),
             "workspaces": self.store.list("workspaces"),
             "executions": self.store.list("executions")[-100:],
+            "projects": self.store.list("projects"),
         }
 
     def configure(self, config: AgentConfig) -> dict:
@@ -152,9 +159,10 @@ class ExecutionManager:
             source="system",
         )
 
-    async def start(self, identifier: str) -> dict:
+    async def start(self, identifier: str, *, coordinated: bool = False) -> dict:
+        self.integrations.guard_start(identifier, coordinated)
         try:
-            return await self._start(identifier)
+            return await self._start(identifier, coordinated=coordinated)
         except GitOperationError as error:
             self.registry.update(
                 identifier, state=State.FAILED, task_state=TaskState.FAILED, last_error=str(error)
@@ -170,8 +178,9 @@ class ExecutionManager:
             )
             raise
 
-    async def _start(self, identifier: str) -> dict:
+    async def _start(self, identifier: str, *, coordinated: bool = False) -> dict:
         async with self.control:
+            self.integrations.guard_start(identifier, coordinated)
             if self.closing or identifier in self.running:
                 raise ValueError("Agent is already running or controller is stopping")
             record = self.registry.get(identifier)
@@ -216,6 +225,9 @@ class ExecutionManager:
                 self.workspaces.get(config.git.repository) if config.git.enabled else workspace
             )
             project_documents = load_documents(project_root)
+            integration = self.integrations.inputs.get(identifier)
+            if config.execution.integration_validation and not integration:
+                raise ValueError("Integration requires current published worker inputs")
             self.registry.update(identifier, state=State.READY)
             context = self.context(config, task, roles, workspace, branch)
             document_context = (
@@ -240,6 +252,14 @@ class ExecutionManager:
                     (instruction_root / "project" / name).write_text(
                         document["content"], encoding="utf-8"
                     )
+            if integration:
+                (instruction_root / "requirements.md").write_text(
+                    integration["text"], encoding="utf-8"
+                )
+                context += (
+                    "\nRead .cafe/instructions/requirements.md for exact common requirements.\n"
+                )
+                context += "Requirements SHA256: " + integration["sha256"] + "\n"
             (instruction_root / "task.md").write_text(task["content"], encoding="utf-8")
             for role in roles:
                 (instruction_root / "roles" / role["file"]).write_text(
@@ -264,6 +284,8 @@ class ExecutionManager:
                 "publication": "PENDING" if config.git.push_on_success else "NOT_REQUESTED",
                 "started_at": now(),
                 "ended_at": None,
+                "requirements_sha256": integration["sha256"] if integration else None,
+                "integration_base": integration["base"] if integration else None,
                 "attempts": 0,
                 "branch": branch if config.git.enabled else None,
                 "detail": "Starting",
@@ -379,8 +401,27 @@ class ExecutionManager:
                 detail=result.reason[:256],
                 # COMPLETED describes the process. Acceptance remains separately unverified.
                 task_state=TaskState.ASSIGNED if result.success else TaskState.FAILED,
-                acceptance="REVIEW_REQUIRED" if result.success else "UNVERIFIED",
+                acceptance="PENDING_INTEGRATION"
+                if result.success and self.integrations.project(config.id)
+                else "UNVERIFIED",
             )
+            if result.success and config.execution.integration_validation:
+                # Tests get no Git RPC authority once the model process has finished.
+                watcher.cancel()
+                await asyncio.gather(watcher, return_exceptions=True)
+                watcher = None
+                try:
+                    async with asyncio.timeout(config.execution.timeout_seconds):
+                        await validation.validate(self, config, run, workspace)
+                except ValueError as error:
+                    run.update(
+                        status=State.FAILED,
+                        task_state=TaskState.FAILED,
+                        acceptance="VALIDATION_FAILED",
+                        detail=str(error)[:256],
+                    )
+                    emit(EventType.ERROR, "Shared validation failed: " + str(error)[:220])
+                    return
             if result.success and config.git.push_on_success:
                 emit(EventType.WAITING, "Git: publishing committed results to the agent branch")
                 try:
@@ -397,9 +438,31 @@ class ExecutionManager:
                     return
                 run.update(publication="PUSHED", published=published)
                 emit(EventType.WAITING, "Git: agent branch pushed successfully")
+                if config.execution.integration_validation:
+                    try:
+                        self.integrations.assert_current(config.id)
+                        promoted = await self.git.promote(
+                            config, run["validation"]["commit"], run["integration_base"]
+                        )
+                    except ValueError as error:
+                        run.update(
+                            status=State.FAILED,
+                            task_state=TaskState.FAILED,
+                            promotion="FAILED",
+                            detail=str(error)[:256],
+                        )
+                        emit(EventType.ERROR, str(error)[:256])
+                        return
+                    run.update(
+                        promotion="PROMOTED",
+                        promoted=promoted,
+                        acceptance="AUTO_VALIDATED",
+                        task_state=TaskState.COMPLETED,
+                    )
+                    emit(EventType.CODING, "Git: tested integration promoted to main")
             emit(
                 EventType.FINISHED if result.success else EventType.ERROR,
-                "Runtime completed; task acceptance requires review"
+                "Runtime completed; requirements validation is tracked separately"
                 if result.success
                 else result.reason,
             )
@@ -439,6 +502,7 @@ class ExecutionManager:
             self.registry.update(config.id, state=run["status"], task_state=run["task_state"])
             self.claims.pop(config.workspace, None)
             self.running.pop(config.id, None)
+            self.integrations.schedule(config.id)
 
     async def stop(self, identifier: str) -> dict:
         task = self.running.get(identifier)
@@ -493,5 +557,6 @@ class ExecutionManager:
 
     async def close(self):
         self.closing = True
+        await self.integrations.close()
         for identifier in list(self.running):
             await self.stop(identifier)

@@ -8,6 +8,7 @@ import shutil
 from pydantic import Field, TypeAdapter, field_validator
 
 from .config import AgentConfig, Identifier, State, StrictModel, TaskState
+from .integration import PLAN_INSTRUCTIONS
 from .sandbox import Sandbox
 
 
@@ -15,6 +16,7 @@ class SetupInput(StrictModel):
     project: Identifier
     objective: str = Field(min_length=10, max_length=3000)
     publish_results: bool = False
+    auto_integrate: bool = False
 
     @field_validator("objective")
     @classmethod
@@ -213,6 +215,8 @@ class ProjectSetup:
 
     async def create(self, data: SetupInput):
         manager = self.manager
+        if data.auto_integrate:
+            data.publish_results = True
         async with manager.control:
             for identifier in manager.running:
                 config = manager.registry.get(identifier)["config"]
@@ -233,6 +237,8 @@ class ProjectSetup:
                 record = existing[0]
                 if data.publish_results:
                     await self.enable_publication(record)
+                if data.auto_integrate:
+                    await self.enable_integration(record)
                 return record
             configs = []
             for role in ("backend", "frontend"):
@@ -273,7 +279,7 @@ class ProjectSetup:
                         raise ValueError(
                             "Team Markdown already exists; existing instructions are preserved"
                         )
-                if len(manager.bus.agents) + 2 > 64:
+                if len(manager.bus.agents) + (3 if data.auto_integrate else 2) > 64:
                     raise ValueError("Agent capacity reached")
                 manager.store.put(
                     "projects",
@@ -352,6 +358,8 @@ class ProjectSetup:
                 manager.broadcast_snapshot()
             if data.publish_results or record.get("publish_results"):
                 await self.enable_publication(record)
+            if data.auto_integrate:
+                await self.enable_integration(record)
             record["status"] = "READY"
             manager.store.put("projects", data.project, record)
             return record
@@ -370,3 +378,61 @@ class ProjectSetup:
             self.manager.configure(config)
         record["publish_results"] = True
         self.manager.store.put("projects", record["id"], record)
+
+    async def enable_integration(self, record: dict):
+        manager = self.manager
+        identifier = record["id"] + "-integration"
+        if len(identifier) > 64:
+            raise ValueError("Project ID is too long for an integration worker")
+        if not record.get("integrator"):
+            if any(a["config"]["id"] == identifier for a in manager.store.list("agents")):
+                raise ValueError("Integration agent ID is already in use")
+            if (
+                manager.tasks.files.path(identifier + ".md").exists()
+                or manager.roles.files.path(identifier + ".md").exists()
+            ):
+                raise ValueError("Integration instructions already exist; existing files preserved")
+            destination = manager.workspaces.files.path(identifier)
+            if destination.exists() and any(destination.iterdir()):
+                raise ValueError("Integration destination is not empty; existing files preserved")
+            # Persist ownership before creating files, so interrupted setup can resume.
+            record["integrator"] = identifier
+            record["auto_integrate"] = True
+            manager.store.put("projects", record["id"], record)
+        manager.workspaces.create(identifier)
+        for definitions, text in (
+            (manager.tasks, PLAN_INSTRUCTIONS),
+            (
+                manager.roles,
+                "# Role: Integration and Test Engineer\nReconcile interfaces, "
+                "implement requirements tests, preserve source requirements. "
+                "No weakening tests. Use only the assigned feature branch.\n",
+            ),
+        ):
+            if not definitions.files.path(identifier + ".md").exists():
+                definitions.save(identifier + ".md", text)
+        if not any(a["config"]["id"] == identifier for a in manager.store.list("agents")):
+            manager.configure(
+                AgentConfig.model_validate(
+                    {
+                        "id": identifier,
+                        "name": "Integration & Tests",
+                        "workspace": identifier,
+                        "task": identifier + ".md",
+                        "roles": [identifier + ".md"],
+                        "git": {
+                            "enabled": True,
+                            "repository": record["id"],
+                            "branch": f"agent/{identifier}/validation",
+                            "worktree": True,
+                            "allow_push": True,
+                            "push_on_success": True,
+                        },
+                        "execution": {"timeout_seconds": 3600, "integration_validation": True},
+                    }
+                )
+            )
+        record["auto_integrate"] = True
+        record.setdefault("integration", {"status": "WAITING_FOR_WORKERS"})
+        manager.store.put("projects", record["id"], record)
+        manager.integrations.schedule(record["agents"][0])

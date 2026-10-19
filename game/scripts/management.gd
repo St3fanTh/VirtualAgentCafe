@@ -33,7 +33,6 @@ var git_result: TextEdit
 var executions: ItemList
 var logs: TextEdit
 var execution_status: Label
-var review_note: LineEdit
 var selected_execution := ""
 var log_sequence := 0
 var action := ""
@@ -62,6 +61,7 @@ var setup_result: TextEdit
 var setup_status: Label
 var setup_remote: CheckBox
 var setup_publish: CheckBox
+var setup_integrate: CheckBox
 var publish_on_success: CheckBox
 var setup_ready := false
 var setup_checked_project := ""
@@ -418,8 +418,8 @@ func build_executions(tabs: TabContainer) -> void:
 	button(list_column, "Refresh execution history", func():
 		selected_execution = ""
 		refresh())
-	var monitor := card(row, "Live activity & review", 950)
-	monitor.add_child(caption("Observed activity only; successful runtime still requires task review."))
+	var monitor := card(row, "Live activity & integration", 950)
+	monitor.add_child(caption("Observed execution, shared requirements checks and main promotion."))
 	execution_status = caption("Select an execution to monitor its current status.")
 	execution_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	monitor.add_child(execution_status)
@@ -427,11 +427,8 @@ func build_executions(tabs: TabContainer) -> void:
 	logs.editable = false
 	logs.custom_minimum_size = Vector2(760, 360)
 	monitor.add_child(logs)
-	review_note = line(monitor, "Review evidence / acceptance note")
-	var reviews := HBoxContainer.new()
-	monitor.add_child(reviews)
-	button(reviews, "Accept task", func(): review(true))
-	button(reviews, "Reject task", func(): review(false))
+	monitor.add_child(caption("Team runs integrate automatically. Main is updated only after shared requirements tests pass."))
+	button(monitor, "Retry team integration", retry_integration)
 
 func show_agent(identifier: String) -> void:
 	tabs.current_tab = 0
@@ -535,10 +532,17 @@ func received(_result: int, code: int, _headers: PackedStringArray, body: Packed
 		setup_result.text += "Branch: " + str(data.get("git", {}).get("branch", "")) + "\nOrigin: " + str(data.get("remote", "")) + "\n" + str(data.get("remote_status", "")) + "\n\n" + str(data.get("dirty_warning", ""))
 	elif finished_action == "setup_team":
 		setup_feedback("Team ready. Open Agents to start each worker.")
-		setup_result.text = "TEAM READY\n\n" + "\n".join(data.get("agents", [])) + "\n\nTwo persistent worktrees and branches are ready. Worker files are saved there, not in your source folder. No agent has started.\n\nNext: open Agents, review each Markdown task and its interface contract, then Start agent. Review diffs and tests before accepting results. " + ("Successful runs will push their own branches. No automatic merge." if data.get("publish_results", false) else "Publishing disabled. Enable it in Agents or rerun team setup with publication selected.")
+		var publication_hint := "Publishing disabled. Enable it in Agents or rerun team setup with publication selected."
+		if data.get("publish_results", false):
+			publication_hint = "Successful runs will push their own branches. Shared integration disabled."
+		if data.get("auto_integrate", false):
+			publication_hint = "Automatic shared integration, requirements tests and main promotion enabled."
+		setup_result.text = "TEAM READY\n\n" + "\n".join(data.get("agents", [])) + "\n\nTwo persistent worktrees and branches are ready. Worker files are saved there, not in your source folder. Start new worker runs from Agents; enabled integration uses ready published results automatically.\n\nNext: open Agents, review each Markdown task and its interface contract, then Start agent. Monitor execution logs and the shared test results. " + publication_hint
 		setup_ready = false
 		pending_refresh = true
-		set_notice("Project configured. Review tasks, then start your team in Agents.")
+		if data.get("auto_integrate", false):
+			setup_result.text += "\n\nAUTOMATIC INTEGRATION ENABLED\nAfter both worker pushes, the integration/test worker merges their commits, builds the common requirements test plan, reruns its suites and promotes the green commit to main. No manual task acceptance."
+		set_notice("Project configured. Start your workers in Agents.")
 	elif finished_action == "overview":
 		cache = data
 		populate()
@@ -551,14 +555,22 @@ func received(_result: int, code: int, _headers: PackedStringArray, body: Packed
 			git_result.text = "REPOSITORY\n" + str(data.get("repository", "")) + "\n\nBRANCH\n" + str(data.get("branch", "")) + "\n\nMODIFIED FILES\n" + ("\n".join(data.get("modified_files", [])) if not data.get("modified_files", []).is_empty() else "No changes") + "\n\nRECENT COMMITS\n" + ("\n".join(data.get("history", [])) if not data.get("history", []).is_empty() else "No commits yet")
 		set_notice("Repository information updated.")
 	elif finished_action == "logs" and completed.get("execution", "") == selected_execution:
+		cache["projects"] = data.get("projects", cache.get("projects", []))
 		var record: Dictionary = data.get("execution", {})
-		execution_status.text = str(record.get("status", "")) + " · " + str(record.get("acceptance", "")) + " · Git: " + str(record.get("publication", "NOT_REQUESTED")) + "\nFiles saved in: " + str(record.get("workspace_path", "")) + " · Branch: " + str(record.get("branch", ""))
+		execution_status.text = str(record.get("status", "")) + " · " + str(record.get("acceptance", "")) + " · Git: " + str(record.get("publication", "NOT_REQUESTED")) + " · Main: " + str(record.get("promotion", "NOT_PROMOTED")) + "\nFiles saved in: " + str(record.get("workspace_path", "")) + " · Branch: " + str(record.get("branch", ""))
+		if record.has("validation"):
+			var validation: Dictionary = record.validation
+			execution_status.text += "\nRequirements: " + str(validation.get("requirements", []).size()) + " · Shared tests: " + ("PASS" if validation.get("passed", false) else "FAIL")
 		for entry in data.get("logs", []):
 			if int(entry.get("sequence", 0)) <= log_sequence:
 				continue
 			log_sequence = int(entry.sequence)
 			logs.text += str(entry.get("timestamp", "")).substr(11, 8) + "  " + str(entry.get("type", "")).trim_prefix("agent.").to_upper() + "\n" + str(entry.get("detail", "")) + "\n\n"
 		logs.text = logs.text.right(48000)
+		for project in cache.get("projects", []):
+			if record.get("agent_id", "") in project.get("agents", []) or record.get("agent_id", "") == project.get("integrator", ""):
+				var integration: Dictionary = project.get("integration", {})
+				execution_status.text += "\nTeam: " + str(integration.get("status", "NOT_CONFIGURED")) + " · " + str(integration.get("detail", ""))
 	elif finished_action in ["mutation", "control", "review"]:
 		if finished_action == "mutation" and data.has("config") and str(completed.get("path", "")).begins_with("/agents") and completed.get("method") in [HTTPClient.METHOD_PUT, HTTPClient.METHOD_POST]:
 			if int(completed.get("revision", -1)) == form_revision:
@@ -621,7 +633,7 @@ func update_buttons() -> void:
 				setup_feedback("Checks passed. Enter a goal (at least 10 characters) or load PLANNING.md.")
 			else:
 				setup_feedback("Checks passed. Create your team." + (" Using the next milestone from PLANNING.md." if setup_objective.text.strip_edges().is_empty() else ""))
-		buttons["Create backend + frontend team"].tooltip_text = "Run Check project and resolve all FIX items first." if not setup_ready else "Enter a goal or load PLANNING.md." if setup_goal().length() < 10 else "Create two independent workers."
+		buttons["Create backend + frontend team"].tooltip_text = "Run Check project and resolve all FIX items first." if not setup_ready else "Enter a goal or load PLANNING.md." if setup_goal().length() < 10 else "Create workers and optionally enable shared integration."
 		buttons["Load project documents"].disabled = busy or chosen(setup_project).is_empty()
 		buttons["Save project document"].disabled = busy or setup_document_project != chosen(setup_project) or setup_documents.is_empty()
 		buttons["Import Markdown file"].disabled = busy or setup_document_project != chosen(setup_project) or setup_documents.is_empty()
@@ -637,14 +649,20 @@ func update_buttons() -> void:
 	buttons["Start agent"].disabled = busy or active_agent.is_empty() or running or not ready or dirty
 	buttons["Stop agent"].disabled = busy or active_agent.is_empty() or not running
 	buttons["Restart agent"].disabled = busy or active_agent.is_empty() or not ready or dirty
+	var automatic := bool(selected.get("execution", {}).get("integration_validation", false))
+	buttons["Start agent"].disabled = buttons["Start agent"].disabled or automatic
+	buttons["Restart agent"].disabled = buttons["Restart agent"].disabled or automatic
 	buttons["Save configuration"].disabled = busy or running
-	var reviewable := false
+	var can_retry := false
 	for execution in cache.get("executions", []):
 		if execution.id == selected_execution:
-			reviewable = execution.status == "COMPLETED" and bool(execution.get("runtime_success", false))
-	buttons["Accept task"].disabled = busy or not reviewable
-	buttons["Reject task"].disabled = busy or not reviewable
+			for project in cache.get("projects", []):
+				if project.get("auto_integrate", false) and (execution.agent_id in project.get("agents", []) or execution.agent_id == project.get("integrator", "")):
+					can_retry = project.get("integration", {}).get("status", "") != "RUNNING"
+	buttons["Retry team integration"].disabled = busy or not can_retry
 	buttons["Start agent"].tooltip_text = "Save your changes before starting." if dirty else "Run the assigned Markdown task."
+	if automatic:
+		buttons["Start agent"].tooltip_text = "Starts automatically after both worker branches are published. Use Retry team integration after a failure."
 	buttons["Stop agent"].tooltip_text = "Cancel the running task." if running else "This agent has no active task."
 	buttons["Save configuration"].tooltip_text = "Stop the agent before editing its configuration." if running else "Save this agent and its assignments."
 	var capabilities: Dictionary = cache.get("capabilities", {})
@@ -837,7 +855,13 @@ func save_agent() -> void:
 	git["push_on_success"] = publish_on_success.button_pressed
 	for operation in remote_flags:
 		git["allow_" + operation] = remote_flags[operation].button_pressed
-	var config := {"id": agent_id.text, "name": agent_name.text, "workspace": chosen(workspace), "task": chosen(task_file) if not chosen(task_file).is_empty() else null, "roles": assigned_roles, "git": git, "execution": {"timeout_seconds": int(timeout.value), "max_retries": int(retries.value)}}
+	var execution := {}
+	for record in cache.get("agents", []):
+		if record.config.id == active_agent:
+			execution = record.config.execution.duplicate(true)
+	execution["timeout_seconds"] = int(timeout.value)
+	execution["max_retries"] = int(retries.value)
+	var config := {"id": agent_id.text, "name": agent_name.text, "workspace": chosen(workspace), "task": chosen(task_file) if not chosen(task_file).is_empty() else null, "roles": assigned_roles, "git": git, "execution": execution}
 	call_api("mutation", "/agents/" + agent_id.text if editing else "/agents", HTTPClient.METHOD_PUT if editing else HTTPClient.METHOD_POST, config)
 
 func control(operation: String) -> void:
@@ -884,11 +908,13 @@ func git_read(resource: String) -> void:
 func git_mutate(body: Dictionary) -> void:
 	call_api("git", "/workspaces/" + chosen(git_workspace) + "/git", HTTPClient.METHOD_POST, body)
 
-func review(accepted: bool) -> void:
-	if selected_execution.is_empty() or review_note.text.strip_edges().is_empty():
-		notice.text = "Select an execution and enter your review evidence."
-		return
-	call_api("review", "/executions/" + selected_execution + "/review", HTTPClient.METHOD_POST, {"accepted": accepted, "note": review_note.text})
+func retry_integration() -> void:
+	for project in cache.get("projects", []):
+		for execution in cache.get("executions", []):
+			if execution.id == selected_execution and (execution.agent_id in project.get("agents", []) or execution.agent_id == project.get("integrator", "")):
+				call_api("control", "/projects/" + str(project.id) + "/integrate", HTTPClient.METHOD_POST, {})
+				return
+	set_notice("Select a run belonging to a team with automatic integration enabled.", true)
 
 func _unhandled_key_input(event: InputEvent) -> void:
 	if visible and event is InputEventKey and event.pressed and event.keycode == KEY_ESCAPE:
@@ -907,7 +933,7 @@ func open_setup() -> void:
 func build_setup(parent_tabs: TabContainer) -> void:
 	var row := page(parent_tabs, "Setup")
 	var form := card(row, "1 · Your project and goal", 700)
-	form.add_child(caption("Choose an existing Git project. The assistant prepares two independent agents; it never starts a model task or publishes changes automatically."))
+	form.add_child(caption("Choose an existing Git project. Start workers from Agents. With automatic integration enabled, ready published results start the integration/test worker automatically."))
 	setup_project = option(form, "Approved Git project")
 	setup_project.item_selected.connect(func(_index):
 		setup_ready = false
@@ -927,12 +953,19 @@ func build_setup(parent_tabs: TabContainer) -> void:
 	setup_publish.text = "Push successful results to each agent's own Git branch"
 	setup_publish.tooltip_text = "Requires starter --publish-results and SSH access. Never merges main."
 	form.add_child(setup_publish)
+	setup_integrate = CheckBox.new()
+	setup_integrate.text = "Integrate + requirements tests + promote green result to main"
+	setup_integrate.toggled.connect(func(enabled):
+		setup_publish.disabled = enabled
+		if enabled:
+			setup_publish.button_pressed = true)
+	form.add_child(setup_integrate)
 	var actions := HBoxContainer.new()
 	actions.add_theme_constant_override("separation", 12)
 	form.get_parent().get_parent().add_child(actions)
 	button(actions, "Check project", check_setup_project)
 	button(actions, "Create backend + frontend team", func():
-		call_api("setup_team", "/setup/team", HTTPClient.METHOD_POST, {"project": chosen(setup_project), "objective": setup_goal(), "publish_results": setup_publish.button_pressed}))
+		call_api("setup_team", "/setup/team", HTTPClient.METHOD_POST, {"project": chosen(setup_project), "objective": setup_goal(), "publish_results": setup_publish.button_pressed, "auto_integrate": setup_integrate.button_pressed}))
 	var results := card(row, "2 · Readiness and next steps", 750)
 	setup_status = caption("Choose your project, then Check project. A loaded plan can supply the goal.")
 	setup_status.custom_minimum_size.y = 56

@@ -69,7 +69,7 @@ async def test_lifecycle_context_snapshot_logs_and_separate_acceptance(tmp_path)
     await completed(manager)
     result = manager.store.get("executions", run["id"])
     assert result["status"] == "COMPLETED"
-    assert result["acceptance"] == "REVIEW_REQUIRED"
+    assert result["acceptance"] == "UNVERIFIED"
     assert result["task_state"] != "COMPLETED"
     assert len(manager.store.logs(run["id"])) >= 3
     manager.review(run["id"], True, "Reviewed generated changes and tests")
@@ -112,11 +112,14 @@ async def test_failure_timeout_and_restart_recovery(tmp_path):
     with pytest.raises(ValueError):
         manager.review(run["id"], True, "Cannot accept failed runtime")
     runtime.release.clear()
+    runtime.started.clear()
     record = manager.registry.get("backend-agent")["config"]
     record["execution"]["timeout_seconds"] = 1
     manager.configure(AgentConfig.model_validate(record))
     run = await manager.start("backend-agent")
-    await asyncio.sleep(1.1)
+    async with asyncio.timeout(5):
+        await runtime.started.wait()
+        await manager.running["backend-agent"]
     assert manager.store.get("executions", run["id"])["detail"] == "Execution timed out"
     manager.store.put("executions", "interrupted", {**run, "id": "interrupted"})
     manager.registry.update("backend-agent", state="RUNNING")

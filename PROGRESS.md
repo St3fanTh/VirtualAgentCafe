@@ -674,3 +674,55 @@
   Godot-Import, Zustands-, Headless- und Live-WebSocket-Prüfungen.
 - Git-Commit-ID: git log --format='%h %s' --grep='keep test lab title clear of cafe decorations'.
 - Offene Punkte: keine für diese Beschriftung. Keine Änderung an Agenten/Git-Workflows.
+
+## Team M9 — Automatisch integrieren, Requirements testen, Main übernehmen
+- Nutzer autorisiert gemeinsame Feature-Integration und anschließende Übernahme
+  nach main bei grünen Tests. Die manuelle Accept-/Reject-Oberfläche entfällt.
+  Die vorherige Beschriftungskorrektur wurde als 000d79b separat gepusht.
+- Setup auto_integrate ergänzt einen persistenten Integrations-/Testworker und
+  aktiviert Worker-Pushes. Vorhandene Teams behalten Aufgaben und Worktrees.
+- Neuer Integrationskoordinator wartet auf aktuelle erfolgreiche Worker-Pushes,
+  übernimmt Remote-main und exakte Worker-Commits in einen eigenen Feature-Worktree
+  und startet den bestehenden Codex-Adapter. Ereignisse kommen aus echten Läufen.
+- Unveränderliche gemeinsame Requirements aus AGENTS.md, PLANNING.md und beiden
+  Aufgaben werden als Snapshot gehasht. Der Testworker committet dieselben
+  Requirements, Tests und validation/plan.json mit Anforderung-zu-Test-Zuordnung.
+- Neues Validierungsmodul führt die deklarierten pytest/npm/Godot-Checks nochmals
+  isoliert ohne Netzwerk, Modell-Anmeldung, SSH-Socket oder Git-Schreibrechte aus.
+  Der Datei-RPC-Git-Helper wird vor diesen Controller-Prüfungen abgeschaltet.
+- Nur der unveränderte getestete Commit darf nach Feature-Push auf main:
+  Requirements-/Task-/Rollen-Snapshots müssen noch passen, Remote-main muss dem
+  vorbereiteten Basiscommit entsprechen. Normaler Fast-forward-Push, kein Force,
+  kein Mirror, keine Tags und kein automatisches Überschreiben des Quellordners.
+- Team-/Prüf-/Promotionsstatus, Requirements-Zuordnung und Commit-Hashes bleiben
+  persistent. Controller-Neustart behandelt Unterbrechung ausdrücklich; aktivierte
+  Teams werden erneut geprüft. Fehler und Konflikte erhalten alle Arbeitsdateien.
+  Retry team integration stößt eine erneute Prüfung an, ohne manuelle Annahme.
+- Git-SSH-Erkennung nach globalen -c-Optionen korrigiert; dadurch erhält auch der
+  bestehende Worker-Push den SSH-Agenten. Sanitiserte GitOperationError-Meldungen
+  erscheinen jetzt im API-Fehler statt einer unbrauchbaren generischen Meldung.
+- Dateien: neue management/integration.py und validation.py, management/{api,config,
+  execution,git,setup}.py, main.py; game/scripts/management.gd und drei GUI-Tests;
+  neuer test_team_integration.py, bestehende Ausführungs-/Publikationstests;
+  README und docs/{automatic-integration,architecture,agent-management,project-setup,
+  gui-testing}.md, PROGRESS.md.
+- Testnachweise: echte temporäre Git-Repositories, normale Merges/Pushes und echte
+  isolierte pytest-Läufe. Erfolgsfall, fehlgeschlagener Worker, rote gemeinsame
+  Tests, ungültiger Plan, Merge-Konflikt, konkurrierendes main und geänderte Aufgaben
+  werden geprüft. Keine externen Git-Hosts oder bezahlten Modellaufrufe nötig.
+- Erster Gesamtlauf: 143 PASS/6 FAIL. Vier Fixture-Starttimeouts beim parallelen
+  OpenGL-Renderer; ein Timer-Test mit fixer Pause sowie ein echter Diagnosefehler
+  ("conflict" in einem Verzeichnisnamen). Diagnose auf echte Git-Konfliktmarker
+  begrenzt; Timeout-Test mit tatsächlichem Runtime-Start und Abschluss synchronisiert.
+  Gerenderter OpenGL-Setup-Maus-/Tastaturtest separat PASS.
+- Finale Validierung: scripts/check.sh sequenziell vollständig PASS mit 149 pytest-Tests,
+  Ruff/Format, Godot-Import, Zustands-, Headless- und Live-WebSocket-Prüfungen.
+  Danach zusätzliche Parallelitätsregression PASS: gleichzeitig eintreffende
+  Worker-Fertigmeldungen wiederholen einen fehlgeschlagenen Integrationslauf nicht.
+- Grenzen: Tests belegen deklarierte Checks, keinen formalen Beweis aller Prosa-
+  Anforderungen. Projektabhängigkeiten müssen in der Testumgebung verfügbar sein.
+  Unaufgelöste Merge-Konflikte halten die Pipeline an. Remote-Rechte und Main-
+  Branch-Schutz des Nutzerprojekts können hier nicht geprüft/umgangen werden.
+- Git-Commit-ID: git log --format='%h %s' --grep='automate requirements-tested team integration to main'.
+  Entwicklungsarbeit wird nur auf feat/virtual-agent-cafe-mvp gepusht; die neue
+  Main-Promotion betrifft ausschließlich explizit freigeschaltete Projekt-Teams.

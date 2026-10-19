@@ -36,3 +36,14 @@ let the controller perform authorized Git operations without giving workers cont
 API credentials or SSH agent access. Runtime completion and task acceptance are
 separate durable fields. See [agent management](agent-management.md) for boundaries,
 configuration, APIs, startup and operational limits.
+
+## Automatic team integration
+
+`management/integration.py` coordinates published worker results using persisted
+project records and per-project asynchronous jobs. `ExecutionManager` retains
+runtime ownership, workspace claims, immutable instruction snapshots and event
+streaming. `management/validation.py` validates the requirements-to-check manifest
+and executes fixed pytest/npm/Godot checks in an unauthenticated, offline sandbox.
+`GitService` owns all merge, feature publication and tested-commit main-promotion
+operations. Configuration opt-in authorizes the team workflow; Markdown cannot
+expand its permissions. See [automatic integration](automatic-integration.md).

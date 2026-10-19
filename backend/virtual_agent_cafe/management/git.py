@@ -79,12 +79,13 @@ class GitService:
             str(path),
             *arguments,
         ]
+        operation = self.operation(arguments)
         sandbox = Sandbox()
         isolated = sandbox.command(
             path,
             command,
             metadata=[*self.metadata(path), *extra_mounts],
-            ssh=arguments[:1] in [("clone",), ("fetch",), ("pull",), ("push",), ("ls-remote",)],
+            ssh=operation in {"clone", "fetch", "pull", "push", "ls-remote"},
         )
         process = await asyncio.create_subprocess_exec(
             *isolated,
@@ -109,11 +110,6 @@ class GitService:
                     bounded_read(process.stderr, 65536),
                 )
                 if await process.wait():
-                    operation = (
-                        "push"
-                        if "push" in arguments
-                        else next((a for a in arguments if not a.startswith("-")), "command")
-                    )
                     raise GitOperationError(
                         self.failure(operation, errors.decode("utf-8", errors="replace"))
                     )
@@ -132,6 +128,18 @@ class GitService:
             await process.wait()
 
     @staticmethod
+    def operation(arguments: tuple[str, ...]) -> str:
+        index = 0
+        while index < len(arguments):
+            if arguments[index] == "-c":
+                index += 2
+            elif arguments[index] == "--literal-pathspecs":
+                index += 1
+            else:
+                return arguments[index]
+        return "command"
+
+    @staticmethod
     def failure(operation: str, stderr: str) -> str:
         # Classify stderr; never expose Git output containing remote URLs or credentials.
         text = stderr.lower()
@@ -141,6 +149,21 @@ class GitService:
             )
         reason = "Check repository metadata, branch and filesystem permissions."
         for fragments, advice in (
+            (
+                ("protected branch", "gh006", "gh013", "repository rule"),
+                "Remote branch protection rejected the update. Main remains unchanged; "
+                "use an allowed pull-request workflow or repository permission policy.",
+            ),
+            (
+                (
+                    "conflict (",
+                    "automatic merge failed",
+                    "unmerged files",
+                    "refusing to merge unrelated histories",
+                ),
+                "Integration has merge conflicts or unrelated history. "
+                "Existing worktrees are preserved; main was not changed.",
+            ),
             (
                 ("non-fast-forward", "fetch first", "[rejected]"),
                 "Remote branch has other changes or rejected the update. "
@@ -359,6 +382,72 @@ class GitService:
             f"HEAD:refs/heads/{branch}",
         )
         return {"branch": branch, "commit": commit, "remote": config.git.remote_name}
+
+    async def require_clean(self, path: Path):
+        dirty = await self.run(
+            path, "status", "--porcelain=v1", "--untracked-files=all", "--", ".", ":(exclude).cafe"
+        )
+        if dirty.strip():
+            raise ValueError("Commit or resolve integration changes before continuing")
+
+    async def fetch_main(self, config) -> str:
+        path, _branch = await self.push_target(config)
+        await self.run(
+            path,
+            "fetch",
+            "--no-tags",
+            "--no-recurse-submodules",
+            "--",
+            config.git.remote_name,
+            "refs/heads/main",
+        )
+        return (await self.run(path, "rev-parse", "FETCH_HEAD")).strip()
+
+    async def merge_commit(self, workspace: str, commit: str):
+        if not re.fullmatch(r"[a-f0-9]{40,64}", commit):
+            raise ValueError("Integration requires an exact published commit")
+        path = await self.repository(workspace)
+        try:
+            await self.run(path, "merge-base", "--is-ancestor", commit, "HEAD")
+            return
+        except GitOperationError:
+            pass
+        await self.require_clean(path)
+        await self.run(path, "merge", "--no-ff", "--no-edit", "--no-verify", commit)
+
+    async def promote(self, config, commit: str, base: str) -> dict:
+        path, branch = await self.push_target(config)
+        if not config.execution.integration_validation or not re.fullmatch(
+            r"[a-f0-9]{40,64}", commit
+        ):
+            raise ValueError("Main promotion requires a tested integration commit")
+        await self.require_clean(path)
+        if (await self.run(path, "rev-parse", "HEAD")).strip() != commit:
+            raise ValueError("Integration commit changed after tests")
+        remote = await self.run(path, "ls-remote", "--", config.git.remote_name, "refs/heads/main")
+        if not remote.split() or remote.split()[0] != base:
+            raise ValueError("Remote main changed; merge its latest commit and rerun shared tests")
+        await self.run(path, "merge-base", "--is-ancestor", base, commit)
+        await self.run(
+            path,
+            "-c",
+            f"remote.{config.git.remote_name}.mirror=false",
+            "-c",
+            "push.followTags=false",
+            "push",
+            "--porcelain",
+            "--no-follow-tags",
+            "--recurse-submodules=no",
+            "--",
+            config.git.remote_name,
+            f"{commit}:refs/heads/main",
+        )
+        return {
+            "branch": "main",
+            "commit": commit,
+            "remote": config.git.remote_name,
+            "feature_branch": branch,
+        }
 
     async def worktree(self, repository: str, destination: str, branch: str) -> Path:
         path = await self.repository(repository)

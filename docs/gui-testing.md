@@ -20,7 +20,7 @@ execution-monitoring, dropdown and original task-dialog previews.
   open menus. Stable entries update in place; open menus defer automatic polling.
 - Save responses could replace text typed while the request was pending. Form
   revisions preserve those newer edits and keep their unsaved indicator.
-- New agent creation now selects the saved agent automatically. Start/stop/review
+- New agent creation now selects the saved agent automatically. Start/stop/integration
   actions reflect server capabilities and current lifecycle; disabled actions have
   explanations rather than apparently doing nothing.
 - Background polls no longer erase validation errors. Local validation explains
@@ -50,7 +50,7 @@ The managed scenario covers opening/closing/Escape, modal interception, all four
 navigation tabs, invalid input, polling error retention, delayed-request clicks,
 Markdown/role editing, dropdown keyboard selection, agent creation, duplicate
 click prevention, selection retention, unsaved edits, edits during save, real CLI
-fixture execution through Start, live log selection, task review, Stop, Git init,
+fixture execution through Start, live log selection without a manual acceptance gate, Stop, Git init,
 branch creation, staging, commit, diff and disabled remote operations.
 
 `game/tests/test_cafe_input.gd` tests the original café with real avatar pointer
