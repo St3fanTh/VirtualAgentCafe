@@ -61,6 +61,8 @@ var setup_objective: TextEdit
 var setup_result: TextEdit
 var setup_status: Label
 var setup_remote: CheckBox
+var setup_publish: CheckBox
+var publish_on_success: CheckBox
 var setup_ready := false
 var setup_checked_project := ""
 var setup_documents: Dictionary = {}
@@ -310,11 +312,17 @@ func build_agents(tabs: TabContainer) -> void:
 	retries = SpinBox.new()
 	retries.max_value = 2
 	settings.add_child(retries)
+	publish_on_success = CheckBox.new()
+	publish_on_success.text = "Publish committed results after successful execution"
+	settings.add_child(publish_on_success)
 	for name in ["fetch", "pull", "push"]:
 		var flag := CheckBox.new()
-		flag.text = "Allow manual " + name
+		flag.text = "Allow " + name
 		settings.add_child(flag)
 		remote_flags[name] = flag
+	publish_on_success.toggled.connect(func(enabled):
+		if enabled:
+			remote_flags.push.button_pressed = true)
 	var actions := HBoxContainer.new()
 	actions.add_theme_constant_override("separation", 10)
 	var outer = tabs.get_parent()
@@ -527,7 +535,7 @@ func received(_result: int, code: int, _headers: PackedStringArray, body: Packed
 		setup_result.text += "Branch: " + str(data.get("git", {}).get("branch", "")) + "\nOrigin: " + str(data.get("remote", "")) + "\n" + str(data.get("remote_status", "")) + "\n\n" + str(data.get("dirty_warning", ""))
 	elif finished_action == "setup_team":
 		setup_feedback("Team ready. Open Agents to start each worker.")
-		setup_result.text = "TEAM READY\n\n" + "\n".join(data.get("agents", [])) + "\n\nTwo persistent worktrees and branches are ready. Worker files are saved there, not in your source folder. No agent has started.\n\nNext: open Agents, review each Markdown task and its interface contract, then Start agent. Review diffs and tests before accepting results. No automatic push or merge."
+		setup_result.text = "TEAM READY\n\n" + "\n".join(data.get("agents", [])) + "\n\nTwo persistent worktrees and branches are ready. Worker files are saved there, not in your source folder. No agent has started.\n\nNext: open Agents, review each Markdown task and its interface contract, then Start agent. Review diffs and tests before accepting results. " + ("Successful runs will push their own branches. No automatic merge." if data.get("publish_results", false) else "Publishing disabled. Enable it in Agents or rerun team setup with publication selected.")
 		setup_ready = false
 		pending_refresh = true
 		set_notice("Project configured. Review tasks, then start your team in Agents.")
@@ -544,7 +552,7 @@ func received(_result: int, code: int, _headers: PackedStringArray, body: Packed
 		set_notice("Repository information updated.")
 	elif finished_action == "logs" and completed.get("execution", "") == selected_execution:
 		var record: Dictionary = data.get("execution", {})
-		execution_status.text = str(record.get("status", "")) + " · " + str(record.get("acceptance", "")) + "\nFiles saved in: " + str(record.get("workspace_path", "")) + " · Branch: " + str(record.get("branch", ""))
+		execution_status.text = str(record.get("status", "")) + " · " + str(record.get("acceptance", "")) + " · Git: " + str(record.get("publication", "NOT_REQUESTED")) + "\nFiles saved in: " + str(record.get("workspace_path", "")) + " · Branch: " + str(record.get("branch", ""))
 		for entry in data.get("logs", []):
 			if int(entry.get("sequence", 0)) <= log_sequence:
 				continue
@@ -579,7 +587,7 @@ func bind_form_changes() -> void:
 		edit.text_changed.connect(func(_value): mark_dirty())
 	for select in [workspace, task_file, repository]:
 		select.item_selected.connect(func(_index): mark_dirty())
-	for checkbox in [git_enabled, git_worktree] + remote_flags.values():
+	for checkbox in [git_enabled, git_worktree, publish_on_success] + remote_flags.values():
 		checkbox.toggled.connect(func(_enabled): mark_dirty())
 	for spinner in [timeout, retries]:
 		spinner.value_changed.connect(func(_value): mark_dirty())
@@ -759,6 +767,7 @@ func new_agent() -> void:
 	timeout.value = 300
 	retries.value = 0
 	roles.deselect_all()
+	publish_on_success.button_pressed = false
 	for flag in remote_flags.values():
 		flag.button_pressed = false
 	loading_form = false
@@ -792,6 +801,7 @@ func load_agent(index: int) -> void:
 		git_worktree.button_pressed = bool(config.git.get("worktree", true))
 		choose(repository, str(config.git.get("repository", "")))
 		agent_remote_name.text = str(config.git.get("remote_name", "origin"))
+		publish_on_success.button_pressed = bool(config.git.get("push_on_success", false))
 		branch.text = str(config.git.get("branch", "")) if config.git.get("branch") != null else ""
 		timeout.value = config.execution.timeout_seconds
 		retries.value = config.execution.max_retries
@@ -824,6 +834,7 @@ func save_agent() -> void:
 	var git := {"enabled": git_enabled.button_pressed, "repository": chosen(repository) if git_enabled.button_pressed else null, "branch": branch.text if not branch.text.is_empty() else null}
 	git["remote_name"] = agent_remote_name.text
 	git["worktree"] = git_worktree.button_pressed
+	git["push_on_success"] = publish_on_success.button_pressed
 	for operation in remote_flags:
 		git["allow_" + operation] = remote_flags[operation].button_pressed
 	var config := {"id": agent_id.text, "name": agent_name.text, "workspace": chosen(workspace), "task": chosen(task_file) if not chosen(task_file).is_empty() else null, "roles": assigned_roles, "git": git, "execution": {"timeout_seconds": int(timeout.value), "max_retries": int(retries.value)}}
@@ -912,12 +923,16 @@ func build_setup(parent_tabs: TabContainer) -> void:
 	setup_remote = CheckBox.new()
 	setup_remote.text = "Also check remote access (read only)"
 	form.add_child(setup_remote)
+	setup_publish = CheckBox.new()
+	setup_publish.text = "Push successful results to each agent's own Git branch"
+	setup_publish.tooltip_text = "Requires starter --publish-results and SSH access. Never merges main."
+	form.add_child(setup_publish)
 	var actions := HBoxContainer.new()
 	actions.add_theme_constant_override("separation", 12)
 	form.get_parent().get_parent().add_child(actions)
 	button(actions, "Check project", check_setup_project)
 	button(actions, "Create backend + frontend team", func():
-		call_api("setup_team", "/setup/team", HTTPClient.METHOD_POST, {"project": chosen(setup_project), "objective": setup_goal()}))
+		call_api("setup_team", "/setup/team", HTTPClient.METHOD_POST, {"project": chosen(setup_project), "objective": setup_goal(), "publish_results": setup_publish.button_pressed}))
 	var results := card(row, "2 · Readiness and next steps", 750)
 	setup_status = caption("Choose your project, then Check project. A loaded plan can supply the goal.")
 	setup_status.custom_minimum_size.y = 56

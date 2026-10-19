@@ -121,7 +121,7 @@ func build_ui() -> void:
 	connection_label = label("OFFLINE · reconnecting…", 25)
 	connection_label.position = Vector2(1360, 30)
 	ui.add_child(connection_label)
-	var hint := label("Click Ada or Turing to assign a task · animations follow observed events", 22)
+	var hint := label("Click an agent to manage tasks · animations follow observed events", 22)
 	hint.position = Vector2(44, 113)
 	hint.modulate = Color("9eacb0")
 	ui.add_child(hint)
@@ -238,13 +238,13 @@ func ensure_character(id: String, data: Dictionary) -> void:
 func refresh_activity(event: Dictionary = {}) -> void:
 	var slots := {"ada": "ada", "turing": "turing"}
 	for id in state.agents:
-		if id in ["ada", "turing"]:
+		if id in ["ada", "turing"] or mode == "demo":
 			continue
 		var role := str(state.agents[id].get("role", "")).to_lower()
 		var slot := "turing" if "frontend" in role else "ada" if "backend" in role else ""
 		if not slot.is_empty():
 			# Prefer a worker with observed activity over an unstarted configuration.
-			if slots[slot] == slot or int(state.agents[id].get("sequence", 0)) > int(state.agents[slots[slot]].get("sequence", 0)):
+			if int(state.agents[id].get("sequence", 0)) >= int(state.agents.get(slots[slot], {}).get("sequence", 0)):
 				slots[slot] = id
 	var summaries: Array[String] = []
 	for slot in slots:

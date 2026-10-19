@@ -32,6 +32,11 @@ class AgentRegistry:
         if config.git.enabled:
             self.workspaces.get(config.git.repository)
         record = {
+            **(
+                {key: previous[key] for key in ("last_execution", "branch") if key in previous}
+                if previous
+                else {}
+            ),
             "config": config.model_dump(mode="json"),
             "state": State.CONFIGURED,
             "task_state": TaskState.ASSIGNED if config.task else TaskState.PENDING,

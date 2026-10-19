@@ -364,3 +364,43 @@ async def test_real_codex_login_check_accepts_cached_auth_without_model_calls(
     report = await setup.inspect("sample")
     assert next(c for c in report["checks"] if c["name"] == "codex")["ok"] is False
     assert not report["ready"]
+
+
+async def test_existing_team_can_enable_publication_without_losing_tasks_or_history(
+    tmp_path, monkeypatch
+):
+    manager, setup, source = await project(tmp_path, monkeypatch)
+    await manager.git.set_remote("sample", "origin", "git@example.org:team/project.git")
+    data = SetupInput(project="sample", objective="Implement backend and frontend.")
+    await setup.create(data)
+    manager.tasks.save("sample-backend.md", "# Custom task\nPreserve my changes.")
+    manager.store.put("executions", "previous-run", {"detail": "Earlier task finished"})
+    manager.registry.update("sample-backend", last_execution="previous-run")
+    data.publish_results = True
+    with pytest.raises(ValueError, match="--publish-results"):
+        await setup.create(data)
+    assert not manager.registry.get("sample-backend")["config"]["git"]["allow_push"]
+    monkeypatch.setenv("VAC_ALLOW_REMOTE_GIT", "1")
+    record = await setup.create(data)
+    assert record["publish_results"]
+    for identifier in record["agents"]:
+        config = manager.registry.get(identifier)["config"]
+        assert config["git"]["push_on_success"] and config["git"]["allow_push"]
+    assert manager.registry.get("sample-backend")["last_execution"] == "previous-run"
+    assert "Preserve my changes" in manager.tasks.load("sample-backend.md")["content"]
+    assert (source / "README.md").read_text().startswith("# Existing")
+
+
+def test_launcher_publish_flag_enables_remote_capability_without_secrets(
+    tmp_path, monkeypatch, capsys
+):
+    import json
+
+    repo = tmp_path / "Project"
+    (repo / ".git").mkdir(parents=True)
+    monkeypatch.setattr(
+        "sys.argv", ["setup-project.py", "--project", str(repo), "--publish-results", "--dry-run"]
+    )
+    launcher.main()
+    plan = json.loads(capsys.readouterr().out)
+    assert plan["services"]["backend"]["environment"]["VAC_ALLOW_REMOTE_GIT"] == "1"

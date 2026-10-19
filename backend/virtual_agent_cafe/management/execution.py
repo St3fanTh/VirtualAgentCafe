@@ -209,6 +209,8 @@ class ExecutionManager:
                             create=f"refs/heads/{branch}" not in references.splitlines(),
                         )
                 metadata = self.git.metadata(workspace)
+                if config.git.push_on_success:
+                    await self.git.push_target(config)
             run_id = str(uuid4())
             project_root = (
                 self.workspaces.get(config.git.repository) if config.git.enabled else workspace
@@ -259,6 +261,7 @@ class ExecutionManager:
                 "task_state": TaskState.RUNNING,
                 "acceptance": "UNVERIFIED",
                 "runtime_success": None,
+                "publication": "PENDING" if config.git.push_on_success else "NOT_REQUESTED",
                 "started_at": now(),
                 "ended_at": None,
                 "attempts": 0,
@@ -313,6 +316,13 @@ class ExecutionManager:
                 "commit 'message'; branch|switch agent/" + config.id + "/NAME. "
                 "The helper performs authorized Git operations in your assigned workspace.\n"
             )
+            if config.git.push_on_success:
+                system += (
+                    "PUBLICATION AUTHORIZED: After relevant tests pass, stage only reviewed "
+                    "project files and commit them with python3 .cafe/git.py. "
+                    "Do not leave project changes uncommitted. The controller will push only "
+                    "your own agent branch after a successful run. Never push or merge main.\n"
+                )
         for role in roles:
             system += f"\nROLE {role['file']}:\n{role['content']}\n"
         return system + f"\nTASK {task['file']} (source of truth):\n{task['content']}\n"
@@ -371,6 +381,22 @@ class ExecutionManager:
                 task_state=TaskState.ASSIGNED if result.success else TaskState.FAILED,
                 acceptance="REVIEW_REQUIRED" if result.success else "UNVERIFIED",
             )
+            if result.success and config.git.push_on_success:
+                emit(EventType.WAITING, "Git: publishing committed results to the agent branch")
+                try:
+                    published = await self.git.push(config)
+                except ValueError as error:
+                    run.update(
+                        status=State.FAILED,
+                        task_state=TaskState.FAILED,
+                        publication="FAILED",
+                        detail=str(error)[:256],
+                        acceptance="UNVERIFIED",
+                    )
+                    emit(EventType.ERROR, "Publication failed: " + str(error)[:230])
+                    return
+                run.update(publication="PUSHED", published=published)
+                emit(EventType.WAITING, "Git: agent branch pushed successfully")
             emit(
                 EventType.FINISHED if result.success else EventType.ERROR,
                 "Runtime completed; task acceptance requires review"
@@ -406,6 +432,8 @@ class ExecutionManager:
             if watcher:
                 watcher.cancel()
                 await asyncio.gather(watcher, return_exceptions=True)
+            if run.get("publication") == "PENDING":
+                run["publication"] = "NOT_PUBLISHED"
             run["ended_at"] = now()
             self.store.put("executions", run["id"], run)
             self.registry.update(config.id, state=run["status"], task_state=run["task_state"])

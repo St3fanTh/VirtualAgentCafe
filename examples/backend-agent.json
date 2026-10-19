@@ -13,6 +13,7 @@
     "remote_name": "origin",
     "auto_commit": false,
     "allow_push": false,
+    "push_on_success": false,
     "allow_pull": false,
     "allow_fetch": false
   },

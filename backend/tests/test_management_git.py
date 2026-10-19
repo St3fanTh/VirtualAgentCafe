@@ -167,3 +167,18 @@ async def test_branch_conflict_reports_operation_and_preserves_worktrees(tmp_pat
     assert (first / "unsaved.txt").read_text() == "keep this work"
     assert (source / "README.md").read_text() == "original"
     assert "secret" not in GitService.failure("fetch", "secret: authentication failed")
+
+
+@pytest.mark.parametrize(
+    ("stderr", "expected"),
+    [
+        ("Permission denied (publickey). private@example.org", "Remote authentication failed"),
+        ("fatal: cannot open private/path: Permission denied", "not writable"),
+        ("fatal: unable to create private/index.lock: File exists", "lock or destination conflict"),
+        ("[rejected] secret-url (non-fast-forward)", "force-push is disabled"),
+    ],
+)
+def test_git_diagnostics_distinguish_auth_filesystem_and_conflicts(stderr, expected):
+    message = GitService.failure("push", stderr)
+    assert expected in message
+    assert "private" not in message and "secret-url" not in message

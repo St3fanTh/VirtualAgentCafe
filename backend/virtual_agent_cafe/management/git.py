@@ -109,11 +109,19 @@ class GitService:
                     bounded_read(process.stderr, 65536),
                 )
                 if await process.wait():
-                    operation = next((a for a in arguments if not a.startswith("-")), "command")
+                    operation = (
+                        "push"
+                        if "push" in arguments
+                        else next((a for a in arguments if not a.startswith("-")), "command")
+                    )
                     raise GitOperationError(
                         self.failure(operation, errors.decode("utf-8", errors="replace"))
                     )
                 return output.decode("utf-8", errors="replace")
+        except TimeoutError:
+            raise GitOperationError(
+                "Git command timed out. Check repository and remote access."
+            ) from None
         finally:
             import signal
 
@@ -127,8 +135,17 @@ class GitService:
     def failure(operation: str, stderr: str) -> str:
         # Classify stderr; never expose Git output containing remote URLs or credentials.
         text = stderr.lower()
+        if "publickey" in text or "authentication failed" in text:
+            return f"Git {operation} failed. Remote authentication failed. " + (
+                "Check SSH-agent forwarding and repository access."
+            )
         reason = "Check repository metadata, branch and filesystem permissions."
         for fragments, advice in (
+            (
+                ("non-fast-forward", "fetch first", "[rejected]"),
+                "Remote branch has other changes or rejected the update. "
+                "Review and integrate changes explicitly; force-push is disabled.",
+            ),
             (
                 ("already checked out", "already used by worktree"),
                 "Branch is already assigned to another worktree. Select a different "
@@ -165,10 +182,6 @@ class GitService:
             (
                 ("host key verification failed",),
                 "SSH host verification failed. Configure trusted known_hosts in the backend.",
-            ),
-            (
-                ("publickey", "authentication failed"),
-                "Remote authentication failed. Check SSH-agent forwarding and repository access.",
             ),
         ):
             if any(fragment in text for fragment in fragments):
@@ -293,6 +306,59 @@ class GitService:
         self.validate_files(path, [name for name in staged.split("\0") if name])
         await self.run(path, "commit", "-m", message)
         return await self.info(identifier)
+
+    async def push_target(self, config) -> tuple[Path, str]:
+        if (
+            not config.git.enabled
+            or not config.git.allow_push
+            or os.getenv("VAC_ALLOW_REMOTE_GIT") != "1"
+        ):
+            raise ValueError(
+                "Publishing requires controller remote Git opt-in and agent push permission"
+            )
+        path = await self.repository(config.workspace)
+        branch = (await self.info(config.workspace))["branch"]
+        if not branch.startswith(f"agent/{config.id}/"):
+            raise ValueError("Publishing is restricted to this agent's own branch namespace")
+        self.branch_name(branch)
+        urls = (
+            await self.run(path, "remote", "get-url", "--push", "--all", config.git.remote_name)
+        ).splitlines()
+        if len(urls) != 1 or not (
+            re.fullmatch(r"git@[A-Za-z0-9.-]+:[A-Za-z0-9_./-]+", urls[0])
+            or re.fullmatch(r"https://[A-Za-z0-9.-]+/[A-Za-z0-9_./-]+", urls[0])
+        ):
+            raise ValueError("Publishing requires one SSH or credential-free HTTPS push URL")
+        return path, branch
+
+    async def push(self, config) -> dict:
+        path, branch = await self.push_target(config)
+        # Runtime helper/instruction files are not project results. Everything else
+        # must have been deliberately committed by the worker before publication.
+        dirty = await self.run(
+            path, "status", "--porcelain=v1", "--untracked-files=all", "--", ".", ":(exclude).cafe"
+        )
+        if dirty.strip():
+            raise ValueError(
+                "Results are not fully committed. Review and commit project files before publishing"
+            )
+        commit = (await self.run(path, "rev-parse", "HEAD")).strip()
+        await self.run(
+            path,
+            "-c",
+            f"remote.{config.git.remote_name}.mirror=false",
+            "-c",
+            "push.followTags=false",
+            "push",
+            "--porcelain",
+            "--no-follow-tags",
+            "--recurse-submodules=no",
+            "--set-upstream",
+            "--",
+            config.git.remote_name,
+            f"HEAD:refs/heads/{branch}",
+        )
+        return {"branch": branch, "commit": commit, "remote": config.git.remote_name}
 
     async def worktree(self, repository: str, destination: str, branch: str) -> Path:
         path = await self.repository(repository)

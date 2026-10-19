@@ -130,9 +130,10 @@ in URLs. The public activity WebSocket contains summaries, not definitions or to
 Git operations: `init`, `connect`, `clone` + remote, `branch`/`switch` + branch,
 `stage` + individual files, `commit` + message, `remote` + credential-free URL and
 `remote_name` (local configuration only); optional `fetch`, `pull` (fast-forward only),
-`push` (never main/master). Agents select `git.remote_name` (default `origin`).
-Network remote operations require server opt-in, an applicable
-agent permission and an explicit `confirmed: true` request. Clone requires server
+`push` (only the configured agent's own branch namespace). Agents select `git.remote_name` (default `origin`).
+Manual network remote operations require server opt-in, an applicable
+agent permission and an explicit `confirmed: true` request. Automatic publication
+requires the additional persisted `git.push_on_success` authorization. Clone requires server
 opt-in and confirmation. Use the SSH Compose override to forward an existing agent
 socket and read-only known_hosts to the backend. Workers never receive this socket.
 Unknown SSH host keys fail closed; host key verification is never disabled.
@@ -271,3 +272,27 @@ bar. Refresh retains selection and unsaved text; delayed HTTP actions are queued
 and duplicate clicks are blocked. New agents become selected when saved. Embedded
 4K dropdowns, local validation and server-derived action states improve operation.
 See [GUI design, screenshots and actual mouse/keyboard tests](gui-testing.md).
+
+## Optional publication after execution
+
+Enable server remote Git (`setup-project.py --publish-results`), then configure:
+
+```json
+{
+  "enabled": true,
+  "repository": "project",
+  "branch": "agent/backend-agent/implement-api",
+  "worktree": true,
+  "remote_name": "origin",
+  "allow_push": true,
+  "push_on_success": true
+}
+```
+
+This is the agent configuration's `git` object. The worker commits reviewed files
+using the existing private helper; the controller pushes after runtime success.
+Only that agent's `agent/<id>/…` namespace is allowed. A dirty project tree blocks
+publication (`.cafe` runtime files are excluded). The configured push destination
+must be one credential-free HTTPS or SSH URL. No force, tags, mirror or merge.
+Publication status and the pushed commit are persisted separately from runtime
+success and task acceptance. See [setup instructions](project-setup.md#ergebnisse-automatisch-auf-github-hochladen).

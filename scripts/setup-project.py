@@ -112,6 +112,11 @@ def main():
         action="store_true",
         help="Lesende Remote-Prüfung im Assistenten erlauben",
     )
+    parser.add_argument(
+        "--publish-results",
+        action="store_true",
+        help="Remote Git für Pushes auf eigene Agenten-Branches erlauben",
+    )
     parser.add_argument("--login", action="store_true", help="Codex-Anmeldung interaktiv öffnen")
     parser.add_argument("--godot", help="Pfad zur Godot-Executable (auch Godot.exe in WSL)")
     parser.add_argument("--no-godot", action="store_true", help="Nur Backend starten")
@@ -121,7 +126,7 @@ def main():
     args = parser.parse_args()
     project = selected_project(args.project)
     identifier = project_id(project)
-    plan = override(project, identifier, args.remote_checks)
+    plan = override(project, identifier, args.remote_checks or args.publish_results)
     if args.dry_run:
         print(json.dumps(plan, indent=2))
         return

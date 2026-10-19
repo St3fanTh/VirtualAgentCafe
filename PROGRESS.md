@@ -624,3 +624,40 @@
 - Git-Commit-ID: git log --format='%h %s' --grep='preserve worker setup and show managed activity'.
 - Nächster Schritt: explizit gewünschtes Hochladen auf eigene Agenten-Branches;
   dies war bisher absichtlich gesperrt und wird separat implementiert/getestet.
+
+## Worker M7 — Ergebnisse auf eigene Git-Branches veröffentlichen
+- Nutzer präzisiert: Die von Workern bearbeiteten Projektdateien sollen auf das
+  Projekt-Remote hochgeladen werden. Vorheriger Meilenstein: cd27365.
+- Opt-in im Starter (--publish-results), Setup (publish_results) und pro Agent
+  (allow_push + push_on_success). Bestehende Teams können freigeschaltet werden,
+  ohne Aufgaben, Rollen, Arbeitsdateien oder Referenzen auf frühere Läufe zu verlieren.
+- Worker erhalten Commit-Anweisungen für den bestehenden privaten Git-Helper.
+  Nach Runtime-Erfolg pusht ausschließlich der Controller die committierten
+  Ergebnisse. Uncommittete Projektänderungen verhindern einen irreführenden Upload.
+- GitService prüft eigene agent/<id>/…-Branch und genau eine freigegebene SSH-/HTTPS-
+  Push-URL ohne Zugangsdaten. Explizite einzelne Refspec, kein Force/Mirror/Tags,
+  kein Submodul-Push. Auch der manuelle Push nutzt denselben Service.
+- publication und ggf. Remote-Name/Branch/Commit werden separat persistiert und
+  im Ausführungsdialog angezeigt. Runtime-Erfolg und Aufgabenabnahme bleiben
+  getrennt. Abgelehnte Pushes erhalten Dateien und melden FAILED statt Erfolg.
+- Korrigierte Diagnose unterscheidet lokale Dateirechte von SSH-Authentifizierung
+  und nicht vorspulbaren Remote-Branches; keine rohen Git-Ausgaben im API-Fehler.
+- Demo bleibt trotz gespeicherter Worker benutzbar; bei paralleler Legacy-Nutzung
+  bevorzugen die Karten die zuletzt beobachtete Aktivität derselben Rolle.
+- Dateien: management/{api,config,execution,git,registry,setup}.py;
+  scripts/setup-project.py; game/scripts/{management,cafe}.gd;
+  Tests: test_worker_publication.py, test_management_git.py, test_project_setup.py,
+  game/tests/{test_setup_input,test_management}.gd;
+  docs/{project-setup,agent-management}.md, examples/backend-agent.json, PROGRESS.md.
+- Validierung: scripts/check.sh vollständig PASS mit 141 pytest-Tests,
+  Ruff/Format, Godot-Import, Zustands-, Headless- und Live-WebSocket-Prüfungen.
+  Zusätzlicher gerenderter OpenGL-Setup-Maus-/Tastaturtest unter Xvfb PASS;
+  zusätzlicher Godot-Managementtest mit Demo-Umschaltung PASS.
+- Echte lokale Git-Integration gegen temporäres Bare-Remote: Worker-Commit wird
+  übertragen; uncommittete Dateien blockieren Push; konkurrierende Remote-Commits
+  werden nicht überschrieben. Keine externen Git-Hosts oder Modellaufrufe in Tests.
+- Grenze: SSH-/Schreibrechte im Nutzercontainer für SimulationWorld konnten hier
+  nicht geprüft werden. Hochladen auf Agenten-Branches ist implementiert, PR-Erstellung
+  und Merge erfolgen weiterhin bewusst auf GitHub; keine automatische Integration.
+- Git-Commit-ID: git log --format='%h %s' --grep='publish successful worker results to agent branches'.
+  Push erfolgt auf feat/virtual-agent-cafe-mvp; Main bleibt unverändert.

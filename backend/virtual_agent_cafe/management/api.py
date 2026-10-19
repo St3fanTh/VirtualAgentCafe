@@ -245,10 +245,7 @@ def management_router(manager: ExecutionManager, validated_body, mode: str) -> A
                 if data.operation == "pull":
                     await git.run(path, "pull", "--ff-only", config.git.remote_name)
                 elif data.operation == "push":
-                    branch = (await git.info(identifier))["branch"]
-                    if branch in {"main", "master"}:
-                        raise ValueError("Pushing protected branches is disabled")
-                    await git.run(path, "push", config.git.remote_name, branch)
+                    await git.push(config)
                 else:
                     await git.run(path, "fetch", config.git.remote_name)
                 return await git.info(identifier)

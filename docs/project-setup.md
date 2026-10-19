@@ -82,7 +82,9 @@ F5 ist dabei nicht nötig. Der Managementtoken wird nur im Prozessspeicher an Go
    auswählen und **Start agent** klicken. Die Einrichtung allein startet keine
    kostenpflichtigen Modellaufgaben.
 6. Ergebnisse, Tests und Diffs prüfen. Annahme und späterer Merge erfolgen bewusst;
-   der Assistent pusht oder merged nicht.
+   standardmäßig wird nicht gepusht. Optional kann der Controller erfolgreiche
+   Läufe auf eigene Agenten-Branches hochladen (siehe unten). Ein Merge erfolgt
+   weiterhin nicht automatisch.
 
 Uncommittete Änderungen bleiben im Quellrepository. Die Agentenworktrees beginnen
 bei dessen HEAD; der Assistent zeigt diesen Unterschied an und erstellt selbst
@@ -275,3 +277,44 @@ Bei einem Git-Fehler während der Team-Einrichtung bleiben bereits gespeicherte
 Aufgaben und Agentenkonfigurationen erhalten. Nach Beheben der konkret genannten
 Ursache kann die Einrichtung wiederholt werden. Bestehende Arbeitsdateien werden
 nicht entfernt, gesperrte Branches nicht automatisch freigegeben.
+
+## Ergebnisse automatisch auf GitHub hochladen
+
+Starte den Assistenten mit freigeschalteten Remote-Operationen:
+
+```bash
+python3 scripts/setup-project.py --publish-results --privileged
+```
+
+`--privileged` ist nur nötig, wenn deine Containerumgebung es für die bereits
+vorhandene Namespace-Isolation benötigt. Wähle denselben Projektordner erneut.
+Der Starter verwendet weiterhin den bestehenden SSH-Agenten und `known_hosts`;
+es werden keine privaten Schlüssel kopiert. Der SSH-Agent muss Schreibzugriff
+auf das konfigurierte Repository besitzen.
+
+In Godot unter **Setup**:
+
+1. Projekt auswählen und **Check project** ausführen.
+2. **Push successful results to each agent's own Git branch** aktivieren.
+3. **Create backend + frontend team** anklicken. Bei einem bestehenden Team wird
+   die Veröffentlichung freigeschaltet; bearbeitete Aufgaben bleiben erhalten.
+4. Unter **Agents** den jeweiligen Worker auswählen und **Start agent** anklicken.
+
+Alternativ bei bestehenden Agenten unter **Agents** die Optionen **Allow push**
+und **Publish committed results after successful execution** aktivieren und
+**Save configuration** drücken. Dafür muss Remote Git ebenfalls über den Starter
+freigeschaltet sein. Ohne diese ausdrückliche Auswahl bleibt Veröffentlichung aus.
+
+Der Worker erhält die Anweisung, relevante Tests auszuführen und geprüfte Dateien
+über den vorhandenen Git-Helper zu committen. Nach erfolgreichem Runtime-Abschluss
+prüft der Controller, ob alle Projektänderungen committet sind. Er pusht genau
+`HEAD` auf `refs/heads/agent/<agent-id>/…`. Tags, andere Branches, Force-Push und
+Merge werden nicht ausgeführt. Die Worker erhalten keinen SSH-Agent-Socket.
+
+Unter **Executions** zeigt **Git: PUSHED** den erfolgreichen Push. Commit-ID,
+Remote-Name und Branch werden im Ausführungsdatensatz gespeichert. **FAILED**
+bedeutet, dass die Veröffentlichung scheiterte; **NOT_PUBLISHED**, dass der Lauf
+vor der Veröffentlichung abgebrochen/fehlgeschlagen ist. Dateien bleiben erhalten.
+Bei uncommitteten Änderungen, fehlenden Rechten oder abweichender Remote-Historie
+wird kein erfolgreicher Abschluss behauptet. Review und Integration bleiben eigene
+Schritte; GitHub zeigt die Ergebnisse auf den Agenten-Branches, nicht auf `main`.

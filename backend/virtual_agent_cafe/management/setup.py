@@ -14,6 +14,7 @@ from .sandbox import Sandbox
 class SetupInput(StrictModel):
     project: Identifier
     objective: str = Field(min_length=10, max_length=3000)
+    publish_results: bool = False
 
     @field_validator("objective")
     @classmethod
@@ -224,8 +225,15 @@ class ProjectSetup:
                 raise ValueError("Project ID must be at most 40 characters for team setup")
             # Reusing a completed setup is safe; never replace subsequently edited tasks/configs.
             existing = [p for p in manager.store.list("projects") if p["id"] == data.project]
+            if data.publish_results and os.getenv("VAC_ALLOW_REMOTE_GIT") != "1":
+                raise ValueError(
+                    "Start setup-project.py with --publish-results to enable remote Git"
+                )
             if existing and existing[0]["status"] == "READY":
-                return existing[0]
+                record = existing[0]
+                if data.publish_results:
+                    await self.enable_publication(record)
+                return record
             configs = []
             for role in ("backend", "frontend"):
                 identifier = f"{data.project}-{role}"
@@ -242,6 +250,8 @@ class ProjectSetup:
                                 "repository": data.project,
                                 "branch": f"agent/{identifier}/implementation",
                                 "worktree": True,
+                                "allow_push": data.publish_results,
+                                "push_on_success": data.publish_results,
                             },
                             "execution": {"timeout_seconds": 1800},
                         }
@@ -272,6 +282,7 @@ class ProjectSetup:
                         "id": data.project,
                         "status": "PREPARING",
                         "objective": data.objective,
+                        "publish_results": data.publish_results,
                         "agents": [c.id for c in configs],
                     },
                 )
@@ -294,7 +305,9 @@ class ProjectSetup:
                             "- Changes and remaining "
                             "integration steps are documented.\n"
                             "- Commit reviewed files on the assigned branch.\n\n"
-                            "## Constraints\nNo push or merge. Do not modify unrelated components. "
+                            "## Constraints\nNo direct push or merge from the worker. "
+                            "The controller publishes the agent branch only when authorized. "
+                            "Do not modify unrelated components. "
                             "Use python3 .cafe/git.py for permitted Git operations.\n"
                         ),
                     )
@@ -337,6 +350,23 @@ class ProjectSetup:
                     AgentConfig.model_validate(manager.registry.get(config.id)["config"])
                 )
                 manager.broadcast_snapshot()
+            if data.publish_results or record.get("publish_results"):
+                await self.enable_publication(record)
             record["status"] = "READY"
             manager.store.put("projects", data.project, record)
             return record
+
+    async def enable_publication(self, record: dict):
+        configs = []
+        for identifier in record["agents"]:
+            config = AgentConfig.model_validate(self.manager.registry.get(identifier)["config"])
+            if config.git.repository != record["id"] or not config.git.enabled:
+                raise ValueError("Agent repository changed; configure publication in Agents")
+            config.git.allow_push = True
+            config.git.push_on_success = True
+            await self.manager.git.push_target(config)
+            configs.append(config)
+        for config in configs:
+            self.manager.configure(config)
+        record["publish_results"] = True
+        self.manager.store.put("projects", record["id"], record)

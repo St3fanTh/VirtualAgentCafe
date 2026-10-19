@@ -84,6 +84,13 @@ func _process(_delta: float) -> bool:
 			if cafe.activity_cards.ada.status_label.text != "Finished":
 				push_error("Managed completion must reach the activity card")
 				quit(1)
+			cafe.mode = "demo"
+			cafe.refresh_activity()
+			if not cafe.characters.ada.visible or cafe.activity_cards.ada.agent_id != "ada":
+				push_error("Configured workers must not hide the demo actors")
+				quit(1)
+			cafe.mode = "codex"
+			cafe.refresh_activity()
 			ui.refresh()
 			stage = 7
 		7:

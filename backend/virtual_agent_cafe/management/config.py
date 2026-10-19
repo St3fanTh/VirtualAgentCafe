@@ -38,6 +38,7 @@ class GitConfig(StrictModel):
     remote_name: str = Field(default="origin", pattern=r"^[A-Za-z][A-Za-z0-9_-]{0,31}$")
     auto_commit: Literal[False] = False
     allow_push: bool = False
+    push_on_success: bool = False
     allow_pull: bool = False
     allow_fetch: bool = False
 
@@ -45,6 +46,8 @@ class GitConfig(StrictModel):
     def connected(self):
         if self.enabled and not self.repository:
             raise ValueError("Git requires a repository workspace")
+        if self.push_on_success and not (self.enabled and self.allow_push):
+            raise ValueError("Publishing requires Git enabled and explicit push permission")
         return self
 
 
