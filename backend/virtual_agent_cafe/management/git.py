@@ -147,6 +147,11 @@ class GitService:
             return f"Git {operation} failed. Remote authentication failed. " + (
                 "Check SSH-agent forwarding and repository access."
             )
+        if "no user exists for uid" in text:
+            return (
+                f"Git {operation} failed. SSH cannot resolve the sandbox user. "
+                "Update and restart the backend to mount read-only account metadata."
+            )
         reason = "Check repository metadata, branch and filesystem permissions."
         for fragments, advice in (
             (

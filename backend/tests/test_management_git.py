@@ -173,6 +173,7 @@ async def test_branch_conflict_reports_operation_and_preserves_worktrees(tmp_pat
     ("stderr", "expected"),
     [
         ("Permission denied (publickey). private@example.org", "Remote authentication failed"),
+        ("No user exists for uid 1000", "SSH cannot resolve the sandbox user"),
         ("fatal: cannot open private/path: Permission denied", "not writable"),
         ("fatal: unable to create private/index.lock: File exists", "lock or destination conflict"),
         ("[rejected] secret-url (non-fast-forward)", "force-push is disabled"),
@@ -182,3 +183,39 @@ def test_git_diagnostics_distinguish_auth_filesystem_and_conflicts(stderr, expec
     message = GitService.failure("push", stderr)
     assert expected in message
     assert "private" not in message and "secret-url" not in message
+
+
+async def test_real_ssh_resolves_user_inside_git_sandbox(tmp_path):
+    import subprocess
+
+    sandbox = Sandbox()
+    await sandbox.validate(tmp_path)
+    command = sandbox.command(
+        tmp_path,
+        ["ssh", "-G", "-F", "/dev/null", "git@example.invalid"],
+        ssh=True,
+        network=False,
+    )
+    result = await asyncio.to_thread(
+        subprocess.run, command, capture_output=True, text=True, timeout=10
+    )
+    assert result.returncode == 0, result.stderr
+    assert "user git" in result.stdout
+    # Account data is visible, but never writable; shadow and host homes stay hidden.
+    script = (
+        "import os,pwd; from pathlib import Path; "
+        "assert pwd.getpwuid(os.getuid()); "
+        "assert not Path('/etc/shadow').exists(); "
+        "assert not Path('/home/node').exists(); "
+        "assert not Path('/root').exists(); "
+        "p=Path('/etc/passwd'); "
+        "assert os.statvfs(p).f_flag & os.ST_RDONLY"
+    )
+    result = await asyncio.to_thread(
+        subprocess.run,
+        sandbox.command(tmp_path, ["python3", "-c", script], ssh=True, network=False),
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+    assert result.returncode == 0, result.stderr

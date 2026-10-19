@@ -325,3 +325,21 @@ Requirements-Tests bis zur Main-Promotion; ohne diese Freischaltung bleiben es e
 Im Setup zusätzlich **Integrate + requirements tests + promote green result to main**
 aktivieren. Das ergänzt den Integrations-/Testworker und ersetzt die manuelle
 Aufgabenannahme. [Vollständiger Ablauf und Testplanformat](automatic-integration.md).
+
+### Push bricht mit „No user exists for uid 1000“ ab
+
+Wenn Host- und Container-SSH funktionieren, aber der isolierte Push fehlschlägt,
+benötigt OpenSSH die öffentliche Benutzerzuordnung innerhalb seiner Sandbox.
+Aktuelle Versionen binden `/etc/passwd` und `/etc/group` ausschließlich lesbar
+für Git-SSH ein; private Schlüssel, Shadow-Dateien und Host-Homeverzeichnisse
+bleiben ausgeschlossen. Den VirtualAgentCafe-Feature-Branch aktualisieren und den
+Starter im Terminal mit geladenem SSH-Agenten erneut ausführen:
+
+```bash
+python3 scripts/setup-project.py --publish-results --privileged
+```
+
+Bestehende Worktrees bleiben erhalten. Die fehlgeschlagenen Worker können danach
+über Start/Restart fortsetzen; ihre Rollen und Aufgaben sollen vorhandene Änderungen
+zuerst prüfen und nur offene Arbeiten abschließen. Ein früher fehlgeschlagener Push
+wird nicht allein durch den Neustart automatisch nachgeholt.

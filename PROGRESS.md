@@ -752,3 +752,29 @@
 - Vollständige Abschlussprüfung: scripts/check.sh PASS — 154 pytest-Tests,
   Ruff/Format, Godot-Import, Zustands-, Headless- und Live-WebSocket-Tests grün.
   Eine bestehende Starlette/httpx-Abkündigungswarnung; keine Testfehler.
+
+## Git-SSH innerhalb der Sandbox korrigieren — 2026-10-19
+
+- Nutzerdiagnose: Host-SSH und Container-SSH sowie Push-Dry-run im echten
+  Backend-Worktree erfolgreich; derselbe SSH-Aufruf in Sandbox bricht mit
+  „No user exists for uid 1000“ ab. Kein Hinweis auf fehlende Repository-URL.
+- Ursache: isoliertes Dateisystem enthielt keine passwd-Benutzerzuordnung;
+  OpenSSH benötigt getpwuid bereits vor der Remote-Authentifizierung.
+- Korrektur: ausschließlich für SSH-fähige Git-Sandbox /etc/passwd und /etc/group
+  lesbar binden. Keine Shadow-Dateien, privaten Schlüssel oder Host-Homes.
+  Git-Diagnostik erkennt diesen Fehler nun explizit statt generischer Push-Meldung.
+- Dateien: management/{sandbox,git}.py, test_management_git.py,
+  docs/project-setup.md und PROGRESS.md.
+- Neue Regression: echtes OpenSSH -G unter UID 1000 im isolierten Offline-Prozess;
+  Benutzerauflösung, schreibgeschützter Account-Mount und fehlende Shadow-/Home-
+  Pfade werden geprüft. Erster Testlauf: 11 PASS/1 FAIL wegen abweichendem
+  Schreibfehler (Permission denied statt Read-only); Mountschutz anschließend
+  direkt mit statvfs geprüft. Blocking-Aufrufe in asyncio.to_thread verschoben.
+- Nutzerumgebung: echter GitHub-Push wird hier nicht behauptet. Nach Update Backend
+  über Starter neu starten; vorhandene Worktrees erhalten, fehlgeschlagene Worker
+  können mit ihrem bisherigen Stand fortsetzen und erneut veröffentlichen.
+- Nächster Schritt: erneuter Push in der Nutzerumgebung, danach Teamintegration.
+- Git-Commit-ID: git log --format='%h %s' --grep='resolve SSH users inside Git sandbox'.
+- Abschlussprüfung: scripts/check.sh vollständig PASS — 156 pytest-Tests,
+  Ruff/Format, Godot-Import, Zustands-/Headless- und Live-WebSocket-Tests.
+  Bestehende Starlette/httpx-Abkündigungswarnung, keine Testfehler.

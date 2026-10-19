@@ -93,6 +93,11 @@ class Sandbox:
                 # Runtime requires auth, but controller configuration/history are not exposed.
                 args += ["--ro-bind", str(auth), "/home/agent/.codex/auth.json"]
         if ssh:
+            # OpenSSH resolves the caller UID before contacting the remote. Expose
+            # only public account metadata, never shadow files or home directories.
+            for location in ["/etc/passwd", "/etc/group"]:
+                if Path(location).is_file():
+                    args += ["--ro-bind", location, location]
             sock = os.getenv("SSH_AUTH_SOCK")
             known = Path.home() / ".ssh" / "known_hosts"
             if sock and known.is_file():
