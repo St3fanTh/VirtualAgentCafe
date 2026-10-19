@@ -1,5 +1,6 @@
 import asyncio
 import importlib.util
+import json
 import socket
 from pathlib import Path
 from types import SimpleNamespace
@@ -404,3 +405,48 @@ def test_launcher_publish_flag_enables_remote_capability_without_secrets(
     launcher.main()
     plan = json.loads(capsys.readouterr().out)
     assert plan["services"]["backend"]["environment"]["VAC_ALLOW_REMOTE_GIT"] == "1"
+
+
+def test_launcher_can_restore_original_workspace_id_mount(tmp_path, monkeypatch, capsys):
+    root = tmp_path / "cafe"
+    root.mkdir()
+    repo = tmp_path / "SimulationWorld"
+    (repo / ".git").mkdir(parents=True)
+    monkeypatch.setattr(launcher, "ROOT", root)
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "setup-project.py",
+            "--project",
+            str(repo),
+            "--workspace-id",
+            "project-1467da4f208c3c30b8b116-fd507a6f",
+            "--dry-run",
+        ],
+    )
+    launcher.main()
+    plan = json.loads(capsys.readouterr().out)
+    volume = plan["services"]["backend"]["volumes"][0]
+    assert volume["source"] == str(repo)
+    assert volume["target"] == "/workspaces/project-1467da4f208c3c30b8b116-fd507a6f"
+
+
+def test_launcher_rejects_invalid_workspace_id(tmp_path, monkeypatch):
+    root = tmp_path / "cafe"
+    root.mkdir()
+    repo = tmp_path / "SimulationWorld"
+    (repo / ".git").mkdir(parents=True)
+    monkeypatch.setattr(launcher, "ROOT", root)
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "setup-project.py",
+            "--project",
+            str(repo),
+            "--workspace-id",
+            "../escape",
+            "--dry-run",
+        ],
+    )
+    with pytest.raises(ValueError, match="Workspace-ID"):
+        launcher.main()

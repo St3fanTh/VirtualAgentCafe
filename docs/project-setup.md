@@ -343,3 +343,22 @@ Bestehende Worktrees bleiben erhalten. Die fehlgeschlagenen Worker können danac
 über Start/Restart fortsetzen; ihre Rollen und Aufgaben sollen vorhandene Änderungen
 zuerst prüfen und nur offene Arbeiten abschließen. Ein früher fehlgeschlagener Push
 wird nicht allein durch den Neustart automatisch nachgeholt.
+
+### Vorhandene Agenten-Worktrees nach falschem Projekt-Mount wieder anbinden
+
+Wenn der Starter einen Workspace unter einer anderen ID als der vorhandene Agent
+meldet, den echten Projektordner direkt an die ursprünglich gespeicherte ID
+binden. So bleiben Agenten-Worktrees und Ausführungen erhalten. Beispiel:
+
+```bash
+python3 scripts/setup-project.py \\
+  --project /mnt/f/Workspace/SimulationWorld \\
+  --workspace-id project-1467da4f208c3c30b8b116-fd507a6f \\
+  --publish-results --privileged
+```
+
+`--project` muss auf den echten Projektordner mit `.git` zeigen, nicht auf einen
+Docker-Desktop-Bind-Mount unter `/mnt/wsl/docker-desktop-bind-mounts/`. Die ID
+muss zur `gitdir:`-Zeile im bestehenden Worker-Worktree passen. Der Starter prüft
+den Sandbox-Mount, bevor Godot startet. Danach `git rev-parse --show-toplevel` im
+Worker-Worktree prüfen, bevor Agenten fortgesetzt werden.

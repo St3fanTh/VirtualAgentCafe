@@ -105,6 +105,10 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--project", help="Projektordner; ohne Angabe öffnet sich der Ordnerdialog")
     parser.add_argument(
+        "--workspace-id",
+        help="Container-Arbeitsbereich-ID; für Reparatur vorhandener Agenten-Worktrees",
+    )
+    parser.add_argument(
         "--privileged", action="store_true", help="Explizit den lokalen Namespace-Override nutzen"
     )
     parser.add_argument(
@@ -125,7 +129,12 @@ def main():
     )
     args = parser.parse_args()
     project = selected_project(args.project)
-    identifier = project_id(project)
+    identifier = args.workspace_id or project_id(project)
+    if not re.fullmatch(r"[a-z][a-z0-9_-]{0,63}", identifier):
+        raise ValueError(
+            "Workspace-ID muss mit einem Kleinbuchstaben beginnen und nur a-z, 0-9, _ "
+            "oder - enthalten"
+        )
     plan = override(project, identifier, args.remote_checks or args.publish_results)
     if args.dry_run:
         print(json.dumps(plan, indent=2))

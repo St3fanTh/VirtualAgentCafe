@@ -801,3 +801,23 @@
 - Vollständige Prüfung scripts/check.sh PASS: 157 pytest-Tests, Ruff/Format,
   Godot-Import, Zustands-, Headless- und Live-WebSocket-Tests. Eine bestehende
   Starlette/httpx-Abkündigungswarnung, keine Fehler.
+
+## Bestehende Worktrees nach falscher Quellenwahl wieder anbinden — 2026-10-19
+
+- Diagnose aus Nutzerumgebung: vorhandene Worker-Worktree-.git-Datei zeigt korrekt
+  auf `/workspaces/project-1467da4f208c3c30b8b116-fd507a6f/.git/worktrees/...`;
+  gemeinsames `.git` fehlte, weil der Starter zuvor den Desktop-Bind-Mount mit
+  einer abweichenden ID `f7aeb5...` ausgewählt hatte.
+- Starter hat nun optional `--workspace-id` zum bewussten Wiederanbinden des echten
+  Host-Projekts an die ursprüngliche Container-ID. Identifier-Pfad validiert;
+  Standardverhalten bleibt unverändert. Setup-Anleitung dokumentiert Reparatur.
+- Test deckt Dry-run-Mountquelle und exaktes Ziel für die vorhandene ID ab und
+  lehnt ungültige IDs ab. Projekt-Setup-Tests: 17 PASS.
+- Dateien: scripts/setup-project.py, backend/tests/test_project_setup.py,
+  docs/project-setup.md, PROGRESS.md.
+- Nächster Schritt: vollständige `scripts/check.sh`, Commit und Push. Dann kann
+  Nutzer das echte SimulationWorld-Repo unter vorhandener ID anbinden; bestehende
+  Worker-Arbeitsverzeichnisse und Branches werden dadurch nicht gelöscht.
+- Git-Commit-ID: git log --format='%h %s' --grep='restore existing worktree mounts'.
+- Vollständige Prüfung: scripts/check.sh PASS — 159 pytest-Tests, Ruff/Format,
+  Godot-Import, Zustands-, Headless- und Live-WebSocket-Tests.
