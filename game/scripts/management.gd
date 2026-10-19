@@ -522,7 +522,8 @@ func received(_result: int, code: int, _headers: PackedStringArray, body: Packed
 		setup_feedback("Checks passed." if setup_ready else "Project blocked: resolve the FIX items in the report.", not setup_ready)
 		setup_result.text = "PROJECT · " + setup_checked_project + "\n\n"
 		for entry in data.get("checks", []):
-			setup_result.text += ("PASS · " if entry.get("ok", false) else "FIX · ") + str(entry.get("detail", "")) + "\n\n"
+			var prefix := "SKIP · " if entry.get("status", "") == "SKIPPED" else "PASS · " if entry.get("ok", false) else "FIX · "
+			setup_result.text += prefix + str(entry.get("detail", "")) + "\n\n"
 		setup_result.text += "Branch: " + str(data.get("git", {}).get("branch", "")) + "\nOrigin: " + str(data.get("remote", "")) + "\n" + str(data.get("remote_status", "")) + "\n\n" + str(data.get("dirty_warning", ""))
 	elif finished_action == "setup_team":
 		setup_feedback("Team ready. Open Agents to start each worker.")

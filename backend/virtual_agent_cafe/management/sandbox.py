@@ -3,6 +3,7 @@
 import asyncio
 import os
 import shutil
+import signal
 from pathlib import Path
 
 from ..adapters.codex import CodexAdapter
@@ -129,21 +130,111 @@ class Sandbox:
         args += ["--chdir", str(workspace), "--", *command]
         return args
 
-    async def validate(self, workspace: Path):
-        process = await asyncio.create_subprocess_exec(
-            *self.command(workspace, ["/usr/bin/true"], network=False),
-            stdout=asyncio.subprocess.DEVNULL,
-            stderr=asyncio.subprocess.DEVNULL,
-        )
+    @staticmethod
+    def failure(stderr: str, code: int | None) -> dict:
+        # Classify only the trusted, unauthenticated /usr/bin/true self-test.
+        # Raw stderr can contain private workspace paths and never enters the API.
+        text = stderr.lower()
+        reason = "sandbox_failed"
+        detail = "Sandbox self-test failed. Run scripts/sandbox-diagnostics.py in the backend."
+        if "no space left on device" in text:
+            reason = "namespace_limit"
+            detail = (
+                "Sandbox resource limit reached. Check host namespace limits and available space."
+            )
+        elif any(
+            term in text
+            for term in ("operation not permitted", "permission denied", "no permissions")
+        ):
+            reason = "namespace_denied"
+            detail = (
+                "Namespace creation or mounts denied by the kernel/container. "
+                "Start the local starter with --privileged; if already enabled, "
+                "check the Docker/WSL host namespace policy."
+            )
+        elif any(
+            term in text
+            for term in (
+                "ro-bind",
+                "bind mount",
+                "read-only file system",
+                "can't mkdir",
+                "can't chdir",
+            )
+        ):
+            reason = "mount_failed"
+            detail = (
+                "Sandbox mount setup failed. "
+                "Check the selected workspace mount and directory permissions."
+            )
+        elif "execvp" in text or "no such file or directory" in text:
+            reason = "runtime_missing"
+            detail = (
+                "Sandbox runtime or mount target is missing. "
+                "Rebuild the backend and check the project mount."
+            )
+        return {"ok": False, "code": reason, "exit_code": code, "detail": detail}
+
+    async def probe(self, workspace: Path) -> dict:
+        try:
+            command = self.command(workspace, ["/usr/bin/true"], network=False)
+        except ValueError:
+            return {
+                "ok": False,
+                "code": "runtime_missing",
+                "exit_code": None,
+                "detail": "Bubblewrap is missing. "
+                "Rebuild the backend image or install bubblewrap locally.",
+            }
+        try:
+            process = await asyncio.create_subprocess_exec(
+                *command,
+                stdout=asyncio.subprocess.DEVNULL,
+                stderr=asyncio.subprocess.PIPE,
+                start_new_session=True,
+            )
+        except OSError:
+            return {
+                "ok": False,
+                "code": "launch_failed",
+                "exit_code": None,
+                "detail": "Sandbox executable could not be started. "
+                "Check installation and executable permissions.",
+            }
         try:
             async with asyncio.timeout(5):
+                output = bytearray()
+                while chunk := await process.stderr.read(1024):
+                    output.extend(chunk)
+                    if len(output) > 4096:
+                        return self.failure("", None)
                 code = await process.wait()
             if code:
-                raise ValueError("Filesystem isolation unavailable; check user/mount namespaces")
+                return self.failure(output.decode("utf-8", errors="replace"), code)
+            return {
+                "ok": True,
+                "code": "ready",
+                "exit_code": 0,
+                "detail": "Workspace namespace isolation ready",
+            }
+        except TimeoutError:
+            return {
+                "ok": False,
+                "code": "timeout",
+                "exit_code": None,
+                "detail": "Sandbox self-test timed out. Check container and host namespace setup.",
+            }
         finally:
-            if process.returncode is None:
-                process.kill()
-                await process.wait()
+            try:
+                os.killpg(process.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+            await process.communicate()
+
+    async def validate(self, workspace: Path):
+        result = await self.probe(workspace)
+        if not result["ok"]:
+            raise ValueError(result["detail"])
 
 
 class IsolatedCodexAdapter(CodexAdapter):

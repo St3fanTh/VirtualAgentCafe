@@ -95,19 +95,9 @@ class ProjectSetup:
         manager.workspaces.create(project)
         checks = []
         sandbox = Sandbox()
-        try:
-            isolated = await self.command_ok(sandbox.command(path, ["/usr/bin/true"]))
-        except (OSError, ValueError):
-            isolated = False
-        checks.append(
-            {
-                "name": "sandbox",
-                "ok": isolated,
-                "detail": "Workspace isolation ready"
-                if isolated
-                else "Namespace sandbox unavailable. Check container/user namespace setup.",
-            }
-        )
+        diagnostic = await sandbox.probe(path)
+        isolated = diagnostic["ok"]
+        checks.append({"name": "sandbox", **diagnostic})
         login = False
         if isolated and shutil.which("codex"):
             login = await self.command_ok(
@@ -120,10 +110,15 @@ class ProjectSetup:
         checks.append(
             {
                 "name": "codex",
-                "ok": login,
-                "detail": "Codex login ready"
-                if login
-                else "Run docker compose exec backend codex login (or use starter --login).",
+                "ok": login if isolated else None,
+                "status": "CHECKED" if isolated else "SKIPPED",
+                "detail": (
+                    "Codex login ready"
+                    if login
+                    else "Run docker compose exec backend codex login (or use starter --login)."
+                )
+                if isolated
+                else "Codex login not checked: resolve the sandbox failure first.",
             }
         )
         checks.append(
@@ -139,8 +134,9 @@ class ProjectSetup:
             checks.append(
                 {
                     "name": "repository",
-                    "ok": False,
-                    "detail": "Git inspection requires a working namespace sandbox.",
+                    "ok": None,
+                    "status": "SKIPPED",
+                    "detail": "Git not checked: resolve the sandbox failure first.",
                 }
             )
             return {

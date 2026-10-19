@@ -11,6 +11,7 @@ from fastapi.testclient import TestClient
 from virtual_agent_cafe.bus import EventBus
 from virtual_agent_cafe.main import create_app
 from virtual_agent_cafe.management.execution import ExecutionManager
+from virtual_agent_cafe.management.sandbox import Sandbox
 from virtual_agent_cafe.management.setup import ProjectSetup, SetupInput
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -76,19 +77,23 @@ async def test_checks_block_missing_login_initial_commit_and_demo_mode(tmp_path,
     with pytest.raises(ValueError, match="failed project checks"):
         await setup.create(SetupInput(project="sample", objective="Implement this project."))
     assert not manager.store.list("agents")
-    setup.command_ok.side_effect = [True, False]
+    setup.command_ok.side_effect = [False]
     report = await setup.inspect("sample")
     assert not next(c for c in report["checks"] if c["name"] == "codex")["ok"]
     setup.command_ok.side_effect = None
     setup.mode = "demo"
     setup.command_ok.return_value = False
+    monkeypatch.setattr(
+        Sandbox, "probe", AsyncMock(return_value=Sandbox.failure("Operation not permitted", 1))
+    )
+    setup.command_ok.reset_mock()
     report = await setup.inspect("sample")
-    assert {c["name"] for c in report["checks"] if not c["ok"]} == {
-        "sandbox",
+    assert {c["name"] for c in report["checks"] if c["ok"] is False} == {"sandbox", "mode"}
+    assert {c["name"] for c in report["checks"] if c.get("status") == "SKIPPED"} == {
         "codex",
-        "mode",
         "repository",
     }
+    setup.command_ok.assert_not_called()
 
 
 async def test_conflicts_preserve_files_and_partial_setup_can_resume(tmp_path, monkeypatch):
@@ -217,7 +222,9 @@ def test_launcher_connects_without_printing_or_persisting_token(tmp_path, monkey
 
     def run(command, **kwargs):
         calls.append((command, kwargs))
-        return SimpleNamespace(returncode=0, stdout="fixture-private-token\n")
+        return SimpleNamespace(
+            returncode=0, stdout='{"ok": true}' if "bash" in command else "fixture-private-token\n"
+        )
 
     monkeypatch.setattr(launcher.subprocess, "run", run)
     launcher.main()
@@ -229,6 +236,9 @@ def test_launcher_connects_without_printing_or_persisting_token(tmp_path, monkey
     assert "fixture-private-token" not in config + capsys.readouterr().out
     assert not any("privileged" in str(command) for command, _ in calls)
     assert any("--wait" in command for command, _ in calls)
+    probe = next(command for command, _ in calls if "bash" in command)
+    assert probe[-2:] == ["vac-sandbox-check", "/workspaces/" + launcher.project_id(repo)]
+    assert '"$1"' in probe[-3]
 
 
 def test_launcher_dry_run_never_invokes_docker_or_writes_config(tmp_path, monkeypatch, capsys):
@@ -283,3 +293,29 @@ async def test_project_check_timeout_is_reported_not_an_internal_error(tmp_path,
     monkeypatch.setattr(setup, "inspect_project", AsyncMock(side_effect=TimeoutError))
     with pytest.raises(ValueError, match="Project check timed out"):
         await setup.inspect("sample")
+
+
+def test_launcher_stops_before_login_and_godot_if_sandbox_fails(tmp_path, monkeypatch, capsys):
+    root = tmp_path / "cafe"
+    root.mkdir()
+    repo = tmp_path / "Project"
+    (repo / ".git").mkdir(parents=True)
+    monkeypatch.setattr(launcher, "ROOT", root)
+    monkeypatch.setattr(launcher.shutil, "which", lambda _name: "/usr/bin/fake")
+    monkeypatch.setattr("sys.argv", ["setup-project.py", "--project", str(repo), "--privileged"])
+    calls = []
+
+    def run(command, **kwargs):
+        calls.append(command)
+        if "bash" in command:
+            return SimpleNamespace(
+                returncode=1, stdout='{"ok": false, "detail": "Namespace denied"}'
+            )
+        return SimpleNamespace(returncode=0, stdout="")
+
+    monkeypatch.setattr(launcher.subprocess, "run", run)
+    with pytest.raises(ValueError, match="Codex-Login und Godot-Start"):
+        launcher.main()
+    assert "Namespace denied" in capsys.readouterr().out
+    assert not any("codex" in command for command in calls)
+    assert len(calls) == 2

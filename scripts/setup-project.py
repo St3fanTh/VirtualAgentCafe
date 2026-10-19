@@ -151,6 +151,37 @@ def main():
     if "SSH_AUTH_SOCK" not in plan["services"]["backend"]["environment"]:
         print("SSH-Agent/known_hosts nicht verfügbar. Lokales Arbeiten bleibt möglich.")
     subprocess.run([*compose, "up", "--build", "--wait", "backend"], check=True)
+    probe = subprocess.run(
+        [
+            *compose,
+            "exec",
+            "-T",
+            "backend",
+            "bash",
+            "-lc",
+            "source scripts/environment.sh && "
+            'python3 scripts/sandbox-diagnostics.py --workspace "$1"',
+            "vac-sandbox-check",
+            f"/workspaces/{identifier}",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if probe.returncode != 0:
+        try:
+            detail = json.loads(probe.stdout)["detail"]
+        except (ValueError, KeyError, TypeError):
+            detail = (
+                "Sandbox-Diagnose nicht verfügbar. "
+                "Backend-Image neu bauen und Diagnose im Container starten."
+            )
+        print("Sandbox nicht bereit: " + str(detail))
+        if args.privileged:
+            print("Privileged wurde angefordert. Prüfe zusätzlich die Docker-/WSL-Hostrichtlinien.")
+        raise ValueError(
+            "Sandbox-Prüfung fehlgeschlagen. Codex-Login und Godot-Start wurden übersprungen."
+        )
     login = subprocess.run(
         [*compose, "exec", "-T", "backend", "codex", "login", "status"],
         stdout=subprocess.DEVNULL,

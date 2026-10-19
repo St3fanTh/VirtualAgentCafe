@@ -169,6 +169,44 @@ Mount-Plan ohne Start/Änderungen anzeigen:
 python3 scripts/setup-project.py --project /pfad/zum/projekt --dry-run
 ```
 
+## Sandbox-Fehler beim Start
+
+Der Starter führt nach dem Container-Healthcheck den Namespace-Selbsttest im
+gewählten Projektworkspace aus. Bei Fehlern hält er vor Codex-Anmeldung und
+Godot-Start an. Er erhöht Berechtigungen nicht automatisch und startet keine Worker
+ohne funktionierende Isolation. Für die bisherige lokale Umgebung den expliziten
+Override verwenden:
+
+```bash
+python3 scripts/setup-project.py --privileged
+```
+
+Bleibt die Prüfung blockiert, im laufenden Backend die Diagnose ausführen:
+
+```bash
+docker compose exec backend bash -lc \
+  'source scripts/environment.sh && python3 scripts/sandbox-diagnostics.py'
+```
+
+Mit `--workspace /workspaces/DEINE-PROJEKT-ID` prüfst du zusätzlich genau den
+Projektmount. Die Ausgabe enthält feste Fehlerkategorien und verfügbare numerische
+Namespace-Einstellungen; keine Tokens, Auth-Dateien oder rohen Tool-Ausgaben.
+
+- `namespace_denied`: Kernel-/Container-Regeln verbieten Namespace-Erstellung oder
+  Mounts. Falls Privileged bereits aktiv ist, die Docker-/WSL-Hostrichtlinien prüfen.
+- `namespace_limit`: Namespace-/Systemressourcen erschöpft.
+- `mount_failed` / `workspace_unavailable`: Projektmount und Verzeichnisrechte prüfen.
+- `runtime_missing` / `launch_failed`: Backend neu bauen beziehungsweise die lokale
+  Bubblewrap-Installation prüfen.
+- `timeout`: Selbsttest hat sein Zeitlimit erreicht.
+
+Der Assistent verwendet denselben Selbsttest wie der Workerstart. Schlägt er fehl,
+stehen Codex-Anmeldung und Git als **SKIP** im Bericht. Sie wurden dann nicht
+geprüft; die Meldung fordert nicht mehr fälschlich zur Codex-Neuanmeldung auf.
+Ein `ready`-Ergebnis belegt die lokale Namespace-Prüfung, nicht Modellverfügbarkeit
+oder Git-Remote-Berechtigungen. Ein Privileged-Container kann weiterhin durch die
+Konfiguration seines Hosts eingeschränkt sein; das Skript verändert diese nicht.
+
 ## API und Tests
 
 Alle Routen benötigen den vorhandenen Managementtoken:

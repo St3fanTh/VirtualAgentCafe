@@ -548,3 +548,31 @@
   Bericht macht fehlende Voraussetzungen sichtbar, umgeht sie aber nicht.
 - Commit-ID: git log --format='%h %s' --grep='fix project setup feedback and plan-based team creation'.
   Feature-Branch wird synchronisiert; kein automatischer Main-Merge.
+
+## Setup M4 — Sandbox-Ursachen und übersprungene Folgeprüfungen
+- Fortsetzung des Nutzerproblems: Namespace-Sandbox blockiert, gleichzeitig wird
+  fälschlich eine nicht geprüfte Codex-Anmeldung als Fehler angezeigt.
+- Gemeinsamer begrenzter Sandbox-Selbsttest für Setup und Workerstart: feste
+  Fehlerkategorien für Namespace-Rechte, Ressourcen, Mounts, fehlende Laufzeit und
+  Zeitlimit. Kein Auth-Mount/Modellaufruf; rohe stderr-Inhalte gelangen nicht in API
+  oder Aktivitätslogs. Begrenzte Ausgabe und Prozessgruppen-Bereinigung getestet.
+- Setup zeigt Codex und Git nach Sandbox-Fehler als SKIPPED/SKIP; keine irreführende
+  Aufforderung zur Neuanmeldung. Unsafe Starts bleiben weiterhin gesperrt.
+- Starter führt nach Healthcheck die Diagnose am ausgewählten Projektmount aus;
+  bei Fehlern hält er vor Codex-Login und Godot an. Keine automatische Ausweitung
+  von Rechten und kein Fallback ohne Isolation.
+- scripts/sandbox-diagnostics.py liefert teilbare JSON-Diagnose mit festen
+  Kategorien und verfügbaren numerischen Namespace-Einstellungen. Dokumentation
+  beschreibt expliziten Privileged-Start und Diagnose im bestehenden Container.
+- Dateien: management/sandbox.py und setup.py, scripts/setup-project.py und neues
+  sandbox-diagnostics.py, game/scripts/management.gd, neuer blockierter GUI-Test
+  samt UID, Backend-Sandbox-/Starter-/Setup-Tests und Fixture, docs/project-setup.md.
+- Validierung: scripts/check.sh PASS mit 128 pytest-Tests, Ruff/Format, Godot-Import,
+  Headless-/Zustands-/Live-WebSocket-Prüfungen; gerenderter OpenGL-Test der blockierten
+  Sandbox PASS. Aktueller echter Namespace-Selbsttest liefert hier code=ready.
+  Nach präzisierter Workspace-Argumentübergabe alle 12 Starter-/Setup-Tests erneut PASS.
+- Grenze: im Entwicklungscontainer steht keine Docker-CLI bereit. Konkrete
+  Docker-/WSL-Hostrichtlinie des Nutzers bleibt ohne dessen Diagnose unbekannt;
+  insbesondere beweist ein lokales ready nicht die Funktionsfähigkeit seines Hosts.
+- Commit-ID: git log --format='%h %s' --grep='diagnose sandbox startup and skip dependent checks'.
+  Feature-Branch wird synchronisiert; kein automatischer Main-Merge.

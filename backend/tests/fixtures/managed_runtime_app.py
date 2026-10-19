@@ -89,3 +89,11 @@ if os.getenv("VAC_SETUP_FIXTURE") == "1":
         ],
         check=True,
     )
+
+
+if os.getenv("VAC_SANDBOX_BLOCKED") == "1":
+
+    async def blocked_probe(self, workspace):
+        return Sandbox.failure("bwrap: Creating new namespace failed: Operation not permitted", 1)
+
+    Sandbox.probe = blocked_probe
