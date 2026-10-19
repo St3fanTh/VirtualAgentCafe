@@ -576,3 +576,26 @@
   insbesondere beweist ein lokales ready nicht die Funktionsfähigkeit seines Hosts.
 - Commit-ID: git log --format='%h %s' --grep='diagnose sandbox startup and skip dependent checks'.
   Feature-Branch wird synchronisiert; kein automatischer Main-Merge.
+
+## Setup M5 — Tatsächlichen Codex-Anmeldestatus korrekt prüfen
+- Nutzerbericht: Namespace, Modus und Git bestehen; Codex bleibt als einziger FIX.
+- Konkreter Programmfehler reproduziert mit codex-cli 0.162.1: die Prüfung rief
+  codex --ignore-user-config login status auf. Diese Option ist nur für exec
+  gültig; der Statusaufruf beendet sich vor der Auth-Prüfung mit Parserfehler.
+- Korrektur: codex login status innerhalb der bestehenden Auth-Sandbox. Keine
+  Änderung an Zugangsdaten, Host-Konfiguration oder an exec --ignore-user-config.
+  Die Sandbox bindet weiterhin nur auth.json, nicht die Benutzerkonfiguration ein.
+- Regression mit echter CLI statt Status-Stub: temporäres, klar fiktives Auth-File,
+  Namespace ohne Netzwerk, vollständige Projektprüfung mit und ohne Auth-Datei.
+  Test scheitert vor der Korrektur und besteht danach; keine Modellaufrufe.
+- CI installiert dieselbe gepinnte CLI 0.162.1 wie das Dockerfile, damit dieser
+  Regressionstest dort ausgeführt und nicht wegen fehlender CLI übersprungen wird.
+- Dateien: management/setup.py, backend/tests/test_project_setup.py,
+  .github/workflows/ci.yml, docs/project-setup.md, PROGRESS.md.
+- Validierung: scripts/check.sh mit 129 pytest-Tests, Ruff/Format und bisherigen
+  Godot-Import-/Headless-/Zustands-/Live-WebSocket-Prüfungen. Der isolierte echte
+  CLI-Regressionslauf bestand sowohl mit als auch ohne gespeicherte Test-Anmeldung.
+- Grenze: gespeicherte Auth wird geprüft, nicht die serverseitige Gültigkeit eines
+  Kontos oder Modellverfügbarkeit. Nutzer-Anmeldung wurde nicht gelesen/geändert.
+- Commit-ID: git log --format='%h %s' --grep='use supported Codex login status command'.
+  Feature-Branch wird synchronisiert; kein automatischer Main-Merge.

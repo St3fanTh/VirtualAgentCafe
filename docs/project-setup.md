@@ -89,6 +89,24 @@ bei dessen HEAD; der Assistent zeigt diesen Unterschied an und erstellt selbst
 keinen initialen Commit. Für einen neuen Ausgangsstand zuerst deine gewünschten
 Änderungen selbst prüfen und committen.
 
+## Codex-Anmeldung prüfen
+
+Wenn Sandbox und Git PASS melden, aber Codex weiterhin FIX, den gespeicherten
+Anmeldestatus direkt im Backend prüfen:
+
+```bash
+docker compose exec backend codex login status
+```
+
+Nur wenn dort keine Anmeldung vorhanden ist, `docker compose exec backend codex login`
+ausführen. Der Assistent verwendet denselben Statusbefehl innerhalb des isolierten
+Workspaces. `--ignore-user-config` ist eine Option von `codex exec`, nicht von
+`codex login status`; sie gehört nicht in die Anmeldeprüfung. Benutzerkonfiguration
+wird in dieser Sandbox ohnehin nicht eingebunden, nur die schreibgeschützte
+Authentifizierungsdatei. Die Prüfung bestätigt gespeicherte Anmeldedaten und ruft
+kein Modell auf. Ein Regressionstest verwendet die echte gepinnte CLI mit einem
+Test-Auth-File und abgeschaltetem Netzwerk, sowohl mit als auch ohne Anmeldung.
+
 ## Gemeinsame Projektdateien
 
 `AGENTS.md` enthält die Projektkonventionen und gemeinsamen Agentenregeln.

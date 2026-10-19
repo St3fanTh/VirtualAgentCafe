@@ -103,7 +103,7 @@ class ProjectSetup:
             login = await self.command_ok(
                 sandbox.command(
                     path,
-                    [shutil.which("codex"), "--ignore-user-config", "login", "status"],
+                    [shutil.which("codex"), "login", "status"],
                     authenticated=True,
                 )
             )

@@ -319,3 +319,39 @@ def test_launcher_stops_before_login_and_godot_if_sandbox_fails(tmp_path, monkey
     assert "Namespace denied" in capsys.readouterr().out
     assert not any("codex" in command for command in calls)
     assert len(calls) == 2
+
+
+async def test_real_codex_login_check_accepts_cached_auth_without_model_calls(
+    tmp_path, monkeypatch
+):
+    import json
+    import shutil
+
+    codex = shutil.which("codex")
+    if codex is None:
+        pytest.skip("Codex CLI unavailable")
+    manager, setup, _ = await project(tmp_path, monkeypatch)
+    # Exercise the real status parser instead of the normal deterministic CLI stub.
+    monkeypatch.setattr(setup, "command_ok", ProjectSetup.command_ok.__get__(setup, ProjectSetup))
+    monkeypatch.setattr(
+        "virtual_agent_cafe.management.setup.shutil", SimpleNamespace(which=lambda _name: codex)
+    )
+    auth = tmp_path / "fixture-auth"
+    auth.mkdir()
+    (auth / "auth.json").write_text(json.dumps({"OPENAI_API_KEY": "sk-fixture-not-a-real-key"}))
+    monkeypatch.setenv("CODEX_HOME", str(auth))
+    command = Sandbox.command
+
+    def offline(self, workspace, arguments, **kwargs):
+        kwargs["network"] = False
+        return command(self, workspace, arguments, **kwargs)
+
+    monkeypatch.setattr(Sandbox, "command", offline)
+    report = await setup.inspect("sample")
+    assert next(c for c in report["checks"] if c["name"] == "codex")["ok"] is True
+    assert report["ready"] is True
+    # The same executable must report missing credentials correctly as well.
+    (auth / "auth.json").unlink()
+    report = await setup.inspect("sample")
+    assert next(c for c in report["checks"] if c["name"] == "codex")["ok"] is False
+    assert not report["ready"]
