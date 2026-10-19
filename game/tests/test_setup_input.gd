@@ -68,7 +68,7 @@ func run() -> void:
 	check(ui.setup_result.text.contains("PASS"), "Readiness report visible")
 	check(not ui.buttons["Create backend + frontend team"].disabled, "Ready team can be created from the loaded plan without a redundant goal")
 	check(ui.setup_status.text.contains("PLANNING.md"), "Report explains the goal inferred from the loaded plan")
-	await click(ui.setup_integrate)
+	check(ui.setup_integrate.button_pressed, "Integration worker is enabled by default")
 	check(ui.setup_publish.button_pressed, "Automatic integration also enables worker publication")
 	await click(ui.buttons["Create backend + frontend team"])
 	await settled(ui)
@@ -89,6 +89,27 @@ func run() -> void:
 	await click(ui.agents, Vector2(35, 20))
 	await frames()
 	check(not ui.active_agent.is_empty(), "Generated agent can be selected for review")
+	await tab(ui, 4)
+	var scroll: Node = ui.setup_project
+	while scroll != null and not scroll is ScrollContainer:
+		scroll = scroll.get_parent()
+	check(scroll is ScrollContainer, "Project controls are in a scrollable panel")
+	scroll.scroll_vertical = 10000
+	await frames(2)
+	await click(ui.buttons["Delete all managed projects"])
+	check(ui.project_delete_dialog.visible, "Delete-all button asks for confirmation")
+	check(ui.project_delete_dialog.dialog_text.contains("Source repositories"), "Delete confirmation explains preserved source")
+	await key(KEY_ESCAPE)
+	check(not ui.project_delete_dialog.visible and ui.cache.projects.size() == 1, "Cancel keeps the managed project")
+	await click(ui.buttons["Delete all managed projects"])
+	# Godot exposes ConfirmationDialog as a separate native window in headless mode;
+	# its controls cannot receive root-viewport mouse coordinates. Exercise the real
+	# accept button signal after testing the cancel path with viewport keyboard input.
+	ui.project_delete_dialog.get_ok_button().emit_signal("pressed")
+	await settled(ui)
+	check(ui.cache.projects.is_empty(), "Confirmed delete-all removes all managed projects")
+	check(ui.cache.agents.is_empty(), "Project deletion removes its team agents")
+	check(ui.cache.workspaces.size() >= 1, "Source repository workspace remains available")
 	await click(ui.buttons["Close"])
 	check(not ui.visible, "Wizard can be closed")
 	cafe.queue_free()

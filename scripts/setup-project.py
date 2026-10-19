@@ -14,10 +14,64 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 
 
+def project_identity(path: Path) -> tuple[str, str]:
+    remote = ""
+    git_config = path / ".git" / "config"
+    try:
+        content = git_config.read_text(encoding="utf-8")
+        if len(content) <= 131072:
+            match = re.search(
+                r'^\s*\[remote\s+"origin"\]\s*((?:(?!^\s*\[).*(?:\n|$))*)',
+                content,
+                re.MULTILINE,
+            )
+            if match:
+                url = re.search(r"^\s*url\s*=\s*(.*?)\s*$", match.group(1), re.MULTILINE)
+                remote = url.group(1) if url else ""
+    except (OSError, UnicodeError):
+        pass
+    if re.fullmatch(r"git@[A-Za-z0-9.-]+:[A-Za-z0-9_./-]+", remote) or re.fullmatch(
+        r"https://[A-Za-z0-9.-]+/[A-Za-z0-9_./-]+", remote
+    ):
+        normalized = remote.lower().removesuffix(".git")
+        slug = remote.rsplit("/", 1)[-1].rsplit(":", 1)[-1].removesuffix(".git")
+        return hashlib.sha256(("remote:" + normalized).encode()).hexdigest(), slug
+    resolved = str(path.resolve())
+    return hashlib.sha256(("path:" + resolved).encode()).hexdigest(), path.name
+
+
 def project_id(path: Path) -> str:
-    value = re.sub(r"[^a-z0-9_-]+", "-", path.name.lower()).strip("-_")[:32]
+    identity, slug = project_identity(path)
+    mapping = ROOT / ".runtime" / "setup" / "project-mounts.json"
+    if mapping.is_file() and not mapping.is_symlink() and mapping.stat().st_size <= 65536:
+        try:
+            existing = json.loads(mapping.read_text(encoding="utf-8"))
+            if isinstance(existing, dict) and isinstance(existing.get(identity), str):
+                return existing[identity]
+        except (OSError, json.JSONDecodeError):
+            pass
+    value = re.sub(r"[^a-z0-9_-]+", "-", slug.lower()).strip("-_")[:32]
     prefix = value if value and value[0].isalpha() else "project-" + value
-    return prefix[:30] + "-" + hashlib.sha256(str(path).encode()).hexdigest()[:8]
+    return prefix[:30] + "-" + identity[:8]
+
+
+def save_project_id(path: Path, identifier: str) -> None:
+    identity, _slug = project_identity(path)
+    mapping = ROOT / ".runtime" / "setup" / "project-mounts.json"
+    mapping.parent.mkdir(parents=True, exist_ok=True)
+    existing = {}
+    if mapping.is_file() and not mapping.is_symlink() and mapping.stat().st_size <= 65536:
+        try:
+            value = json.loads(mapping.read_text(encoding="utf-8"))
+            if isinstance(value, dict):
+                existing = value
+        except (OSError, json.JSONDecodeError):
+            pass
+    existing[identity] = identifier
+    temporary = mapping.with_suffix(".tmp")
+    temporary.write_text(json.dumps(existing, sort_keys=True) + "\n", encoding="utf-8")
+    os.chmod(temporary, 0o600)
+    os.replace(temporary, mapping)
 
 
 def selected_project(value: str | None) -> Path:
@@ -147,6 +201,7 @@ def main():
     config_dir.mkdir(parents=True, exist_ok=True)
     config = config_dir / "project.compose.json"
     config.write_text(json.dumps(plan, indent=2) + "\n")
+    save_project_id(project, identifier)
     compose = [
         "docker",
         "compose",

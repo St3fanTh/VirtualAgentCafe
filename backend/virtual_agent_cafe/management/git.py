@@ -1,6 +1,7 @@
 import asyncio
 import os
 import re
+import shutil
 from pathlib import Path
 
 from .files import WorkspaceManager
@@ -459,6 +460,47 @@ class GitService:
             "feature_branch": branch,
         }
 
+    async def remove_worktree(self, repository: str, destination: str) -> None:
+        source = await self.repository(repository)
+        target = self.workspaces.get(destination)
+        if not (target / ".git").exists():
+            if target.is_dir() and not any(target.iterdir()):
+                await asyncio.to_thread(target.rmdir)
+                return
+            raise ValueError("Managed workspace is not a removable Git worktree")
+        actual = await self.repository(destination)
+        common = Path(
+            (
+                await self.run(actual, "rev-parse", "--path-format=absolute", "--git-common-dir")
+            ).strip()
+        )
+        if not (await asyncio.to_thread((actual / common).resolve)).is_relative_to(
+            self.workspaces.files.root
+        ):
+            raise ValueError("Worktree metadata is outside approved workspace roots")
+        common = (actual / common).resolve()
+        source_common = Path(
+            (
+                await self.run(source, "rev-parse", "--path-format=absolute", "--git-common-dir")
+            ).strip()
+        )
+        if (source / source_common).resolve() != common:
+            raise ValueError("Workspace belongs to a different Git repository")
+        await self.require_clean(actual)
+        # Git cannot unlink a worktree that bubblewrap mounted as its own mount point.
+        # After clean-state and same-repository checks, remove this approved tree and
+        # prune its now-stale administrative entry. Branch references remain intact.
+        if target.resolve() != target or not target.resolve().is_relative_to(
+            self.workspaces.files.root
+        ):
+            raise ValueError("Worktree path is outside approved workspace roots")
+        await asyncio.to_thread(shutil.rmtree, target)
+
+    async def prune_worktrees(self, repository: str) -> None:
+        """Prune stale metadata once after a group of managed worktrees is removed."""
+        source = await self.repository(repository)
+        await self.run(source, "worktree", "prune", "--expire", "now")
+
     async def worktree(self, repository: str, destination: str, branch: str) -> Path:
         path = await self.repository(repository)
         target = self.workspaces.get(destination)
@@ -466,7 +508,11 @@ class GitService:
         async with self.locks.setdefault(repository, asyncio.Lock()):
             if (target / ".git").exists():
                 actual = await self.repository(destination)
-                common = (await self.run(actual, "rev-parse", "--git-common-dir")).strip()
+                common = (
+                    await self.run(
+                        actual, "rev-parse", "--path-format=absolute", "--git-common-dir"
+                    )
+                ).strip()
                 if (actual / common).resolve() != (path / ".git").resolve():
                     raise ValueError("Workspace is connected to a different repository")
                 if (await self.info(destination))["branch"] != name:

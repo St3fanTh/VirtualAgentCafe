@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import sqlite3
 import threading
+import uuid
 from pathlib import Path
 
 
@@ -42,6 +43,10 @@ class Store:
             raise KeyError(identifier)
         return json.loads(row[0])
 
+    def delete(self, kind: str, identifier: str):
+        with self.lock, self.db:
+            self.db.execute("DELETE FROM records WHERE kind=? AND id=?", (kind, identifier))
+
     def list(self, kind: str) -> list[dict]:
         with self.lock:
             rows = self.db.execute(
@@ -65,6 +70,40 @@ class Store:
                 self.db.execute(
                     "UPDATE records SET data=? WHERE kind='projects' AND id=?",
                     (json.dumps(project), project["id"]),
+                )
+
+    def delete_project(
+        self,
+        identifier: str,
+        archive_id: str,
+        archive: dict,
+        agents: list[tuple[str, dict]],
+        workspaces: list[str],
+    ):
+        """Archive a managed project and remove its active agent/workspace records."""
+        with self.lock, self.db:
+            removed = self.db.execute(
+                "DELETE FROM records WHERE kind='projects' AND id=?", (identifier,)
+            )
+            if removed.rowcount != 1:
+                raise KeyError(identifier)
+            self.db.execute(
+                "INSERT INTO records VALUES (?,?,?)",
+                ("deleted_projects", archive_id, json.dumps(archive)),
+            )
+            for agent_id, archived in agents:
+                removed = self.db.execute(
+                    "DELETE FROM records WHERE kind='agents' AND id=?", (agent_id,)
+                )
+                if removed.rowcount != 1:
+                    raise KeyError(agent_id)
+                self.db.execute(
+                    "INSERT INTO records VALUES (?,?,?)",
+                    ("deleted_agents", str(uuid.uuid4()), json.dumps(archived)),
+                )
+            for workspace in workspaces:
+                self.db.execute(
+                    "DELETE FROM records WHERE kind='workspaces' AND id=?", (workspace,)
                 )
 
     def log(self, execution: str, data: dict):

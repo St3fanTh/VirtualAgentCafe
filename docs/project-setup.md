@@ -81,11 +81,12 @@ F5 ist dabei nicht nötig. Der Managementtoken wird nur im Prozessspeicher an Go
    unter ihrem bisherigen Dateinamen gespeichert. Danach unter **Markdown** die Aufgaben prüfen/anpassen. Unter **Agents** jeden Agenten
    auswählen und **Start agent** klicken. Die Einrichtung allein startet keine
    kostenpflichtigen Modellaufgaben.
-6. Ergebnisse, Tests und Diffs prüfen. Annahme und späterer Merge erfolgen bewusst;
-   standardmäßig wird nicht gepusht. Optional kann der Controller erfolgreiche
-   Läufe auf eigene Agenten-Branches hochladen (siehe unten). Optional kann die
-   [automatische Integration mit Requirements-Tests und Main-Promotion](automatic-integration.md)
-   freigeschaltet werden; dann entfällt eine manuelle Aufgabenannahme.
+6. Ergebnisse, Tests und Diffs prüfen. Bei aktiviertem Publish-Schalter pusht der
+   Controller erfolgreiche Läufe auf den jeweiligen Agenten-Branch. Der
+   Integrationsagent kann anschließend beide Worker-Branches auf seinem eigenen
+   Branch zusammenführen, gemeinsame Tests erstellen und nach grüner Prüfung den
+   freigegebenen Stand nach `main` promoten (siehe
+   [automatische Integration](automatic-integration.md)).
 
 Uncommittete Änderungen bleiben im Quellrepository. Die Agentenworktrees beginnen
 bei dessen HEAD; der Assistent zeigt diesen Unterschied an und erstellt selbst
@@ -165,8 +166,10 @@ aktiviert. Hooks und externe Git-Helfer bleiben deaktiviert.
 - Der generierte Compose-Override liegt ignoriert unter
   `.runtime/setup/project.compose.json`. Nur der gewählte externe Projektordner
   wird zusätzlich eingebunden; kein beliebiger Hostpfad ist über die API wählbar.
-- Projekt-IDs enthalten einen kurzen Pfad-Hash, damit gleichnamige Ordner nicht
-  versehentlich dasselbe Team verwenden. Der Starter unterstützt ein ausgewähltes
+- Projekt-IDs verwenden bei gültiger `origin`-Adresse eine Repository-Kennung,
+  sodass dasselbe Repo über andere Docker-/WSL-Pfade wiederverwendet wird. Ohne
+  Remote wird ein Pfad-Hash verwendet. Lokal wird nur Hash→Workspace-ID gespeichert,
+  keine Remote-URL. Der Starter unterstützt ein ausgewähltes
   externes Quellprojekt pro Backend-Start. Starte ihn zum Wiederöffnen erneut mit
   demselben Ordner; beim Projektwechsel bleiben alte Arbeitsstände erhalten.
 - Compose erstellt das Backend bei geänderter Konfiguration/Image neu. Beende
@@ -178,6 +181,22 @@ aktiviert. Hooks und externe Git-Helfer bleiben deaktiviert.
 - Ein erneuter Teamerstellungsversuch erhält vorhandene Aufgaben/Konfigurationen.
   Unterbrochene Einrichtungen werden mit der ursprünglichen Zielbeschreibung
   fortgesetzt. Bestehende fremde Dateien werden nicht überschrieben.
+
+### Projekte aufräumen und Ergebnisse nachvollziehen
+
+Im Setup-Tab kannst du **Delete selected project** oder **Delete all managed
+projects** wählen. Beide Aktionen verlangen eine Bestätigung. Entfernt werden nur
+die VirtualAgentCafe-Projektzuordnungen und sauberen verwalteten Worker-Worktrees;
+das ausgewählte Quellverzeichnis, seine Git-Branches und die Ausführungshistorie
+bleiben erhalten. Projekte mit laufenden Agenten oder uncommitteten Änderungen
+werden nicht gelöscht. Worktrees werden erst alle entfernt, danach bereinigt Git
+einmalig die gemeinsamen Verwaltungsmetadaten.
+
+Nach einem erfolgreichen Worker-Lauf zeigt **Executions** einen kurzen Recap,
+geänderte Dateien, Tests und den Branch-/Commit-Nachweis. Bei aktiviertem Push wird
+`agent-changelogs/<agent-id>.md` als Recap-Commit auf genau diesen Agenten-Branch
+gepusht. Worker pushen nicht nach `main`; nur der aktivierte Integrationsablauf darf
+seinen geprüften Integrationscommit dorthin promoten.
 - Native Windows-/macOS-Launcher ohne Linux/WSL-Host, SSH-Agent-Brücken für Windows
   ohne WSL-Socket und Git-Submodule sind kein Bestandteil dieses Assistenten.
 - Docker-Start, nativer Tk-Dialog und Windows-Übergabe benötigen einen Test auf dem

@@ -184,6 +184,86 @@ class ExecutionManager:
                 "preserved": ["workspace", "git_branches", "markdown", "execution_history"],
             }
 
+    async def delete_project(self, identifier: str) -> dict:
+        async with self.control:
+            project = self.store.get("projects", identifier)
+            members = list(dict.fromkeys([*project.get("agents", []), project.get("integrator")]))
+            members = [member for member in members if member]
+            if identifier in self.integrations.running or any(
+                member in self.running for member in members
+            ):
+                raise ValueError(
+                    "Stop all project agents and integration before deleting the project"
+                )
+            agent_records = [(member, self.registry.get(member)) for member in members]
+            for member, record in agent_records:
+                if record.get("state") == State.RUNNING:
+                    raise ValueError("Stop all project agents before deleting the project")
+                for other in self.store.list("projects"):
+                    if other["id"] != identifier and member in [
+                        *other.get("agents", []),
+                        other.get("integrator"),
+                    ]:
+                        raise ValueError(
+                            "An agent is shared by another project; delete it separately"
+                        )
+            workspaces = list(
+                dict.fromkeys(record["config"]["workspace"] for _, record in agent_records)
+            )
+            for workspace in workspaces:
+                if any(
+                    agent["config"]["workspace"] == workspace
+                    and agent["config"]["id"] not in members
+                    for agent in self.store.list("agents")
+                ):
+                    raise ValueError("A project worktree is shared by another agent")
+                await self.git.remove_worktree(identifier, workspace)
+            if workspaces:
+                await self.git.prune_worktrees(identifier)
+            archived_agents = [
+                (member, {"id": member, "deleted_at": now(), "agent": record})
+                for member, record in agent_records
+            ]
+            self.store.delete_project(
+                identifier,
+                str(uuid4()),
+                {"id": identifier, "deleted_at": now(), "project": project},
+                archived_agents,
+                workspaces,
+            )
+            for member, _record in agent_records:
+                self.registry.configs.path(member + ".json").unlink(missing_ok=True)
+                self.bus.agents.pop(member, None)
+            remaining = self.store.list("agents")
+            for _, record in agent_records:
+                config = record["config"]
+                for manager, key in (
+                    (self.tasks, "task"),
+                    (self.roles, "roles"),
+                ):
+                    assigned = (
+                        [config[key]] if key == "task" and config.get(key) else config.get(key, [])
+                    )
+                    for filename in assigned:
+                        if not any(
+                            filename
+                            in [agent["config"].get("task"), *agent["config"].get("roles", [])]
+                            for agent in remaining
+                        ):
+                            manager.files.path(filename).unlink(missing_ok=True)
+                            self.store.delete(manager.kind, filename)
+            self.broadcast_snapshot()
+            return {
+                "id": identifier,
+                "deleted": True,
+                "agents": members,
+                "preserved": [
+                    "source_repository",
+                    "local_and_remote_branches",
+                    "execution_history",
+                ],
+            }
+
     def register(self, config: AgentConfig):
         record = self.registry.get(config.id)
         previous = None
@@ -366,7 +446,9 @@ class ExecutionManager:
             "Do not expose credentials, private task text or raw tool output in public messages. "
             "Do not push, pull, fetch, reset, clean, force-update or merge automatically. "
             "Do not modify other agents' Git metadata. Run relevant tests. "
-            "A successful runtime requires separate human acceptance of the task.\n"
+            "A successful runtime requires separate human acceptance of the task. "
+            "End with a concise factual recap: completed work, changed files, tests, and "
+            "whether the controller published the branch (the runtime itself cannot know).\n"
             "The exact Markdown task/role snapshots are mounted read-only at "
             ".cafe/instructions/task.md and .cafe/instructions/roles/. Read them before editing.\n"
             "Precedence: system security > validated configuration > "
@@ -440,16 +522,65 @@ class ExecutionManager:
                     break
                 if attempt < config.execution.max_retries:
                     emit(EventType.WAITING, "Retrying failed runtime in the same workspace")
+            response_file = workspace / ".cafe" / "last-response.md"
+            changelog = ""
+            try:
+                if response_file.is_file() and not response_file.is_symlink():
+                    changelog = await asyncio.to_thread(
+                        lambda: response_file.read_text(encoding="utf-8", errors="replace")[
+                            :6000
+                        ].strip()
+                    )
+            except OSError:
+                changelog = ""
+            if not changelog:
+                changelog = result.reason[:1200]
             run.update(
                 status=State.COMPLETED if result.success else State.FAILED,
                 runtime_success=result.success,
                 detail=result.reason[:256],
+                changelog=changelog,
                 # COMPLETED describes the process. Acceptance remains separately unverified.
                 task_state=TaskState.ASSIGNED if result.success else TaskState.FAILED,
                 acceptance="PENDING_INTEGRATION"
                 if result.success and self.integrations.project(config.id)
                 else "UNVERIFIED",
             )
+            if result.success and config.git.push_on_success:
+                changelog_path = f"agent-changelogs/{config.id}.md"
+                relative_changelog = self.workspaces.files.path(
+                    f"{config.workspace}/{changelog_path}"
+                )
+                await asyncio.to_thread(
+                    relative_changelog.parent.mkdir, parents=True, exist_ok=True
+                )
+                if relative_changelog.is_symlink():
+                    raise ValueError("Agent changelog cannot be a symlink")
+                previous_changelog = ""
+                if relative_changelog.exists():
+                    if relative_changelog.stat().st_size > 60000:
+                        raise ValueError("Agent changelog exceeds 60 KiB")
+                    previous_changelog = await asyncio.to_thread(
+                        relative_changelog.read_text, encoding="utf-8"
+                    )
+                branch_tip = (
+                    await self.git.run(workspace, "rev-parse", "--verify", "HEAD")
+                ).strip()
+                section = (
+                    f"\n## {run['started_at']} · {run['id']}\n\n"
+                    f"- Task: `{config.task}`\n- Branch: `{run['branch']}`\n"
+                    f"- Agent commit: `{branch_tip}`\n- Result: `{result.reason[:256]}`\n\n"
+                    f"{changelog[:3000].strip()}\n"
+                )
+                await asyncio.to_thread(
+                    relative_changelog.write_text,
+                    previous_changelog + section,
+                    encoding="utf-8",
+                )
+                run["changelog_path"] = changelog_path
+                await self.git.stage(config.workspace, [changelog_path])
+                await self.git.commit(config.workspace, "docs: add agent execution recap")
+                emit(EventType.WAITING, "Git: agent recap committed to its branch")
             if result.success and config.execution.integration_validation:
                 # Tests get no Git RPC authority once the model process has finished.
                 watcher.cancel()

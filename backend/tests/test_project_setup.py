@@ -2,6 +2,7 @@ import asyncio
 import importlib.util
 import json
 import socket
+import subprocess
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
@@ -450,3 +451,34 @@ def test_launcher_rejects_invalid_workspace_id(tmp_path, monkeypatch):
     )
     with pytest.raises(ValueError, match="Workspace-ID"):
         launcher.main()
+
+
+def test_project_identity_reuses_remote_across_mount_paths_and_remembers_override(
+    tmp_path, monkeypatch
+):
+    root = tmp_path / "cafe"
+    root.mkdir()
+    monkeypatch.setattr(launcher, "ROOT", root)
+    first = tmp_path / "SimulationWorld"
+    second = tmp_path / "Docker Desktop" / "SimulationWorld"
+    for path in (first, second):
+        path.mkdir(parents=True)
+        subprocess.run(["git", "init", "-q", str(path)], check=True)
+        subprocess.run(
+            [
+                "git",
+                "-C",
+                str(path),
+                "remote",
+                "add",
+                "origin",
+                "git@github.com:St3fanTh/SimulationWorld.git",
+            ],
+            check=True,
+        )
+    assert launcher.project_id(first) == launcher.project_id(second)
+    legacy = "project-1467da4f208c3c30b8b116-fd507a6f"
+    launcher.save_project_id(first, legacy)
+    assert launcher.project_id(second) == legacy
+    mapping = (root / ".runtime/setup/project-mounts.json").read_text()
+    assert "github.com" not in mapping and legacy in mapping

@@ -20,6 +20,11 @@ class DeleteInput(StrictModel):
     confirmed: Literal[True]
 
 
+class DeleteProjectsInput(StrictModel):
+    confirmed: Literal[True]
+    project_ids: list[str] = Field(default_factory=list, max_length=64)
+
+
 class GitInput(StrictModel):
     operation: Literal[
         "init",
@@ -54,8 +59,13 @@ def management_router(manager: ExecutionManager, validated_body, mode: str) -> A
         except (ValueError, OSError) as error:
             detail = (
                 str(error)[:200]
-                if type(error) is ValueError or isinstance(error, GitOperationError)
-                else "Operation rejected; check configuration, paths, locks and isolation"
+                if isinstance(error, ValueError) or isinstance(error, GitOperationError)
+                else (
+                    "Workspace filesystem operation failed; "
+                    "check mount permissions, locks and open worktree processes"
+                    if isinstance(error, OSError)
+                    else "Operation rejected; check configuration, paths, locks and isolation"
+                )
             )
             raise HTTPException(409, detail) from None
 
@@ -105,6 +115,26 @@ def management_router(manager: ExecutionManager, validated_body, mode: str) -> A
     async def setup_team(request: Request):
         data = await validated_body(request, SetupInput)
         return await guarded(lambda: setup.create(data))
+
+    @router.delete("/projects/{identifier}")
+    async def delete_project(identifier: str, request: Request):
+        await validated_body(request, DeleteInput)
+        return await guarded(lambda: manager.delete_project(identifier))
+
+    @router.delete("/projects")
+    async def delete_projects(request: Request):
+        data = await validated_body(request, DeleteProjectsInput)
+
+        async def delete_all():
+            current = {project["id"] for project in manager.store.list("projects")}
+            if set(data.project_ids) != current:
+                raise ValueError("Project list changed; refresh and confirm deletion again")
+            deleted = []
+            for identifier in data.project_ids:
+                deleted.append(await manager.delete_project(identifier))
+            return {"deleted": deleted, "count": len(deleted)}
+
+        return await guarded(delete_all)
 
     @router.post("/projects/{identifier}/integrate", status_code=202)
     async def retry_integration(identifier: str, request: Request):

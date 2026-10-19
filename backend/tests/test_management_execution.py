@@ -24,6 +24,9 @@ class ControlledRuntime:
         emit(EventType.CODING, "Editing code")
         await self.release.wait()
         (workspace / "result.txt").write_text("changed")
+        response = workspace / ".cafe" / "last-response.md"
+        response.parent.mkdir(exist_ok=True)
+        response.write_text("## Recap\nImplemented the API and pushed the tested change.")
         emit(EventType.TESTING, "CLI: pytest · PASS (exit 0)")
         return RunResult(self.success, "Runtime completed" if self.success else "Tests failed")
 
@@ -71,6 +74,7 @@ async def test_lifecycle_context_snapshot_logs_and_separate_acceptance(tmp_path)
     assert result["status"] == "COMPLETED"
     assert result["acceptance"] == "UNVERIFIED"
     assert result["task_state"] != "COMPLETED"
+    assert "Implemented the API" in result["changelog"]
     assert len(manager.store.logs(run["id"])) >= 3
     manager.review(run["id"], True, "Reviewed generated changes and tests")
     assert manager.registry.get("backend-agent")["task_state"] == "ASSIGNED"

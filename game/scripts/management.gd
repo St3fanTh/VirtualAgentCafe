@@ -40,6 +40,9 @@ var editing := false
 var active_agent := ""
 var delete_dialog := ConfirmationDialog.new()
 var delete_candidate := ""
+var project_delete_dialog := ConfirmationDialog.new()
+var project_delete_ids: Array[String] = []
+var delete_all_projects_pending := false
 var pending_agent := ""
 var poll := Timer.new()
 var tabs: TabContainer
@@ -568,6 +571,12 @@ func received(_result: int, code: int, _headers: PackedStringArray, body: Packed
 		cache["projects"] = data.get("projects", cache.get("projects", []))
 		var record: Dictionary = data.get("execution", {})
 		execution_status.text = str(record.get("status", "")) + " · " + str(record.get("acceptance", "")) + " · Git: " + str(record.get("publication", "NOT_REQUESTED")) + " · Main: " + str(record.get("promotion", "NOT_PROMOTED")) + "\nFiles saved in: " + str(record.get("workspace_path", "")) + " · Branch: " + str(record.get("branch", ""))
+		var published: Dictionary = record.get("published", {})
+		if not published.is_empty():
+			execution_status.text += "\nPushed: " + str(published.get("branch", "")) + " · " + str(published.get("commit", ""))
+		var changelog := str(record.get("changelog", "")).strip_edges()
+		if not changelog.is_empty():
+			execution_status.text += "\n\nRECAP\n" + changelog.left(1400)
 		if record.has("validation"):
 			var validation: Dictionary = record.validation
 			execution_status.text += "\nRequirements: " + str(validation.get("requirements", []).size()) + " · Shared tests: " + ("PASS" if validation.get("passed", false) else "FAIL")
@@ -581,6 +590,27 @@ func received(_result: int, code: int, _headers: PackedStringArray, body: Packed
 			if record.get("agent_id", "") in project.get("agents", []) or record.get("agent_id", "") == project.get("integrator", ""):
 				var integration: Dictionary = project.get("integration", {})
 				execution_status.text += "\nTeam: " + str(integration.get("status", "NOT_CONFIGURED")) + " · " + str(integration.get("detail", ""))
+	elif finished_action in ["delete_project", "delete_projects"]:
+		var removed_ids := project_delete_ids.duplicate()
+		var removed_agents: Array = []
+		var remaining_projects: Array = []
+		for project in cache.get("projects", []):
+			if str(project.get("id", "")) not in removed_ids:
+				remaining_projects.append(project)
+			else:
+				removed_agents.append_array(project.get("agents", []))
+				if not str(project.get("integrator", "")).is_empty():
+					removed_agents.append(str(project.integrator))
+		cache["projects"] = remaining_projects
+		cache["agents"] = cache.get("agents", []).filter(func(agent):
+			return str(agent.get("config", {}).get("id", "")) not in removed_agents)
+		project_delete_ids.clear()
+		delete_all_projects_pending = false
+		setup_ready = false
+		setup_result.text = "Project management entries and clean worker worktrees removed. Source repositories, Git branches and execution history kept."
+		set_notice("Managed project deleted. Refresh the project list to see remaining repositories.")
+		populate()
+		call_api("setup_projects", "/setup")
 	elif finished_action == "delete_agent":
 		var removed := str(data.get("id", ""))
 		if pending_agent == removed:
@@ -641,6 +671,11 @@ func update_buttons() -> void:
 		node.disabled = busy
 	if setup_project != null:
 		buttons["Create backend + frontend team"].disabled = busy or not setup_ready or chosen(setup_project) != setup_checked_project or setup_goal().length() < 10
+		var managed_ids: Array = []
+		for project in cache.get("projects", []):
+			managed_ids.append(project.get("id", ""))
+		buttons["Delete selected project"].disabled = busy or not managed_ids.has(chosen(setup_project))
+		buttons["Delete all managed projects"].disabled = busy or managed_ids.is_empty()
 		buttons["Check project"].disabled = busy or chosen(setup_project).is_empty()
 		var checking := str(active_request.get("action", "")) == "setup_check"
 		for queued in request_queue:
@@ -966,6 +1001,34 @@ func _unhandled_key_input(event: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 
 
+func ask_delete_selected_project() -> void:
+	var identifier := chosen(setup_project)
+	if identifier.is_empty():
+		return
+	project_delete_ids = [identifier]
+	delete_all_projects_pending = false
+	project_delete_dialog.dialog_text = "Delete managed project '" + identifier + "'?\n\nClean worker and integration worktrees plus project agent settings will be removed. Uncommitted changes block deletion. The selected source repository, local and remote Git branches, and execution history are preserved."
+	project_delete_dialog.popup_centered(Vector2i(800, 320))
+
+func ask_delete_all_projects() -> void:
+	project_delete_ids.clear()
+	for project in cache.get("projects", []):
+		project_delete_ids.append(str(project.get("id", "")))
+	if project_delete_ids.is_empty():
+		return
+	delete_all_projects_pending = true
+	project_delete_dialog.dialog_text = "Delete ALL " + str(project_delete_ids.size()) + " managed projects and their clean worker worktrees?\n\nUncommitted work blocks deletion. Source repositories, branches, and execution history are preserved."
+	project_delete_dialog.popup_centered(Vector2i(800, 320))
+
+func confirm_project_delete() -> void:
+	if project_delete_ids.is_empty():
+		return
+	var identifiers := project_delete_ids.duplicate()
+	if delete_all_projects_pending:
+		call_api("delete_projects", "/projects", HTTPClient.METHOD_DELETE, {"confirmed": true, "project_ids": identifiers})
+	else:
+		call_api("delete_project", "/projects/" + identifiers[0], HTTPClient.METHOD_DELETE, {"confirmed": true})
+
 func open_setup() -> void:
 	show_management()
 	tabs.current_tab = 4
@@ -983,6 +1046,8 @@ func build_setup(parent_tabs: TabContainer) -> void:
 		setup_ready = false
 		update_buttons())
 	button(form, "Find projects", func(): call_api("setup_projects", "/setup"))
+	button(form, "Delete selected project", ask_delete_selected_project)
+	button(form, "Delete all managed projects", ask_delete_all_projects)
 	form.add_child(caption("Optional goal override. A loaded PLANNING.md supplies the next incomplete milestone. Define the shared API contract when possible."))
 	setup_objective = TextEdit.new()
 	setup_objective.placeholder_text = "Build a task tracker. Backend: task API. Frontend: task list and creation form. Shared contract: GET /api/tasks → [{id, title}], POST /api/tasks accepts {title}."
@@ -999,6 +1064,9 @@ func build_setup(parent_tabs: TabContainer) -> void:
 	form.add_child(setup_publish)
 	setup_integrate = CheckBox.new()
 	setup_integrate.text = "Integrate + requirements tests + promote green result to main"
+	setup_integrate.button_pressed = true
+	setup_publish.button_pressed = true
+	setup_publish.disabled = true
 	setup_integrate.toggled.connect(func(enabled):
 		setup_publish.disabled = enabled
 		if enabled:
@@ -1010,6 +1078,15 @@ func build_setup(parent_tabs: TabContainer) -> void:
 	button(actions, "Check project", check_setup_project)
 	button(actions, "Create backend + frontend team", func():
 		call_api("setup_team", "/setup/team", HTTPClient.METHOD_POST, {"project": chosen(setup_project), "objective": setup_goal(), "publish_results": setup_publish.button_pressed, "auto_integrate": setup_integrate.button_pressed}))
+	project_delete_dialog.title = "Delete managed project data"
+	project_delete_dialog.ok_button_text = "Delete project data"
+	project_delete_dialog.dialog_autowrap = true
+	project_delete_dialog.theme = theme
+	project_delete_dialog.confirmed.connect(confirm_project_delete)
+	project_delete_dialog.canceled.connect(func():
+		project_delete_ids.clear()
+		delete_all_projects_pending = false)
+	add_child(project_delete_dialog)
 	var results := card(row, "2 · Readiness and next steps", 750)
 	setup_status = caption("Choose your project, then Check project. A loaded plan can supply the goal.")
 	setup_status.custom_minimum_size.y = 56

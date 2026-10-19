@@ -821,3 +821,31 @@
 - Git-Commit-ID: git log --format='%h %s' --grep='restore existing worktree mounts'.
 - Vollständige Prüfung: scripts/check.sh PASS — 159 pytest-Tests, Ruff/Format,
   Godot-Import, Zustands-, Headless- und Live-WebSocket-Tests.
+
+## Projektverwaltung, Branch-Veröffentlichung und Recaps — 2026-10-19
+
+- Starter erkennt dieselbe Git-Repository-`origin`-Adresse über unterschiedliche
+  Host-/WSL-Pfade hinweg wieder. Lokal wird nur Hash→Workspace-ID gespeichert;
+  `--workspace-id` bleibt die gezielte Reparatur für existierende Worktrees.
+- Setup bietet Löschen des gewählten Projekts oder aller verwalteten Projekte mit
+  Bestätigung. Laufende oder unsaubere Worktrees blockieren es. Quellrepository,
+  Branches und Ausführungshistorie bleiben erhalten. Gemeinsame Worktree-Metadaten
+  werden erst bereinigt, nachdem alle Worktrees des Projekts entfernt wurden.
+- Erfolgreiche Läufe zeigen in Executions einen Recap plus Branch-/Commit-Nachweis.
+  Der Controller committet `agent-changelogs/<agent-id>.md` und pusht ausschließlich
+  auf den jeweiligen Worker-Branch. Der Integrationsagent führt beide Workerstände
+  auf eigenem Branch zusammen und darf den gemeinsam geprüften Stand nach `main`
+  promoten, wenn die Integration ausdrücklich aktiviert wurde.
+- Setup wählt Integration und Veröffentlichung standardmäßig aus; der Backend-Start
+  muss Remote-Pushes separat über `--publish-results` freigeben. Setup startet keine
+  Modellaufgabe.
+- Geändert: Starter und Tests, Management API/Execution/Git/Storage, Godot Setup-UI
+  und Eingabetests, Projekt-Setup-Dokumentation.
+- Verifikation: `scripts/check.sh` PASS — 163 pytest-Tests, Ruff/Format,
+  Godot-Import, Zustands- und Headless-Tests sowie Live-WebSocket-/GUI-Integration.
+  Zusätzlich 16 fokussierte Team-Integration-, Worker-Publish- und
+  Mehr-Worktree-Löschtests PASS. Eine bestehende Starlette/httpx-Abkündigungswarnung.
+- Git-Commit-ID: wird über `git log --grep='reuse selected repositories and publish agent recaps'`
+  nachverfolgt; Commit und Push erfolgen nach dieser Prüfung.
+- Offen: keine bekannte Implementierungslücke in diesem Meilenstein. Grafische
+  Sichtprüfung auf dem Windows-/WSL-Zielhost bleibt erforderlich.
