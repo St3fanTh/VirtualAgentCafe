@@ -661,3 +661,16 @@
   und Merge erfolgen weiterhin bewusst auf GitHub; keine automatische Integration.
 - Git-Commit-ID: git log --format='%h %s' --grep='publish successful worker results to agent branches'.
   Push erfolgt auf feat/virtual-agent-cafe-mvp; Main bleibt unverändert.
+
+## Darstellung M8 — Teststation-Beschriftung freistellen
+- CLI TEST LAB von der Höhe der Bar-Dekoration auf ein eigenes dunkles Schild
+  direkt über dem Testmonitor verschoben. Text anhand der tatsächlichen Schrift-
+  breite zentriert; kein Überlappen mit Kerze, Dekoration oder Dampf.
+- Dateien: game/scripts/world.gd und PROGRESS.md.
+- Sichtprüfung: echte OpenGL-Aufnahmen unter Xvfb mit aktivierten und deaktivierten
+  Effekten erzeugt und geprüft; vollständiger Text auf kontrastreichem Hintergrund.
+  Vorschaubilder liegen nur in .runtime/lab-sign-preview und werden nicht committet.
+- Automatisierte Validierung: scripts/check.sh PASS: 141 pytest-Tests, Ruff/Format,
+  Godot-Import, Zustands-, Headless- und Live-WebSocket-Prüfungen.
+- Git-Commit-ID: git log --format='%h %s' --grep='keep test lab title clear of cafe decorations'.
+- Offene Punkte: keine für diese Beschriftung. Keine Änderung an Agenten/Git-Workflows.

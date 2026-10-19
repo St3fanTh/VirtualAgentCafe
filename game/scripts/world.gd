@@ -158,7 +158,11 @@ func _draw() -> void:
 		box(x, 42, 4, 4, "82c79e")
 	box(244, 55, 3, 8, "394454")
 	box(291, 55, 3, 8, "394454")
-	text(Vector2(247, 87), "CLI TEST LAB")
+	# Keep the title above the station, clear of the bar candles and steam overlay.
+	box(239, 29, 61, 7, "202d39")
+	var lab_title := "CLI TEST LAB"
+	var lab_title_width := ThemeDB.fallback_font.get_string_size(lab_title, HORIZONTAL_ALIGNMENT_LEFT, -1, 44).x / maxf(1.0, get_global_transform().get_scale().x)
+	text(Vector2(269.5 - lab_title_width / 2, 34.5), lab_title)
 	# Conversation nook, lounge and café counter.
 	box(179, 119, 30, 13, "b98773")
 	box(182, 116, 24, 3, "d6a381")
