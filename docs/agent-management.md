@@ -300,3 +300,20 @@ success and task acceptance. See [setup instructions](project-setup.md#ergebniss
 
 Automatic shared integration and main promotion are an additional explicit team opt-in;
 see [workflow, requirements manifest and safeguards](automatic-integration.md).
+
+## Delete an agent
+
+Open **Manage agents → Agents**, select an agent and click **Delete agent**.
+Confirm the dialog to remove its active configuration and café character. Cancel
+(or Escape) leaves the agent unchanged. Stop running agents first; team deletion
+also requires all team workers and integration to be stopped.
+
+Deletion survives restart. It preserves workspace files, Git branches and commits,
+Markdown tasks and roles, execution history and logs. The configuration is archived
+internally. An affected team's automatic integration is disabled; explicitly run
+project setup again to restore a complete team. The built-in demo agents cannot
+be deleted. Deletion does not remove files or remote branches.
+
+Authenticated API clients can use `DELETE /management/agents/{id}` with JSON
+`{"confirmed": true}`. Missing confirmation is rejected; active execution blocks
+deletion. The refreshed WebSocket snapshot removes the character in connected clients.

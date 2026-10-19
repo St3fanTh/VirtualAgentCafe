@@ -38,6 +38,8 @@ var log_sequence := 0
 var action := ""
 var editing := false
 var active_agent := ""
+var delete_dialog := ConfirmationDialog.new()
+var delete_candidate := ""
 var pending_agent := ""
 var poll := Timer.new()
 var tabs: TabContainer
@@ -339,6 +341,14 @@ func build_agents(tabs: TabContainer) -> void:
 	button(actions, "Start agent", func(): control("start"))
 	button(actions, "Stop agent", func(): control("stop"))
 	button(actions, "Restart agent", func(): control("restart"))
+	button(left, "Delete agent", ask_delete_agent)
+	delete_dialog.title = "Delete agent"
+	delete_dialog.ok_button_text = "Delete agent"
+	delete_dialog.dialog_autowrap = true
+	delete_dialog.theme = theme
+	delete_dialog.confirmed.connect(confirm_delete_agent)
+	delete_dialog.canceled.connect(func(): delete_candidate = "")
+	add_child(delete_dialog)
 
 func build_definitions(tabs: TabContainer) -> void:
 	var row := page(tabs, "Markdown")
@@ -571,6 +581,14 @@ func received(_result: int, code: int, _headers: PackedStringArray, body: Packed
 			if record.get("agent_id", "") in project.get("agents", []) or record.get("agent_id", "") == project.get("integrator", ""):
 				var integration: Dictionary = project.get("integration", {})
 				execution_status.text += "\nTeam: " + str(integration.get("status", "NOT_CONFIGURED")) + " · " + str(integration.get("detail", ""))
+	elif finished_action == "delete_agent":
+		var removed := str(data.get("id", ""))
+		if pending_agent == removed:
+			pending_agent = ""
+		if active_agent == removed:
+			new_agent()
+		set_notice("Agent deleted. Workspace, Git branches, Markdown and execution history kept.")
+		pending_refresh = true
 	elif finished_action in ["mutation", "control", "review"]:
 		if finished_action == "mutation" and data.has("config") and str(completed.get("path", "")).begins_with("/agents") and completed.get("method") in [HTTPClient.METHOD_PUT, HTTPClient.METHOD_POST]:
 			if int(completed.get("revision", -1)) == form_revision:
@@ -652,6 +670,8 @@ func update_buttons() -> void:
 	var automatic := bool(selected.get("execution", {}).get("integration_validation", false))
 	buttons["Start agent"].disabled = buttons["Start agent"].disabled or automatic
 	buttons["Restart agent"].disabled = buttons["Restart agent"].disabled or automatic
+	buttons["Delete agent"].disabled = busy or running or active_agent.is_empty()
+	buttons["Delete agent"].tooltip_text = "Stop the agent before deleting it." if running else "Remove this agent; keep its workspace, Git branches and history."
 	buttons["Save configuration"].disabled = busy or running
 	var can_retry := false
 	for execution in cache.get("executions", []):
@@ -717,6 +737,12 @@ func populate() -> void:
 		var config: Dictionary = item.config
 		agent_rows.append({"id": config.id, "text": str(config.name) + " · " + str(item.state).capitalize()})
 	sync_list(agents, agent_rows)
+	if editing and not active_agent.is_empty():
+		var still_present := false
+		for row in agent_rows:
+			still_present = still_present or str(row.id) == active_agent
+		if not still_present:
+			new_agent()
 	var spaces: Array = []
 	for item in cache.get("workspaces", []):
 		spaces.append(item.id)
@@ -863,6 +889,20 @@ func save_agent() -> void:
 	execution["max_retries"] = int(retries.value)
 	var config := {"id": agent_id.text, "name": agent_name.text, "workspace": chosen(workspace), "task": chosen(task_file) if not chosen(task_file).is_empty() else null, "roles": assigned_roles, "git": git, "execution": execution}
 	call_api("mutation", "/agents/" + agent_id.text if editing else "/agents", HTTPClient.METHOD_PUT if editing else HTTPClient.METHOD_POST, config)
+
+func ask_delete_agent() -> void:
+	if active_agent.is_empty():
+		return
+	delete_candidate = active_agent
+	delete_dialog.dialog_text = "Delete agent '" + delete_candidate + "' from management?\n\nWorkspace, Git branches, Markdown and execution history will be kept. Automatic integration for its team will be disabled. Stop all team workers first."
+	delete_dialog.popup_centered(Vector2i(760, 280))
+
+func confirm_delete_agent() -> void:
+	if delete_candidate.is_empty():
+		return
+	var identifier := delete_candidate
+	delete_candidate = ""
+	call_api("delete_agent", "/agents/" + identifier, HTTPClient.METHOD_DELETE, {"confirmed": true})
 
 func control(operation: String) -> void:
 	if active_agent.is_empty():

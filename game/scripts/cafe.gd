@@ -266,6 +266,10 @@ func refresh_activity(event: Dictionary = {}) -> void:
 func on_frame(frame: Dictionary) -> void:
 	if state.apply(frame):
 		if frame.get("kind") == "snapshot":
+			for id in characters.keys():
+				if id not in ["ada", "turing"] and not state.agents.has(id):
+					characters[id].queue_free()
+					characters.erase(id)
 			for id in state.agents:
 				ensure_character(id, state.agents[id])
 				characters[id].reset_state(state.agents[id])

@@ -1,0 +1,139 @@
+import asyncio
+
+import pytest
+from fastapi.testclient import TestClient
+
+from virtual_agent_cafe.bus import EventBus
+from virtual_agent_cafe.main import create_app
+from virtual_agent_cafe.management.config import AgentConfig
+from virtual_agent_cafe.management.execution import ExecutionManager
+
+
+def agent(manager):
+    manager.workspaces.create("project")
+    manager.tasks.save("task.md", "# Task\nKeep the result files.")
+    manager.roles.save("backend.md", "# Backend\nFollow the project requirements.")
+    manager.configure(
+        AgentConfig(
+            id="backend-agent",
+            name="Backend",
+            workspace="project",
+            task="task.md",
+            roles=["backend.md"],
+        )
+    )
+    return manager.workspaces.get("project")
+
+
+async def test_deletion_survives_restart_preserves_files_git_and_history(tmp_path):
+    manager = ExecutionManager(tmp_path, EventBus())
+    workspace = agent(manager)
+    await manager.git.init("project")
+    (workspace / "result.txt").write_text("completed work")
+    await manager.git.stage("project", ["result.txt"])
+    await manager.git.commit("project", "feat: saved work")
+    before = await manager.git.info("project")
+    manager.store.put(
+        "executions",
+        "past-run",
+        {"id": "past-run", "agent_id": "backend-agent", "status": "COMPLETED"},
+    )
+    manager.store.log("past-run", {"type": "agent.finished", "detail": "Completed"})
+    queue = manager.bus.subscribe()
+    queue.get_nowait()
+    result = await manager.delete("backend-agent")
+    assert result["deleted"]
+    assert all(row["agent_id"] != "backend-agent" for row in queue.get_nowait()["agents"])
+    restored = ExecutionManager(tmp_path, EventBus())
+    assert not restored.store.list("agents")
+    assert "backend-agent" not in restored.bus.agents
+    assert restored.store.list("deleted_agents")[0]["agent"]["config"]["id"] == "backend-agent"
+    assert (workspace / "result.txt").read_text() == "completed work"
+    assert (await restored.git.info("project"))["history"] == before["history"]
+    assert restored.tasks.load("task.md")["content"].startswith("# Task")
+    assert restored.roles.load("backend.md")["content"].startswith("# Backend")
+    assert restored.store.get("executions", "past-run")["status"] == "COMPLETED"
+    assert restored.store.logs("past-run")[0]["detail"] == "Completed"
+    with pytest.raises(KeyError):
+        await restored.delete("backend-agent")
+    with pytest.raises(ValueError, match="Built-in"):
+        await restored.delete("ada")
+
+
+async def test_running_agent_and_team_integrations_must_be_stopped(tmp_path):
+    manager = ExecutionManager(tmp_path, EventBus())
+    agent(manager)
+    task = asyncio.create_task(asyncio.Event().wait())
+    manager.running["backend-agent"] = task
+    with pytest.raises(ValueError, match="Stop the agent"):
+        await manager.delete("backend-agent")
+    manager.running.pop("backend-agent")
+    manager.store.put(
+        "projects",
+        "project",
+        {
+            "id": "project",
+            "agents": ["backend-agent", "frontend-agent"],
+            "integrator": "test-agent",
+            "auto_integrate": True,
+            "status": "READY",
+        },
+    )
+    manager.integrations.running["project"] = task
+    with pytest.raises(ValueError, match="Stop all team"):
+        await manager.delete("backend-agent")
+    manager.integrations.running.pop("project")
+    manager.running["frontend-agent"] = task
+    with pytest.raises(ValueError, match="Stop all team"):
+        await manager.delete("backend-agent")
+    manager.running.pop("frontend-agent")
+    task.cancel()
+    await asyncio.gather(task, return_exceptions=True)
+    await manager.delete("backend-agent")
+    project = manager.store.get("projects", "project")
+    assert not project["auto_integrate"] and project["integration"]["status"] == "DISABLED"
+    assert project["status"] == "INCOMPLETE"
+    manager.integrations.schedule("frontend-agent")
+    assert not manager.integrations.running
+
+
+def test_delete_api_requires_auth_confirmation_and_rejects_browser_requests(tmp_path):
+    app = create_app("codex", management_root=tmp_path)
+    manager = app.state.management
+    agent(manager)
+    headers = {"Authorization": "Bearer " + manager.access.token}
+    with TestClient(app) as client:
+        assert (
+            client.request(
+                "DELETE", "/management/agents/backend-agent", json={"confirmed": True}
+            ).status_code
+            == 401
+        )
+        for body in ({}, {"confirmed": False}):
+            assert (
+                client.request(
+                    "DELETE", "/management/agents/backend-agent", headers=headers, json=body
+                ).status_code
+                == 422
+            )
+        assert (
+            client.request(
+                "DELETE",
+                "/management/agents/backend-agent",
+                headers={**headers, "Origin": "https://example.org"},
+                json={"confirmed": True},
+            ).status_code
+            == 403
+        )
+        assert manager.registry.get("backend-agent")
+        response = client.request(
+            "DELETE", "/management/agents/backend-agent", headers=headers, json={"confirmed": True}
+        )
+        assert response.status_code == 200 and response.json()["deleted"]
+        assert not client.get("/management", headers=headers).json()["agents"]
+        assert (
+            client.request(
+                "DELETE", "/management/agents/missing", headers=headers, json={"confirmed": True}
+            ).status_code
+            == 404
+        )

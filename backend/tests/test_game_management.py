@@ -18,6 +18,7 @@ ROOT = Path(__file__).resolve().parents[2]
     "script",
     [
         "test_management.gd",
+        "test_agent_deletion.gd",
         "test_gui_input.gd",
         "test_setup_input.gd",
         "test_setup_input_blocked.gd",
@@ -72,7 +73,9 @@ def test_native_management_ui_to_isolated_runtime(tmp_path, script):
                 assert time.monotonic() < deadline, "Fixture backend readiness timeout"
                 time.sleep(0.05)
         display_args = ["--headless"]
-        if (script == "test_gui_input.gd" or setup_test) and os.getenv("VAC_GUI_RENDERED") == "1":
+        if (script in {"test_gui_input.gd", "test_agent_deletion.gd"} or setup_test) and os.getenv(
+            "VAC_GUI_RENDERED"
+        ) == "1":
             display_args = [
                 "--audio-driver",
                 "Dummy",

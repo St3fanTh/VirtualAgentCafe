@@ -16,6 +16,10 @@ class EmptyInput(StrictModel):
     pass
 
 
+class DeleteInput(StrictModel):
+    confirmed: Literal[True]
+
+
 class GitInput(StrictModel):
     operation: Literal[
         "init",
@@ -141,6 +145,11 @@ def management_router(manager: ExecutionManager, validated_body, mode: str) -> A
                 return manager.configure(config)
 
         return await guarded(save)
+
+    @router.delete("/agents/{identifier}")
+    async def delete_agent(identifier: str, request: Request):
+        await validated_body(request, DeleteInput)
+        return await guarded(lambda: manager.delete(identifier))
 
     @router.put("/agents/{identifier}")
     async def edit(identifier: str, request: Request):

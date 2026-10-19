@@ -200,6 +200,7 @@ func run() -> void:
 	await click(ui.buttons["Start agent"])
 	await settled(ui)
 	check(not ui.buttons["Stop agent"].disabled, "Stop becomes enabled for a running task")
+	check(ui.buttons["Delete agent"].disabled, "Running agent cannot be deleted")
 	await click(ui.buttons["Stop agent"])
 	await settled(ui)
 	check(ui.cache.agents[0].state == "CANCELLED", "Stop button cancels the real process")

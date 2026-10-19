@@ -139,6 +139,51 @@ class ExecutionManager:
         self.broadcast_snapshot()
         return record
 
+    async def delete(self, identifier: str) -> dict:
+        async with self.control:
+            if identifier in {"ada", "turing"}:
+                raise ValueError("Built-in cafe agents cannot be deleted")
+            record = self.registry.get(identifier)
+            if identifier in self.running or record["state"] == State.RUNNING:
+                raise ValueError("Stop the agent before deleting it")
+            projects = []
+            for project in self.store.list("projects"):
+                members = [*project["agents"], project.get("integrator")]
+                if identifier not in members:
+                    continue
+                if project["id"] in self.integrations.running or any(
+                    member in self.running
+                    or (
+                        member in self.bus.agents
+                        and self.registry.get(member)["state"] == State.RUNNING
+                    )
+                    for member in members
+                    if member
+                ):
+                    raise ValueError(
+                        "Stop all team workers and integration before deleting an agent"
+                    )
+                project.update(status="INCOMPLETE", auto_integrate=False)
+                project["integration"] = {
+                    "status": "DISABLED",
+                    "detail": "A team agent was deleted; configure the team again "
+                    "to re-enable automation",
+                }
+                projects.append(project)
+            self.store.archive_agent(
+                identifier,
+                str(uuid4()),
+                {"id": identifier, "deleted_at": now(), "agent": record},
+                projects,
+            )
+            self.bus.agents.pop(identifier, None)
+            self.broadcast_snapshot()
+            return {
+                "id": identifier,
+                "deleted": True,
+                "preserved": ["workspace", "git_branches", "markdown", "execution_history"],
+            }
+
     def register(self, config: AgentConfig):
         record = self.registry.get(config.id)
         previous = None

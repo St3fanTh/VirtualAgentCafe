@@ -726,3 +726,29 @@
 - Git-Commit-ID: git log --format='%h %s' --grep='automate requirements-tested team integration to main'.
   Entwicklungsarbeit wird nur auf feat/virtual-agent-cafe-mvp gepusht; die neue
   Main-Promotion betrifft ausschließlich explizit freigeschaltete Projekt-Teams.
+
+## Agenten gezielt löschen — 2026-10-19
+
+- Implementiert: Delete agent im Agents-Tab mit Bestätigungsdialog, Abbrechen per
+  Escape und Bestätigen per Enter. Die Figur verschwindet über den echten
+  WebSocket-Snapshot; Auswahl/Formular werden aktualisiert.
+- Authentifizierter DELETE-Endpunkt verlangt explizite Bestätigung. Laufende
+  Agenten und aktive Teams blockieren das Löschen. Registry-Entfernung,
+  Konfigurationsarchiv und Deaktivierung betroffener Team-Automatisierung erfolgen
+  in einer SQLite-Transaktion; Neustart stellt gelöschte Agenten nicht wieder her.
+- Projektdateien, Git-Branches/Commits, Aufgaben, Rollen und Ausführungsprotokolle
+  bleiben erhalten. Die beiden eingebauten Demofiguren sind geschützt.
+- Dateien: management/{api,execution,storage}.py; game/scripts/{management,cafe}.gd;
+  neue backend/tests/test_agent_deletion.py und game/tests/test_agent_deletion.gd;
+  test_game_management.py, test_gui_input.gd, docs/agent-management.md, PROGRESS.md.
+- Gezielte Tests: drei Backendtests PASS (Neustart, Dateierhalt, echtes Git,
+  Historie, Team-/Laufsperre, Authentifizierung und Bestätigung); Headless-GUI PASS;
+  zusätzlicher vorhandener GUI-Lauf mit gesperrtem Delete bei laufendem Agent PASS.
+  Separater gerenderter OpenGL-Test mit echten Maus-/Tastaturereignissen PASS.
+- Grenzen: Löschen entfernt die aktive Agentenzuordnung, keine Arbeitsdateien oder
+  Remote-Branches. Unvollständige Teams müssen ausdrücklich neu konfiguriert werden.
+- Nächster Schritt: Nutzerprüfung im aktualisierten Godot-Client.
+- Git-Commit-ID: git log --format='%h %s' --grep='add safe agent deletion'.
+- Vollständige Abschlussprüfung: scripts/check.sh PASS — 154 pytest-Tests,
+  Ruff/Format, Godot-Import, Zustands-, Headless- und Live-WebSocket-Tests grün.
+  Eine bestehende Starlette/httpx-Abkündigungswarnung; keine Testfehler.

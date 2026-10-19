@@ -49,6 +49,24 @@ class Store:
             ).fetchall()
         return [json.loads(row[0]) for row in rows]
 
+    def archive_agent(self, identifier: str, archive_id: str, archive: dict, projects: list[dict]):
+        """Remove active membership and disable affected automation in one transaction."""
+        with self.lock, self.db:
+            removed = self.db.execute(
+                "DELETE FROM records WHERE kind='agents' AND id=?", (identifier,)
+            )
+            if removed.rowcount != 1:
+                raise KeyError(identifier)
+            self.db.execute(
+                "INSERT INTO records VALUES (?,?,?)",
+                ("deleted_agents", archive_id, json.dumps(archive)),
+            )
+            for project in projects:
+                self.db.execute(
+                    "UPDATE records SET data=? WHERE kind='projects' AND id=?",
+                    (json.dumps(project), project["id"]),
+                )
+
     def log(self, execution: str, data: dict):
         with self.lock, self.db:
             self.db.execute(
