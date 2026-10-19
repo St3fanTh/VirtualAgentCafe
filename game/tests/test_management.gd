@@ -78,6 +78,12 @@ func _process(_delta: float) -> bool:
 			if not cafe.characters.has(managed_id):
 				push_error("Managed agent not visible in café")
 				quit(1)
+			if cafe.characters.ada.visible or cafe.activity_cards.ada.agent_id != managed_id:
+				push_error("Idle placeholder/card must follow the managed worker")
+				quit(1)
+			if cafe.activity_cards.ada.status_label.text != "Finished":
+				push_error("Managed completion must reach the activity card")
+				quit(1)
 			ui.refresh()
 			stage = 7
 		7:

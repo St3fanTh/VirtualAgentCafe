@@ -324,3 +324,29 @@ async def test_large_role_assignments_fit_realtime_snapshot_budget(tmp_path):
     assert len(snapshot["agents"][-1]["role"]) <= 120
     assert len(manager.registry.get("backend-agent")["config"]["roles"]) == 16
     await manager.close()
+
+
+async def test_git_start_failure_is_visible_and_persisted(tmp_path, monkeypatch):
+    from virtual_agent_cafe.management.git import GitOperationError
+
+    runtime = ControlledRuntime()
+    manager = configured(tmp_path, runtime)
+    config = manager.registry.get("backend-agent")["config"]
+    config["git"] = {"enabled": True, "repository": "project", "worktree": False}
+    manager.configure(AgentConfig.model_validate(config))
+
+    async def fail(*args):
+        raise GitOperationError("Git status failed. Workspace is not writable.")
+
+    monkeypatch.setattr(manager.git, "repository", fail)
+    with pytest.raises(GitOperationError):
+        await manager.start("backend-agent")
+    assert not runtime.started.is_set()
+    assert manager.bus.agents["backend-agent"].status == EventType.ERROR
+    assert not manager.running and not manager.claims
+    restarted = ExecutionManager(tmp_path, EventBus(), runtime)
+    assert restarted.registry.get("backend-agent")["state"] == "FAILED"
+    assert restarted.bus.agents["backend-agent"].status == EventType.ERROR
+    assert "not writable" in restarted.bus.agents["backend-agent"].detail
+    assert restarted.tasks.load("task.md")["content"].startswith("# Task")
+    assert restarted.roles.load("backend.md")["content"].startswith("# Backend")

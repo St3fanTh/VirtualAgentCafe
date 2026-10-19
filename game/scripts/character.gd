@@ -4,6 +4,7 @@ signal selected(agent_id: String)
 
 var agent_id := "ada"
 var role_label := ""
+var display_name := ""
 var status := "agent.waiting"
 var detail := "Ready"
 var source := "system"
@@ -22,7 +23,9 @@ const MIN_EVENT_DWELL := 0.65
 
 func reset_state(state: Dictionary) -> void:
 	presentation_queue.clear()
-	last_sequence = -1
+	# A configuration snapshot must not restart an unchanged worker's animation.
+	if int(state.get("sequence", 0)) != last_sequence or str(state.get("status", "agent.waiting")) != status:
+		last_sequence = -1
 	update_state(state)
 
 func enqueue_state(state: Dictionary) -> void:
@@ -54,6 +57,14 @@ func update_state(state: Dictionary) -> void:
 		bubble = detail if status == "agent.message" else ""
 		bubble_left = 8.0
 	queue_redraw()
+
+func short_label() -> String:
+	if "frontend" in role_label.to_lower() or agent_id == "turing":
+		return "Frontend"
+	if "backend" in role_label.to_lower() or agent_id == "ada":
+		return "Backend"
+	var title := display_name if not display_name.is_empty() else agent_id.capitalize()
+	return title.left(17) + "…" if title.length() > 18 else title
 
 func destination() -> Vector2:
 	var second := agent_id == "turing" or "frontend" in role_label.to_lower()
@@ -128,7 +139,7 @@ func _draw() -> void:
 			rect(8, -12 + phase, 3, 1, Color("82d8aa"))
 			rect(12, -10, 6, 0.5, Color("82d8aa"))
 			rect(7, -6, 12, 1, Color("9a8472"))
-		"agent.thinking":
+		"agent.started", "agent.thinking":
 			for i in range(3):
 				rect(-4 + i * 4, -27, 2, 2, Color("aab5f5") if int(clock * 3) % 3 == i else dark)
 		"agent.message":
@@ -159,8 +170,10 @@ func _draw() -> void:
 	draw_set_transform(Vector2(-badge_width / 2 + 2.5, -31), 0.0, Vector2.ONE / draw_scale)
 	draw_string(font, Vector2.ZERO, badge, HORIZONTAL_ALIGNMENT_LEFT, -1, 36, tint.lightened(0.25))
 	draw_set_transform(Vector2.ZERO)
-	draw_set_transform(Vector2(-9, 15), 0.0, Vector2.ONE / draw_scale)
-	draw_string(font, Vector2.ZERO, agent_id.capitalize() + (" · " + role_label if not role_label.is_empty() else (" · Backend" if agent_id == "ada" else " · Frontend")), HORIZONTAL_ALIGNMENT_LEFT, -1, 36, Color("f2e9dc"))
+	var title := short_label()
+	var title_width := font.get_string_size(title, HORIZONTAL_ALIGNMENT_LEFT, -1, 36).x
+	draw_set_transform(Vector2(-title_width / draw_scale / 2, 15), 0.0, Vector2.ONE / draw_scale)
+	draw_string(font, Vector2.ZERO, title, HORIZONTAL_ALIGNMENT_LEFT, -1, 36, Color("f2e9dc"))
 	draw_set_transform(Vector2.ZERO)
 	if bubble != "" and bubble_left > 0:
 		var text := bubble.left(42)

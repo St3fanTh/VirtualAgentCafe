@@ -527,7 +527,7 @@ func received(_result: int, code: int, _headers: PackedStringArray, body: Packed
 		setup_result.text += "Branch: " + str(data.get("git", {}).get("branch", "")) + "\nOrigin: " + str(data.get("remote", "")) + "\n" + str(data.get("remote_status", "")) + "\n\n" + str(data.get("dirty_warning", ""))
 	elif finished_action == "setup_team":
 		setup_feedback("Team ready. Open Agents to start each worker.")
-		setup_result.text = "TEAM READY\n\n" + "\n".join(data.get("agents", [])) + "\n\nTwo separate worktrees and branches are ready. No agent has started.\n\nNext: open Agents, review each Markdown task and its interface contract, then Start agent. Review diffs and tests before accepting results. No automatic push or merge."
+		setup_result.text = "TEAM READY\n\n" + "\n".join(data.get("agents", [])) + "\n\nTwo persistent worktrees and branches are ready. Worker files are saved there, not in your source folder. No agent has started.\n\nNext: open Agents, review each Markdown task and its interface contract, then Start agent. Review diffs and tests before accepting results. No automatic push or merge."
 		setup_ready = false
 		pending_refresh = true
 		set_notice("Project configured. Review tasks, then start your team in Agents.")
@@ -544,7 +544,7 @@ func received(_result: int, code: int, _headers: PackedStringArray, body: Packed
 		set_notice("Repository information updated.")
 	elif finished_action == "logs" and completed.get("execution", "") == selected_execution:
 		var record: Dictionary = data.get("execution", {})
-		execution_status.text = str(record.get("status", "")) + " · " + str(record.get("acceptance", "")) + "\nWorkspace: " + str(record.get("workspace_path", "")) + " · Branch: " + str(record.get("branch", ""))
+		execution_status.text = str(record.get("status", "")) + " · " + str(record.get("acceptance", "")) + "\nFiles saved in: " + str(record.get("workspace_path", "")) + " · Branch: " + str(record.get("branch", ""))
 		for entry in data.get("logs", []):
 			if int(entry.get("sequence", 0)) <= log_sequence:
 				continue

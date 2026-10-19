@@ -7,6 +7,10 @@ from .files import WorkspaceManager
 from .sandbox import Sandbox
 
 
+class GitOperationError(ValueError):
+    """A sanitized failure of an approved Git subprocess."""
+
+
 class GitService:
     """Typed operations only. No shell, aliases, hooks, forced updates or automatic merge."""
 
@@ -87,18 +91,27 @@ class GitService:
             env=env,
             start_new_session=True,
             stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.DEVNULL,
+            stderr=asyncio.subprocess.PIPE,
         )
         try:
             async with asyncio.timeout(30):
-                output = bytearray()
-                while chunk := await process.stdout.read(65536):
-                    output.extend(chunk)
-                    if len(output) > 1024 * 1024:
-                        raise ValueError("Git output exceeds 1 MiB; narrow the requested diff")
+
+                async def bounded_read(stream, limit):
+                    output = bytearray()
+                    while chunk := await stream.read(65536):
+                        output.extend(chunk)
+                        if len(output) > limit:
+                            raise ValueError("Git output exceeds limit; narrow the requested diff")
+                    return bytes(output)
+
+                output, errors = await asyncio.gather(
+                    bounded_read(process.stdout, 1024 * 1024),
+                    bounded_read(process.stderr, 65536),
+                )
                 if await process.wait():
-                    raise ValueError(
-                        "Git operation failed; check repository, branch and permissions"
+                    operation = next((a for a in arguments if not a.startswith("-")), "command")
+                    raise GitOperationError(
+                        self.failure(operation, errors.decode("utf-8", errors="replace"))
                     )
                 return output.decode("utf-8", errors="replace")
         finally:
@@ -109,6 +122,59 @@ class GitService:
             except ProcessLookupError:
                 pass
             await process.wait()
+
+    @staticmethod
+    def failure(operation: str, stderr: str) -> str:
+        # Classify stderr; never expose Git output containing remote URLs or credentials.
+        text = stderr.lower()
+        reason = "Check repository metadata, branch and filesystem permissions."
+        for fragments, advice in (
+            (
+                ("already checked out", "already used by worktree"),
+                "Branch is already assigned to another worktree. Select a different "
+                "branch; existing files are preserved.",
+            ),
+            (
+                (
+                    "could not create leading directories",
+                    "permission denied",
+                    "read-only file system",
+                ),
+                "Workspace or Git metadata is not writable. Check the mounted folder's "
+                "user permissions.",
+            ),
+            (
+                ("index.lock", "cannot lock ref", "unable to create", "already exists"),
+                "Git lock or destination conflict. Check other Git processes and "
+                "existing branches/worktrees; no files were removed.",
+            ),
+            (
+                ("dubious ownership",),
+                "Git rejected repository ownership. Check the approved workspace mount.",
+            ),
+            (
+                ("not a git repository", "invalid gitfile"),
+                "Repository/worktree metadata is missing or refers to an unavailable "
+                "path. Check the project mount.",
+            ),
+            (
+                ("bad object", "invalid reference", "ambiguous argument"),
+                "Requested commit or branch is unavailable. Check the initial commit and "
+                "selected branch.",
+            ),
+            (
+                ("host key verification failed",),
+                "SSH host verification failed. Configure trusted known_hosts in the backend.",
+            ),
+            (
+                ("publickey", "authentication failed"),
+                "Remote authentication failed. Check SSH-agent forwarding and repository access.",
+            ),
+        ):
+            if any(fragment in text for fragment in fragments):
+                reason = advice
+                break
+        return f"Git {operation} failed. {reason}"
 
     @staticmethod
     def branch_name(name: str) -> str:

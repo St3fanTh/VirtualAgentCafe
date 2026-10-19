@@ -148,3 +148,22 @@ async def test_approved_bind_mount_with_different_owner(tmp_path, monkeypatch):
     workspaces.create("agent")
     await git.worktree("project", "agent", "agent/worker/task")
     assert (await git.info("agent"))["branch"] == "agent/worker/task"
+
+
+async def test_branch_conflict_reports_operation_and_preserves_worktrees(tmp_path):
+    workspaces = WorkspaceManager(tmp_path / "workspaces", Store(tmp_path))
+    git = GitService(workspaces)
+    for name in ("project", "first", "second"):
+        workspaces.create(name)
+    await git.init("project")
+    source = workspaces.get("project")
+    (source / "README.md").write_text("original")
+    await git.stage("project", ["README.md"])
+    await git.commit("project", "feat: initial")
+    first = await git.worktree("project", "first", "agent/shared/task")
+    (first / "unsaved.txt").write_text("keep this work")
+    with pytest.raises(ValueError, match="Git worktree failed.*already assigned"):
+        await git.worktree("project", "second", "agent/shared/task")
+    assert (first / "unsaved.txt").read_text() == "keep this work"
+    assert (source / "README.md").read_text() == "original"
+    assert "secret" not in GitService.failure("fetch", "secret: authentication failed")

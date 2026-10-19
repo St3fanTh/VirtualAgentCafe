@@ -12,7 +12,7 @@ from ..models import AgentState, Event, EventType, Payload
 from . import git_helper
 from .config import AgentConfig, Identifier, State, TaskState
 from .files import ApprovedFiles, MarkdownManager, WorkspaceManager
-from .git import GitService
+from .git import GitOperationError, GitService
 from .project_documents import load_documents
 from .registry import AgentRegistry
 from .sandbox import IsolatedCodexAdapter, Sandbox
@@ -133,15 +133,44 @@ class ExecutionManager:
         return record
 
     def register(self, config: AgentConfig):
+        record = self.registry.get(config.id)
+        previous = None
+        if record.get("last_execution"):
+            previous = self.store.get("executions", record["last_execution"])
+        status = EventType.WAITING
+        if record["state"] in {State.FAILED, State.CANCELLED}:
+            status = EventType.ERROR
+        elif record["state"] == State.COMPLETED:
+            status = EventType.FINISHED
         self.bus.agents[config.id] = ManagedState(
             agent_id=config.id,
+            status=status,
             name=config.name,
             role=(", ".join(config.roles) or "custom")[:120],
-            detail="Configured; ready for a Markdown task",
+            detail=record.get("last_error")
+            or (previous["detail"] if previous else "Configured; ready for a Markdown task"),
             source="system",
         )
 
     async def start(self, identifier: str) -> dict:
+        try:
+            return await self._start(identifier)
+        except GitOperationError as error:
+            self.registry.update(
+                identifier, state=State.FAILED, task_state=TaskState.FAILED, last_error=str(error)
+            )
+            self.bus.publish(
+                ManagedEvent(
+                    agent_id=identifier,
+                    type=EventType.ERROR,
+                    correlation_id=uuid4(),
+                    sequence=self.bus.sequence + 1,
+                    payload=ManagedPayload(source="system", detail=str(error)[:256]),
+                )
+            )
+            raise
+
+    async def _start(self, identifier: str) -> dict:
         async with self.control:
             if self.closing or identifier in self.running:
                 raise ValueError("Agent is already running or controller is stopping")
@@ -242,6 +271,7 @@ class ExecutionManager:
                 state=State.RUNNING,
                 task_state=TaskState.RUNNING,
                 last_execution=run_id,
+                last_error=None,
                 branch=run["branch"],
             )
             self.claims[config.workspace] = identifier

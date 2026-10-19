@@ -241,3 +241,37 @@ Wiederaufnahme, Konflikte, Pfad-/API-Schutz, Launcher-Mounts und Tokenbehandlung
 Ereignissen gegen einen separaten Testserver. Nur der Codex-Anmeldestatus wird im
 Fixture ersetzt; Git und Namespace-Prüfung laufen tatsächlich. Kein bezahlter
 Modellaufruf und kein externer Git-Dienst ist für diese Tests nötig.
+
+## Wo liegen die Arbeitsergebnisse?
+
+Die beiden Worker bearbeiten getrennte Projektkopien in persistenten Git-Worktrees,
+zum Beispiel `/workspaces/simulationworld-9e6a873f-backend` und
+`/workspaces/simulationworld-9e6a873f-frontend`. Der ursprüngliche Projektordner wird
+nicht automatisch mit diesen Änderungen zusammengeführt. Im Godot-Dialog unter
+**Executions** den Lauf auswählen: **Files saved in** zeigt den genauen Pfad und
+daneben steht die zugehörige Branch. **Workspaces → Git** zeigt Status und Commits.
+Ein fehlgeschlagener Lauf kann Teiländerungen enthalten; scheitert bereits die
+Git-Vorbereitung, wurde der Worker noch nicht ausgeführt.
+
+Dateien aus dem Backend auf den Docker-Host kopieren (Pfade aus dem Dialog übernehmen):
+
+```bash
+docker compose cp backend:/workspaces/simulationworld-9e6a873f-backend ./backend-ergebnis
+docker compose cp backend:/workspaces/simulationworld-9e6a873f-frontend ./frontend-ergebnis
+```
+
+Diese Kopien dienen zur Dateiansicht. Ihre `.git`-Datei verweist weiterhin auf
+Containerpfade; Git-Status, Diffs und Commits deshalb über die Verwaltung oder im
+ursprünglichen Container prüfen. Die beiden Projektstände müssen nach Review
+bewusst integriert werden. Es gibt keinen automatischen Merge oder Push.
+
+`runtime` speichert Aufgaben, Rollen, Konfiguration und Ausführungshistorie;
+`agent_workspaces` speichert die bearbeiteten Projektdateien. Normale Container-
+Neuerstellung erhält diese benannten Compose-Volumes. `docker compose down -v`
+löscht sie. Verwende dieselbe Compose-Projektidentität, damit beim nächsten Start
+dieselben Volumes eingebunden werden.
+
+Bei einem Git-Fehler während der Team-Einrichtung bleiben bereits gespeicherte
+Aufgaben und Agentenkonfigurationen erhalten. Nach Beheben der konkret genannten
+Ursache kann die Einrichtung wiederholt werden. Bestehende Arbeitsdateien werden
+nicht entfernt, gesperrte Branches nicht automatisch freigegeben.

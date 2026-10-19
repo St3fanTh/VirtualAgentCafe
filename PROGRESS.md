@@ -599,3 +599,28 @@
   Kontos oder Modellverfügbarkeit. Nutzer-Anmeldung wurde nicht gelesen/geändert.
 - Commit-ID: git log --format='%h %s' --grep='use supported Codex login status command'.
   Feature-Branch wird synchronisiert; kein automatischer Main-Merge.
+
+## Worker M6 — Sichtbare Aktivität, Git-Fehler und erhaltene Ergebnisse
+- Kurze, zentrierte Figurenbeschriftung (Backend/Frontend; andere Namen maximal
+  18 Zeichen). Große Karten und Arbeitsplätze folgen den eingerichteten Workern;
+  deren unbenutzte Ada/Turing-Platzhalter werden ausgeblendet. Unveränderte
+  Snapshots setzen die Animation nicht mehr zurück; STARTING hat eine Animation.
+- Gespeicherte Abschluss-/Fehlerzustände werden nach Neustart wieder angezeigt.
+  Git-Vorbereitungsfehler erreichen den Eventstream und bleiben im Agentenstatus.
+  Teamkonfiguration wird vor Git-Vorbereitung gespeichert, auch bei Teilfehlern;
+  die Einrichtung bleibt wiederaufnehmbar und erhält bestehende Arbeitsdateien.
+- Git-Fehler nennen Operation und klassifizierte Ursache (Branch-Konflikt,
+  Rechte, Locks, Metadaten, SSH); rohe stderr-Ausgaben werden nicht veröffentlicht.
+  Die konkrete Ursache im Nutzercontainer ist ohne die neue Diagnose noch unbekannt.
+- Ergebnisordner im Ausführungsdialog verdeutlicht; docs/project-setup.md erklärt
+  persistente Worktrees, Kopieren der Dateien und Unterschiede zum Quellprojekt.
+- Dateien: management/{git,execution,setup}.py; deren drei Backend-Testdateien;
+  game/scripts/{cafe,character,management}.gd; game/tests/{test_states,test_management}.gd;
+  docs/project-setup.md und PROGRESS.md.
+- Validierung: scripts/check.sh PASS: 131 pytest-Tests, Ruff/Format, Godot-Import,
+  Zustands-, Headless- und Live-WebSocket-Tests. Nach erweiterter Speicherung vor
+  Git-Vorbereitung: 13 Setup-Tests erneut PASS, inklusive frischem Controller auf
+  derselben SQLite-Datei und erhaltener Konfiguration/Rollen/Aufgaben nach Fehler.
+- Git-Commit-ID: git log --format='%h %s' --grep='preserve worker setup and show managed activity'.
+- Nächster Schritt: explizit gewünschtes Hochladen auf eigene Agenten-Branches;
+  dies war bisher absichtlich gesperrt und wird separat implementiert/getestet.

@@ -118,6 +118,15 @@ async def test_conflicts_preserve_files_and_partial_setup_can_resume(tmp_path, m
     with pytest.raises(ValueError, match="Interrupted"):
         await setup.create(data)
     assert manager.store.get("projects", "sample")["status"] == "PREPARING"
+    from virtual_agent_cafe.bus import EventBus
+    from virtual_agent_cafe.management.execution import ExecutionManager
+
+    # Open the actual persisted store with a fresh controller, as on container restart.
+    restored = ExecutionManager(manager.contexts.root.parent, EventBus(), recover=False)
+    assert len(restored.store.list("agents")) == 2
+    assert restored.registry.get("sample-frontend")["state"] == "FAILED"
+    assert restored.tasks.load("sample-frontend.md")["content"]
+    assert restored.roles.load("sample-frontend.md")["content"]
     manager.tasks.save("sample-backend.md", "# Changed during recovery\nKeep me")
     monkeypatch.setattr(manager.git, "worktree", worktree)
     assert (await setup.create(data))["status"] == "READY"

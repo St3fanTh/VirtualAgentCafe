@@ -57,6 +57,16 @@ func _init() -> void:
 	visual.reset_state({"status": "agent.error", "sequence": 0})
 	check(visual.presentation_queue.is_empty(), "Snapshot clears stale animation queue")
 	check(visual.status == "agent.error", "Snapshot immediately authoritative")
+	visual.role_label = "simulationworld-9e6a873f-backend.md"
+	check(visual.short_label() == "Backend", "Managed labels omit project IDs and role filenames")
+	visual.role_label = "custom"
+	visual.display_name = "An extremely long agent name that must fit"
+	check(visual.short_label().length() <= 18, "Custom agent label is bounded")
+	visual.reset_state({"status": "agent.coding", "sequence": 101})
+	visual._process(0.3)
+	var elapsed: float = visual.clock
+	visual.reset_state({"status": "agent.coding", "sequence": 101})
+	check(visual.clock == elapsed, "Unchanged snapshots preserve animation progress")
 	visual.free()
 	check(state.apply({"kind": "snapshot", "version": 1, "sequence": 0, "agents": [
 		{"agent_id": "ada", "status": "agent.waiting"},

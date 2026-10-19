@@ -7,7 +7,7 @@ import shutil
 
 from pydantic import Field, TypeAdapter, field_validator
 
-from .config import AgentConfig, Identifier, StrictModel
+from .config import AgentConfig, Identifier, State, StrictModel, TaskState
 from .sandbox import Sandbox
 
 
@@ -309,9 +309,34 @@ class ProjectSetup:
                             "do not invent completed work.\n"
                         ),
                     )
-                await manager.git.worktree(data.project, config.workspace, config.git.branch)
+                # Persist assignments before Git preparation so a failed mount/branch
+                # operation does not make the user's configured worker disappear.
                 if not any(a["config"]["id"] == config.id for a in manager.store.list("agents")):
                     manager.configure(config)
+                try:
+                    await manager.git.worktree(data.project, config.workspace, config.git.branch)
+                except ValueError as error:
+                    manager.registry.update(
+                        config.id,
+                        state=State.FAILED,
+                        task_state=TaskState.FAILED,
+                        last_error=str(error)[:256],
+                    )
+                    manager.register(
+                        AgentConfig.model_validate(manager.registry.get(config.id)["config"])
+                    )
+                    manager.broadcast_snapshot()
+                    raise
+                manager.registry.update(
+                    config.id,
+                    state=State.CONFIGURED,
+                    task_state=TaskState.ASSIGNED,
+                    last_error=None,
+                )
+                manager.register(
+                    AgentConfig.model_validate(manager.registry.get(config.id)["config"])
+                )
+                manager.broadcast_snapshot()
             record["status"] = "READY"
             manager.store.put("projects", data.project, record)
             return record

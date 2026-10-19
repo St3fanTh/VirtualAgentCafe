@@ -227,6 +227,7 @@ func ensure_character(id: String, data: Dictionary) -> void:
 	var character = Character.new()
 	character.agent_id = id
 	character.role_label = str(data.get("role", "custom")).trim_suffix(".md")
+	character.display_name = str(data.get("name", id))
 	character.position = Vector2(145 + (characters.size() - 2) % 5 * 20, 140)
 	character.tint = Color.from_hsv(float(characters.size()) * 0.15, 0.4, 0.9)
 	character.z_index = 3
@@ -234,26 +235,44 @@ func ensure_character(id: String, data: Dictionary) -> void:
 	world.add_child(character)
 	characters[id] = character
 
+func refresh_activity(event: Dictionary = {}) -> void:
+	var slots := {"ada": "ada", "turing": "turing"}
+	for id in state.agents:
+		if id in ["ada", "turing"]:
+			continue
+		var role := str(state.agents[id].get("role", "")).to_lower()
+		var slot := "turing" if "frontend" in role else "ada" if "backend" in role else ""
+		if not slot.is_empty():
+			# Prefer a worker with observed activity over an unstarted configuration.
+			if slots[slot] == slot or int(state.agents[id].get("sequence", 0)) > int(state.agents[slots[slot]].get("sequence", 0)):
+				slots[slot] = id
+	var summaries: Array[String] = []
+	for slot in slots:
+		var id: String = slots[slot]
+		characters[slot].visible = id == slot
+		var data: Dictionary = state.agents.get(id, {})
+		var card = activity_cards[slot]
+		if card.agent_id != id:
+			card.agent_id = id
+			card.history.clear()
+			card.history_label.text = ""
+		card.heading.text = characters[id].short_label().to_upper()
+		card.tooltip_text = id
+		card.update_state(data, event if event.get("agent_id", "") == id else {})
+		world.set_agent_status(slot, str(data.get("status", "agent.waiting")), str(data.get("detail", "")))
+		summaries.append(characters[id].short_label() + " · " + state.state_label(id))
+	status_label.text = "     |     ".join(summaries)
+
 func on_frame(frame: Dictionary) -> void:
 	if state.apply(frame):
 		if frame.get("kind") == "snapshot":
 			for id in state.agents:
 				ensure_character(id, state.agents[id])
 				characters[id].reset_state(state.agents[id])
-				if id in ["ada", "turing"]:
-					world.set_agent_status(id, state.agents[id].status, state.agents[id].get("detail", ""))
-				if activity_cards.has(id):
-					activity_cards[id].history.clear()
-					activity_cards[id].history_label.text = "Snapshot synchronized"
-					activity_cards[id].update_state(state.agents[id])
 		else:
 			var id: String = frame.event.agent_id
 			characters[id].enqueue_state(state.agents[id])
-			if id in ["ada", "turing"]:
-				world.set_agent_status(id, state.agents[id].status, state.agents[id].get("detail", ""))
-			if activity_cards.has(id):
-				activity_cards[id].update_state(state.agents[id], frame.event)
-		status_label.text = "Ada / Backend · %s     |     Turing / Frontend · %s" % [state.state_label("ada"), state.state_label("turing")]
+		refresh_activity(frame.get("event", {}))
 	elif state.needs_snapshot:
 		network.force_reconnect()
 
