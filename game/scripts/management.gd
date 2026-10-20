@@ -593,6 +593,7 @@ func received(_result: int, code: int, _headers: PackedStringArray, body: Packed
 	elif finished_action in ["delete_project", "delete_projects"]:
 		var removed_ids := project_delete_ids.duplicate()
 		var removed_agents: Array = []
+		var removed_workspaces: Array = []
 		var remaining_projects: Array = []
 		for project in cache.get("projects", []):
 			if str(project.get("id", "")) not in removed_ids:
@@ -602,13 +603,18 @@ func received(_result: int, code: int, _headers: PackedStringArray, body: Packed
 				if not str(project.get("integrator", "")).is_empty():
 					removed_agents.append(str(project.integrator))
 		cache["projects"] = remaining_projects
+		for agent in cache.get("agents", []):
+			if str(agent.get("config", {}).get("id", "")) in removed_agents:
+				removed_workspaces.append(str(agent.get("config", {}).get("workspace", "")))
 		cache["agents"] = cache.get("agents", []).filter(func(agent):
 			return str(agent.get("config", {}).get("id", "")) not in removed_agents)
+		cache["workspaces"] = cache.get("workspaces", []).filter(func(item):
+			return str(item.get("id", "")) not in removed_workspaces)
 		project_delete_ids.clear()
 		delete_all_projects_pending = false
 		setup_ready = false
 		setup_result.text = "Project management entries and clean worker worktrees removed. Source repositories, Git branches and execution history kept."
-		set_notice("Managed project deleted. Refresh the project list to see remaining repositories.")
+		set_notice("Managed project and assigned worker workspaces deleted; source repository kept.")
 		populate()
 		call_api("setup_projects", "/setup")
 	elif finished_action == "delete_agent":

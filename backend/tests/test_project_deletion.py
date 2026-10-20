@@ -74,6 +74,7 @@ async def test_delete_project_removes_clean_worktrees_and_archives_history(tmp_p
     assert manager.store.get("executions", "run-1")["agent_id"] == worker.id
     assert not manager.workspaces.files.path(worker.workspace).exists()
     assert not manager.workspaces.files.path(second.workspace).exists()
+    assert {workspace["id"] for workspace in manager.store.list("workspaces")} == {"project"}
     assert "refs/heads/agent/project-backend/implementation" in (
         await manager.git.run(source, "for-each-ref", "--format=%(refname)", "refs/heads/")
     )

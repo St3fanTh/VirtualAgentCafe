@@ -849,3 +849,27 @@
   nachverfolgt; Commit und Push erfolgen nach dieser Prüfung.
 - Offen: keine bekannte Implementierungslücke in diesem Meilenstein. Grafische
   Sichtprüfung auf dem Windows-/WSL-Zielhost bleibt erforderlich.
+
+## Löschansicht aktualisiert zugewiesene Workspaces — 2026-10-20
+
+- Befund: Nach bestätigter Projektlöschung wurden Backend-Workspace-Zuordnungen
+  und Worktree-Ordner entfernt, aber der Godot-Client behielt die alten
+  Workspace-Datensätze im lokalen Cache. Dadurch wirkten zugewiesene Workspaces
+  weiterhin vorhanden.
+- Behoben: Erfolgsantwort entfernt jetzt Projekt, Teamagenten und deren
+  zugewiesene Worker-Workspaces aus dem UI-Cache und aktualisiert die Ansichten.
+  Der Workspace des ausgewählten Quellrepositories bleibt sichtbar.
+- Tests: Godot-Setup-GUI bestätigt vor/nachher die Workspace-Zahlen und den
+  erhaltenen Quellworkspace; Backend-Löschtest prüft die persistierten Workspace-
+  Datensätze. Gezielter nativer GUI-Test PASS.
+- Vollständige `scripts/check.sh` PASS: 163 pytest-Tests, Ruff/Format, Godot-Import,
+  Zustands-/Headless-Test und Live-WebSocket-Smoke. Godot-Setup-GUI-Regression
+  einschließlich Worker-Workspace-Löschung PASS.
+- GitHub-CI-Prüfung: `main` zeigt auf `a0954cd`; dessen kompletter lokaler Check
+  besteht mit 113 Tests plus Godot- und WebSocket-Tests. GitHub meldet für Actions
+  Run #17 nur den Sammelschritt `Unit, integration and Godot checks` als fehlgeschlagen;
+  öffentliche Annotations enthalten keine Testausgabe. Die Warnungen zu Node 20
+  und Ubuntu-Migration erklären den Fehler nicht. Konkreter Runner-Unterschied ist
+  ohne authentifizierte Job-Logs nicht belegt.
+- Git-Commit-ID: wird über `git log --grep='remove deleted worker workspaces from setup UI'`
+  nachverfolgt.

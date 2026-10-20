@@ -80,6 +80,7 @@ func run() -> void:
 	await settled(ui)
 	check(ui.setup_result.text.contains("TEAM READY"), "Creation result is shown")
 	check(ui.cache.agents.size() == 2, "Both agents persist via API")
+	check(ui.cache.workspaces.size() == 3, "Source and worker workspaces are listed before deletion")
 	for agent in ui.cache.agents:
 		check(agent.state == "CONFIGURED", "Setup never starts model tasks")
 		check(not agent.config.git.allow_push, "Push disabled by default")
@@ -109,7 +110,8 @@ func run() -> void:
 	await settled(ui)
 	check(ui.cache.projects.is_empty(), "Confirmed delete-all removes all managed projects")
 	check(ui.cache.agents.is_empty(), "Project deletion removes its team agents")
-	check(ui.cache.workspaces.size() >= 1, "Source repository workspace remains available")
+	check(ui.cache.workspaces.size() == 1, "Project deletion removes its assigned worker workspaces")
+	check(ui.cache.workspaces[0].id == "wizard-project", "Source repository workspace remains available")
 	await click(ui.buttons["Close"])
 	check(not ui.visible, "Wizard can be closed")
 	cafe.queue_free()
