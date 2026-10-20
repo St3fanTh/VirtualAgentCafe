@@ -28,6 +28,8 @@ jobs:
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y bubblewrap
+      - name: Require real workspace isolation on the CI runner
+        run: bash scripts/ci-sandbox.sh
       - name: Ruff lint and formatting
         run: scripts/check.sh lint
       - name: Backend API tests

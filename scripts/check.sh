@@ -23,6 +23,7 @@ run_pytest() {
     local result=$?
     "$PYTHON" - "$report" "${GITHUB_STEP_SUMMARY:-}" <<'PY'
 import sys
+import re
 import xml.etree.ElementTree as ET
 
 report, summary_path = sys.argv[1:]
@@ -35,13 +36,20 @@ for case in root.iter("testcase"):
     if problem is not None:
         name = "::".join(part for part in (case.get("classname"), case.get("name")) if part)
         kind = problem.get("type", "TestFailure").split(".")[-1]
-        failures.append((name, kind))
-for name, kind in failures:
-    print(f"::error title=Pytest failure::{name} ({kind})")
+        location = re.search(r'backend/tests/([^"\n]+\.py):([0-9]+)', problem.text or "")
+        target = f"backend/tests/{location.group(1)}" if location else ""
+        line = location.group(2) if location else ""
+        failures.append((name, kind, target, line))
+for name, kind, target, line in failures:
+    location = f",file={target},line={line}" if target else ""
+    print(f"::error title=Pytest failure{location}::{name} ({kind})")
 if summary_path and failures:
     with open(summary_path, "a", encoding="utf-8") as summary:
         summary.write("\n### Pytest failures\n\n")
-        summary.writelines(f"- `{name}` — `{kind}`\n" for name, kind in failures)
+        summary.writelines(
+            f"- `{name}` — `{kind}`" + (f" at `{target}:{line}`" if target else "") + "\n"
+            for name, kind, target, line in failures
+        )
 PY
     rm -f "$report"
     return "$result"

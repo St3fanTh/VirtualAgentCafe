@@ -911,9 +911,28 @@
   GitHub-Annotation und Job-Zusammenfassung aus; sensible Tracebacks bleiben im
   privaten Runner-Log. Vollcheck mit dieser Änderung erneut PASS (163 pytest und
   sämtliche Ruff-/Godot-/WebSocket-Prüfungen).
+- Die Annotation identifiziert nun auch den Quellcode-Zeilenort des Testfehlers,
+  ohne Assertion-Werte oder Traceback-Inhalte offenzulegen.
 - Nach der Korrektur: gezielte Sandbox-Diagnose 10/10 PASS; erneuter Gesamtcheck
   163 pytest PASS, Ruff/Format, Godot-Import, Zustands-/Headless-Tests und
   Live-WebSocket-Smoke PASS.
 - Commit: `git log --format='%h %s' -1` (Push nach `feat/virtual-agent-cafe-mvp`).
 - Dateien: `.github/workflows/ci.yml`, `scripts/check.sh`, `PROGRESS.md`.
 - Git-Commit-ID: nach erfolgreicher CI-Workflow-Prüfung eintragen.
+
+## CI-Sandbox als Voraussetzung prüfen — 2026-10-20
+
+- Korrektur zur bisherigen Diagnose: Der genaue Fehler auf `main` ist noch nicht
+  aus Logs bestätigt; Dateinamen neuer Feature-Tests belegen keinen Fehlerort auf
+  dem älteren main-Stand. Die Lockerung des Sandbox-Diagnosetests verdeckte eine
+  notwendige Voraussetzung und wurde zurückgenommen.
+- CI prüft jetzt vor allen Tests echte Namespace-Isolation. Bei nachgewiesenem
+  `namespace_denied` und aktiver Ubuntu-AppArmor-Userns-Sperre wird ausschließlich
+  für `/usr/bin/bwrap` ein Profil auf dem temporären Runner geladen. Anschließend
+  muss die echte Sandbox-Probe bestehen. Keine Änderungen an Produktionshosts.
+- Grundlage: Ubuntu-Dokumentation zu AppArmor und unprivilegierten User-Namespaces.
+- Pytest-Annotationen enthalten zusätzlich den Testdatei-Zeilenort, keine Werte.
+- Validierung und GitHub-Ergebnis werden nach Abschluss ergänzt.
+- Lokale Validierung: `scripts/check.sh` vollständig PASS, 163 pytest, Ruff,
+  Godot-Import/States/Headless und WebSocket-Smoke. Shell-Syntaxprüfung PASS.
+- Commit auffindbar mit `git log --grep='prepare real namespace isolation on CI runners'`.
