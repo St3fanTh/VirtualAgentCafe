@@ -40,8 +40,16 @@ jobs:
         run: scripts/check.sh pytest-roles
       - name: Sandbox diagnostics tests
         run: scripts/check.sh pytest-sandbox
-      - name: Agent, project and workspace management tests
-        run: scripts/check.sh pytest-management
+      - name: Agent deletion tests
+        run: scripts/check.sh pytest-agent-deletion
+      - name: Management definition tests
+        run: scripts/check.sh pytest-management-definitions
+      - name: Project deletion tests
+        run: scripts/check.sh pytest-project-deletion
+      - name: Project document tests
+        run: scripts/check.sh pytest-project-documents
+      - name: Project setup tests
+        run: scripts/check.sh pytest-project-setup
       - name: Execution, Git and team integration tests
         run: scripts/check.sh pytest-execution
       - name: Godot UI API and interaction tests

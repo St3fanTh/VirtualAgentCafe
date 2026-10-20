@@ -43,6 +43,21 @@ run_stage() {
     pytest-management)
       "$PYTHON" -m pytest backend/tests/test_agent_deletion.py backend/tests/test_management_definitions.py backend/tests/test_project_deletion.py backend/tests/test_project_documents.py backend/tests/test_project_setup.py -q
       ;;
+    pytest-agent-deletion)
+      "$PYTHON" -m pytest backend/tests/test_agent_deletion.py -q
+      ;;
+    pytest-management-definitions)
+      "$PYTHON" -m pytest backend/tests/test_management_definitions.py -q
+      ;;
+    pytest-project-deletion)
+      "$PYTHON" -m pytest backend/tests/test_project_deletion.py -q
+      ;;
+    pytest-project-documents)
+      "$PYTHON" -m pytest backend/tests/test_project_documents.py -q
+      ;;
+    pytest-project-setup)
+      "$PYTHON" -m pytest backend/tests/test_project_setup.py -q
+      ;;
     pytest-execution)
       "$PYTHON" -m pytest backend/tests/test_management_execution.py backend/tests/test_management_git.py backend/tests/test_team_integration.py backend/tests/test_worker_publication.py -q
       ;;

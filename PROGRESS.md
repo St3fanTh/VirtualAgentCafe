@@ -900,8 +900,13 @@
   Runner können diese Kernel-Fähigkeit sperren; korrekt ist dort ein
   klassifiziertes `namespace_denied` bei geschlossenem Agentstart. Der Test
   prüft nun sowohl echte Bereitschaft als auch diesen sicheren Fehlerpfad.
+- Der aktuelle CI-Lauf besteht Sandbox-Diagnose, Backend, Codex, Reconnect,
+  Rollen/Messaging, Sandbox und Ruff; Fehler liegt nun in der Management-Gruppe.
+  Auch diese fünf Dateien erhalten einzelne CI-Schritte zur exakten Eingrenzung.
 - Erneute vollständige Prüfung vor diesem Commit: 163 pytest PASS, Ruff/Format,
   Godot-Import, Zustands-/Headless-Tests und Live-WebSocket-Smoke PASS.
+- Erneuter Gesamtcheck nach dem weiteren CI-Split ebenfalls PASS: 163 pytest,
+  Ruff/Format, Godot-Import, Zustands-/Headless-Tests und WebSocket-Smoke.
 - Nach der Korrektur: gezielte Sandbox-Diagnose 10/10 PASS; erneuter Gesamtcheck
   163 pytest PASS, Ruff/Format, Godot-Import, Zustands-/Headless-Tests und
   Live-WebSocket-Smoke PASS.
