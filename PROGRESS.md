@@ -907,6 +907,10 @@
   Godot-Import, Zustands-/Headless-Tests und Live-WebSocket-Smoke PASS.
 - Erneuter Gesamtcheck nach dem weiteren CI-Split ebenfalls PASS: 163 pytest,
   Ruff/Format, Godot-Import, Zustands-/Headless-Tests und WebSocket-Smoke.
+- CI-Testfehler geben nun ausschließlich Test-ID und Exception-Typ als
+  GitHub-Annotation und Job-Zusammenfassung aus; sensible Tracebacks bleiben im
+  privaten Runner-Log. Vollcheck mit dieser Änderung erneut PASS (163 pytest und
+  sämtliche Ruff-/Godot-/WebSocket-Prüfungen).
 - Nach der Korrektur: gezielte Sandbox-Diagnose 10/10 PASS; erneuter Gesamtcheck
   163 pytest PASS, Ruff/Format, Godot-Import, Zustands-/Headless-Tests und
   Live-WebSocket-Smoke PASS.

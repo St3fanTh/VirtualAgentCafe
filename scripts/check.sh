@@ -13,6 +13,41 @@ check_godot() {
   fi
 }
 
+run_pytest() {
+  local report
+  report=$(mktemp)
+  if "$PYTHON" -m pytest "$@" -q --junitxml="$report"; then
+    rm -f "$report"
+    return 0
+  else
+    local result=$?
+    "$PYTHON" - "$report" "${GITHUB_STEP_SUMMARY:-}" <<'PY'
+import sys
+import xml.etree.ElementTree as ET
+
+report, summary_path = sys.argv[1:]
+root = ET.parse(report).getroot()
+failures = []
+for case in root.iter("testcase"):
+    problem = case.find("failure")
+    if problem is None:
+        problem = case.find("error")
+    if problem is not None:
+        name = "::".join(part for part in (case.get("classname"), case.get("name")) if part)
+        kind = problem.get("type", "TestFailure").split(".")[-1]
+        failures.append((name, kind))
+for name, kind in failures:
+    print(f"::error title=Pytest failure::{name} ({kind})")
+if summary_path and failures:
+    with open(summary_path, "a", encoding="utf-8") as summary:
+        summary.write("\n### Pytest failures\n\n")
+        summary.writelines(f"- `{name}` — `{kind}`\n" for name, kind in failures)
+PY
+    rm -f "$report"
+    return "$result"
+  fi
+}
+
 run_stage() {
   case "$1" in
     lint)
@@ -20,49 +55,49 @@ run_stage() {
       ruff format --check backend scripts
       ;;
     pytest)
-      "$PYTHON" -m pytest backend/tests -q
+      run_pytest backend/tests
       ;;
     pytest-core)
-      "$PYTHON" -m pytest backend/tests/test_backend.py backend/tests/test_codex.py backend/tests/test_reconnect.py backend/tests/test_roles_messaging.py backend/tests/test_sandbox_diagnostics.py -q
+      run_pytest backend/tests/test_backend.py backend/tests/test_codex.py backend/tests/test_reconnect.py backend/tests/test_roles_messaging.py backend/tests/test_sandbox_diagnostics.py
       ;;
     pytest-backend)
-      "$PYTHON" -m pytest backend/tests/test_backend.py -q
+      run_pytest backend/tests/test_backend.py
       ;;
     pytest-codex)
-      "$PYTHON" -m pytest backend/tests/test_codex.py -q
+      run_pytest backend/tests/test_codex.py
       ;;
     pytest-reconnect)
-      "$PYTHON" -m pytest backend/tests/test_reconnect.py -q
+      run_pytest backend/tests/test_reconnect.py
       ;;
     pytest-roles)
-      "$PYTHON" -m pytest backend/tests/test_roles_messaging.py -q
+      run_pytest backend/tests/test_roles_messaging.py
       ;;
     pytest-sandbox)
-      "$PYTHON" -m pytest backend/tests/test_sandbox_diagnostics.py -q
+      run_pytest backend/tests/test_sandbox_diagnostics.py
       ;;
     pytest-management)
-      "$PYTHON" -m pytest backend/tests/test_agent_deletion.py backend/tests/test_management_definitions.py backend/tests/test_project_deletion.py backend/tests/test_project_documents.py backend/tests/test_project_setup.py -q
+      run_pytest backend/tests/test_agent_deletion.py backend/tests/test_management_definitions.py backend/tests/test_project_deletion.py backend/tests/test_project_documents.py backend/tests/test_project_setup.py
       ;;
     pytest-agent-deletion)
-      "$PYTHON" -m pytest backend/tests/test_agent_deletion.py -q
+      run_pytest backend/tests/test_agent_deletion.py
       ;;
     pytest-management-definitions)
-      "$PYTHON" -m pytest backend/tests/test_management_definitions.py -q
+      run_pytest backend/tests/test_management_definitions.py
       ;;
     pytest-project-deletion)
-      "$PYTHON" -m pytest backend/tests/test_project_deletion.py -q
+      run_pytest backend/tests/test_project_deletion.py
       ;;
     pytest-project-documents)
-      "$PYTHON" -m pytest backend/tests/test_project_documents.py -q
+      run_pytest backend/tests/test_project_documents.py
       ;;
     pytest-project-setup)
-      "$PYTHON" -m pytest backend/tests/test_project_setup.py -q
+      run_pytest backend/tests/test_project_setup.py
       ;;
     pytest-execution)
-      "$PYTHON" -m pytest backend/tests/test_management_execution.py backend/tests/test_management_git.py backend/tests/test_team_integration.py backend/tests/test_worker_publication.py -q
+      run_pytest backend/tests/test_management_execution.py backend/tests/test_management_git.py backend/tests/test_team_integration.py backend/tests/test_worker_publication.py
       ;;
     pytest-gui)
-      "$PYTHON" -m pytest backend/tests/test_game_management.py backend/tests/test_game_tasks.py -q
+      run_pytest backend/tests/test_game_management.py backend/tests/test_game_tasks.py
       ;;
     godot-import)
       check_godot --headless --path game --editor --quit-after 30
