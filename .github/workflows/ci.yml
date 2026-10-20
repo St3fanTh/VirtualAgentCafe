@@ -30,8 +30,16 @@ jobs:
           sudo apt-get install -y bubblewrap
       - name: Ruff lint and formatting
         run: scripts/check.sh lint
-      - name: Backend core and runtime tests
-        run: scripts/check.sh pytest-core
+      - name: Backend API tests
+        run: scripts/check.sh pytest-backend
+      - name: Codex runtime tests
+        run: scripts/check.sh pytest-codex
+      - name: WebSocket reconnect tests
+        run: scripts/check.sh pytest-reconnect
+      - name: Role and messaging tests
+        run: scripts/check.sh pytest-roles
+      - name: Sandbox diagnostics tests
+        run: scripts/check.sh pytest-sandbox
       - name: Agent, project and workspace management tests
         run: scripts/check.sh pytest-management
       - name: Execution, Git and team integration tests

@@ -25,6 +25,21 @@ run_stage() {
     pytest-core)
       "$PYTHON" -m pytest backend/tests/test_backend.py backend/tests/test_codex.py backend/tests/test_reconnect.py backend/tests/test_roles_messaging.py backend/tests/test_sandbox_diagnostics.py -q
       ;;
+    pytest-backend)
+      "$PYTHON" -m pytest backend/tests/test_backend.py -q
+      ;;
+    pytest-codex)
+      "$PYTHON" -m pytest backend/tests/test_codex.py -q
+      ;;
+    pytest-reconnect)
+      "$PYTHON" -m pytest backend/tests/test_reconnect.py -q
+      ;;
+    pytest-roles)
+      "$PYTHON" -m pytest backend/tests/test_roles_messaging.py -q
+      ;;
+    pytest-sandbox)
+      "$PYTHON" -m pytest backend/tests/test_sandbox_diagnostics.py -q
+      ;;
     pytest-management)
       "$PYTHON" -m pytest backend/tests/test_agent_deletion.py backend/tests/test_management_definitions.py backend/tests/test_project_deletion.py backend/tests/test_project_documents.py backend/tests/test_project_setup.py -q
       ;;

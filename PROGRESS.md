@@ -891,7 +891,11 @@
 - Lokal vollständig grün: 163 pytest-Tests, Ruff/Format, Godot-Import,
   Zustands-/Headless-Tests und Live-WebSocket-Smoke.
 - Die Gruppen decken gemeinsam alle pytest-Dateien unter `backend/tests` ab.
-- Offen: nächster GitHub-Lauf nötig, um festzustellen, welche Gruppe abweicht;
+- Offen: nächster GitHub-Lauf nötig, um festzustellen, welche Testdatei abweicht;
   anonyme Actions-Ansicht liefert weiterhin keine pytest-Ausgabe.
+- Der erste aufgeteilte GitHub-Lauf zeigte `Backend core and runtime tests` als
+  fehlerhaft. Diese fünf Dateien laufen jetzt in getrennten CI-Schritten.
+- Erneute vollständige Prüfung vor diesem Commit: 163 pytest PASS, Ruff/Format,
+  Godot-Import, Zustands-/Headless-Tests und Live-WebSocket-Smoke PASS.
 - Dateien: `.github/workflows/ci.yml`, `scripts/check.sh`, `PROGRESS.md`.
 - Git-Commit-ID: nach erfolgreicher CI-Workflow-Prüfung eintragen.
