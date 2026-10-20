@@ -871,5 +871,13 @@
   öffentliche Annotations enthalten keine Testausgabe. Die Warnungen zu Node 20
   und Ubuntu-Migration erklären den Fehler nicht. Konkreter Runner-Unterschied ist
   ohne authentifizierte Job-Logs nicht belegt.
+- CI-Diagnostik: `scripts/check.sh` kann nun einzelne Stufen ausführen; GitHub
+  Actions zeigt Lint, pytest, Godot-Import, Zustands-/Headless-Tests und WebSocket-
+  Smoke getrennt an. Der nächste Lauf lokalisiert den GitHub-spezifischen Fehler.
+- Der GitHub-Lauf für `94de70b` ist ebenfalls im alten Sammelschritt fehlgeschlagen;
+  damit ist es kein Fehler der Workspace-Cache-Korrektur. Die neue aufgeteilte
+  Workflow-Konfiguration läuft erst mit dem nächsten Commit.
+- Geprüft: `scripts/check.sh` nach der Aufteilung vollständig PASS — 163 pytest,
+  Ruff/Format, Godot-Import, Zustands-/Headless-Test und Live-WebSocket-Smoke.
 - Git-Commit-ID: wird über `git log --grep='remove deleted worker workspaces from setup UI'`
   nachverfolgt.

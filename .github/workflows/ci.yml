@@ -28,8 +28,18 @@ jobs:
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y bubblewrap
-      - name: Unit, integration and Godot checks
-        run: scripts/check.sh
+      - name: Ruff lint and formatting
+        run: scripts/check.sh lint
+      - name: Backend unit and integration tests
+        run: scripts/check.sh pytest
+      - name: Godot project import
+        run: scripts/check.sh godot-import
+      - name: Godot state tests
+        run: scripts/check.sh godot-states
+      - name: Godot headless launch
+        run: scripts/check.sh godot-headless
+      - name: Backend to Godot WebSocket smoke test
+        run: scripts/check.sh websocket-smoke
       - name: Render shaders and UI preview
         run: |
           sudo apt-get update -qq
