@@ -6,13 +6,17 @@ permissions:
   contents: read
 jobs:
   test:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
+      - name: Install Python in the approved sandbox runtime directory
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y python3-venv bubblewrap
+          sudo /usr/bin/python3 -m venv /opt/venv
+          sudo chown -R "$(id -u):$(id -g)" /opt/venv
+          echo /opt/venv/bin >> "$GITHUB_PATH"
       - name: Install backend and test tools
         run: |
           python -m pip install -r backend/requirements.lock
@@ -24,10 +28,6 @@ jobs:
           curl -fsSL https://github.com/godotengine/godot/releases/download/4.4.1-stable/Godot_v4.4.1-stable_linux.x86_64.zip -o /tmp/godot.zip
           unzip -q /tmp/godot.zip -d /tmp
           sudo install /tmp/Godot_v4.4.1-stable_linux.x86_64 /usr/local/bin/godot
-      - name: Install filesystem isolation runtime
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y bubblewrap
       - name: Require real workspace isolation on the CI runner
         run: bash scripts/ci-sandbox.sh
       - name: Ruff lint and formatting

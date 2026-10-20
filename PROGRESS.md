@@ -936,3 +936,15 @@
 - Lokale Validierung: `scripts/check.sh` vollständig PASS, 163 pytest, Ruff,
   Godot-Import/States/Headless und WebSocket-Smoke. Shell-Syntaxprüfung PASS.
 - Commit auffindbar mit `git log --grep='prepare real namespace isolation on CI runners'`.
+- GitHub Run 39494719463 bestätigt `Initial sandbox result: namespace_denied`.
+  Mit dem Bwrap-Profil bestehen anschließend Sandbox-, Agentlösch-, Definitions-,
+  Projektlösch-, Projektdokument- und Setup-Tests. Der ursprüngliche Hostfehler ist
+  damit für diesen Runner nachgewiesen.
+- Noch drei Team-Integrationstests scheitern an gemeinsamer pytest-Validierung.
+  `validation.py` verwendet `sys.executable`; setup-python legt es außerhalb der
+  Sandbox-Freigaben in `/opt/hostedtoolcache` ab. CI verwendet jetzt wie Docker
+  `/opt/venv` mit System-Python und festem Ubuntu 24.04 (Python 3.12).
+- Vor Commit zur Python-Laufzeit: vollständiger `scripts/check.sh` PASS, 163 pytest,
+  Ruff/Format, Godot-Import/States/Headless und WebSocket-Smoke.
+- Vorheriger CI-Fix: e0280be; Python-Fix über Commit-Betreff
+  `align CI Python with the sandbox runtime` nachvollziehbar.
