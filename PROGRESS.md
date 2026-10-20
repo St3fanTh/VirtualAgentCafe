@@ -881,3 +881,17 @@
   Ruff/Format, Godot-Import, Zustands-/Headless-Test und Live-WebSocket-Smoke.
 - Git-Commit-ID: wird über `git log --grep='remove deleted worker workspaces from setup UI'`
   nachverfolgt.
+
+## GitHub-pytest-Fehler weiter eingegrenzt — 2026-10-20
+
+- Der Diagnose-Lauf `39489840780` besteht Ruff, scheitert aber im zusammengefassten
+  Backend-pytest-Schritt; die folgenden Godot-Prüfungen werden übersprungen.
+- CI zerlegt pytest nun in vier separat benannte Gruppen (Runtime, Verwaltung,
+  Ausführung/Git/Team und GUI), damit GitHub den fehlschlagenden Bereich anzeigt.
+- Lokal vollständig grün: 163 pytest-Tests, Ruff/Format, Godot-Import,
+  Zustands-/Headless-Tests und Live-WebSocket-Smoke.
+- Die Gruppen decken gemeinsam alle pytest-Dateien unter `backend/tests` ab.
+- Offen: nächster GitHub-Lauf nötig, um festzustellen, welche Gruppe abweicht;
+  anonyme Actions-Ansicht liefert weiterhin keine pytest-Ausgabe.
+- Dateien: `.github/workflows/ci.yml`, `scripts/check.sh`, `PROGRESS.md`.
+- Git-Commit-ID: nach erfolgreicher CI-Workflow-Prüfung eintragen.

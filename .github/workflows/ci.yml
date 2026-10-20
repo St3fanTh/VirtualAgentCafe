@@ -30,8 +30,14 @@ jobs:
           sudo apt-get install -y bubblewrap
       - name: Ruff lint and formatting
         run: scripts/check.sh lint
-      - name: Backend unit and integration tests
-        run: scripts/check.sh pytest
+      - name: Backend core and runtime tests
+        run: scripts/check.sh pytest-core
+      - name: Agent, project and workspace management tests
+        run: scripts/check.sh pytest-management
+      - name: Execution, Git and team integration tests
+        run: scripts/check.sh pytest-execution
+      - name: Godot UI API and interaction tests
+        run: scripts/check.sh pytest-gui
       - name: Godot project import
         run: scripts/check.sh godot-import
       - name: Godot state tests

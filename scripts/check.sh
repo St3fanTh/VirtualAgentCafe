@@ -22,6 +22,18 @@ run_stage() {
     pytest)
       "$PYTHON" -m pytest backend/tests -q
       ;;
+    pytest-core)
+      "$PYTHON" -m pytest backend/tests/test_backend.py backend/tests/test_codex.py backend/tests/test_reconnect.py backend/tests/test_roles_messaging.py backend/tests/test_sandbox_diagnostics.py -q
+      ;;
+    pytest-management)
+      "$PYTHON" -m pytest backend/tests/test_agent_deletion.py backend/tests/test_management_definitions.py backend/tests/test_project_deletion.py backend/tests/test_project_documents.py backend/tests/test_project_setup.py -q
+      ;;
+    pytest-execution)
+      "$PYTHON" -m pytest backend/tests/test_management_execution.py backend/tests/test_management_git.py backend/tests/test_team_integration.py backend/tests/test_worker_publication.py -q
+      ;;
+    pytest-gui)
+      "$PYTHON" -m pytest backend/tests/test_game_management.py backend/tests/test_game_tasks.py -q
+      ;;
     godot-import)
       check_godot --headless --path game --editor --quit-after 30
       ;;
