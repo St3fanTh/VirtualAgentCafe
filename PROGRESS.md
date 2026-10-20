@@ -948,3 +948,19 @@
   Ruff/Format, Godot-Import/States/Headless und WebSocket-Smoke.
 - Vorheriger CI-Fix: e0280be; Python-Fix über Commit-Betreff
   `align CI Python with the sandbox runtime` nachvollziehbar.
+
+## CI vollständig grün — bestätigtes Ergebnis
+
+- Getesteter Code-Commit: `00f7bec` (enthält Sandbox-Fix `e0280be`).
+- GitHub Actions: https://github.com/St3fanTh/VirtualAgentCafe/actions/runs/39495521850
+  vollständig SUCCESS. Backend-, Git-/Team-, native GUI-, Godot-Import/States/
+  Headless-, WebSocket-, Shader-/Management-Rendering-, echte GUI-Eingabe-,
+  Compose- und Container-Build/Health-Prüfungen erfolgreich.
+- Nachgewiesene Runner-Ursache: AppArmor verweigerte zunächst User-Namespaces
+  (`namespace_denied`). Gezieltes Profil für Bubblewrap behebt die Git-/Workspace-
+  Tests. Mit Python in `/opt/venv` bestehen auch alle gemeinsamen Teamtests.
+- Der ältere `main` enthält diese CI-Korrekturen noch nicht; kein automatischer
+  Merge erfolgt. Sein damaliger einzelner Traceback ist weiterhin nicht öffentlich
+  abrufbar. Die fehlerhaften CI-Voraussetzungen sind auf dem Feature-Branch behoben.
+- Dieser Nachtrag ändert nur Dokumentation; Code identisch zum vollständig grünen
+  GitHub-Lauf und zur zuletzt bestandenen lokalen Gesamtsuite mit 163 Tests.
