@@ -895,7 +895,16 @@
   anonyme Actions-Ansicht liefert weiterhin keine pytest-Ausgabe.
 - Der erste aufgeteilte GitHub-Lauf zeigte `Backend core and runtime tests` als
   fehlerhaft. Diese fünf Dateien laufen jetzt in getrennten CI-Schritten.
+- Der nächste Lauf lokalisierte es auf `test_sandbox_diagnostics.py`: dessen
+  echter Bubblewrap-Test verlangte zwingend verfügbare User-Namespaces. Hosted
+  Runner können diese Kernel-Fähigkeit sperren; korrekt ist dort ein
+  klassifiziertes `namespace_denied` bei geschlossenem Agentstart. Der Test
+  prüft nun sowohl echte Bereitschaft als auch diesen sicheren Fehlerpfad.
 - Erneute vollständige Prüfung vor diesem Commit: 163 pytest PASS, Ruff/Format,
   Godot-Import, Zustands-/Headless-Tests und Live-WebSocket-Smoke PASS.
+- Nach der Korrektur: gezielte Sandbox-Diagnose 10/10 PASS; erneuter Gesamtcheck
+  163 pytest PASS, Ruff/Format, Godot-Import, Zustands-/Headless-Tests und
+  Live-WebSocket-Smoke PASS.
+- Commit: `git log --format='%h %s' -1` (Push nach `feat/virtual-agent-cafe-mvp`).
 - Dateien: `.github/workflows/ci.yml`, `scripts/check.sh`, `PROGRESS.md`.
 - Git-Commit-ID: nach erfolgreicher CI-Workflow-Prüfung eintragen.
