@@ -1001,6 +1001,7 @@
 - Tests: `scripts/check.sh` vollständig PASS; 168 pytest bestanden, Ruff und Format
   grün, Godot-Import/Zustände/Headless grün, Live-WebSocket-Smoke grün.
   Vorhandene Starlette/httpx-Deprecation-Warnung bleibt bestehen.
-- Commit-ID: nachfolgender PROGRESS-Eintrag.
+- Implementierungs-Commit: `14bdf55` (`feat: add safe workspace and task deletion`),
+  erfolgreich auf `feat/virtual-agent-cafe-mvp` gepusht.
 - Offen: Workspace-Ordner werden absichtlich nicht physisch gelöscht, damit
   Projektdateien und Git-Verläufe nicht versehentlich verloren gehen.
