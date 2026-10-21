@@ -9,9 +9,23 @@ import re
 import shutil
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+
+
+def save_local_connection(token: str) -> None:
+    """Keep native-client authorization outside Git, exports and Docker builds."""
+    directory = ROOT / ".runtime" / "setup"
+    directory.mkdir(parents=True, exist_ok=True)
+    descriptor, temporary = tempfile.mkstemp(prefix=".connection-", dir=directory)
+    try:
+        with os.fdopen(descriptor, "w", encoding="utf-8") as stream:
+            json.dump({"backend_url": "http://127.0.0.1:8000", "token": token}, stream)
+        os.replace(temporary, directory / "godot-connection.json")
+    finally:
+        Path(temporary).unlink(missing_ok=True)
 
 
 def project_identity(path: Path) -> tuple[str, str]:
@@ -260,6 +274,14 @@ def main():
     if args.login or login.returncode != 0:
         print("Codex-Anmeldung wird geöffnet. Danach geht die Einrichtung weiter.")
         subprocess.run([*compose, "exec", "backend", "codex", "login"], check=True)
+    # Persist locally for later manual Godot starts; never print the token.
+    token = subprocess.run(
+        [*compose, "exec", "-T", "backend", "cat", "/workspace/.runtime/management/control-token"],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    save_local_connection(token)
     if args.no_godot:
         print("Backend bereit. Godot öffnen → Manage agents → Setup project.")
         return
@@ -269,13 +291,6 @@ def main():
             "Backend bereit. Godot manuell öffnen oder erneut mit --godot /pfad/zu/Godot starten."
         )
         return
-    # Read authorization directly into process memory; never print/store the token.
-    token = subprocess.run(
-        [*compose, "exec", "-T", "backend", "cat", "/workspace/.runtime/management/control-token"],
-        check=True,
-        capture_output=True,
-        text=True,
-    ).stdout.strip()
     game = str(ROOT / "game")
     launch_env = {
         **os.environ,

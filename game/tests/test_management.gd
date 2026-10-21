@@ -13,6 +13,7 @@ func _initialize() -> void:
 func start() -> void:
 	cafe = load("res://scenes/cafe.tscn").instantiate()
 	root.add_child(cafe)
+	assert(not cafe.management.token.visible, "Token input stays hidden during automatic connection")
 
 func contains(items: Array, key: String, value: String) -> bool:
 	for item in items:

@@ -49,11 +49,19 @@ python3 scripts/setup-project.py --privileged \
 
 Bei Windows-Godot aus WSL übersetzt der Starter den Spielpfad mit `wslpath` und
 übergibt Verbindungseinstellungen über `WSLENV`. Er startet direkt das Spiel;
-F5 ist dabei nicht nötig. Der Managementtoken wird nur im Prozessspeicher an Godot
-übergeben und weder angezeigt noch in die generierten Dateien geschrieben.
+F5 ist dabei nicht nötig. Der Starter speichert die Verbindung zusätzlich lokal in
+`.runtime/setup/godot-connection.json` mit Dateirechten `0600`. Diese Datei enthält
+den Managementtoken, ist von Git und Docker-Builds ausgeschlossen und darf nicht
+weitergegeben werden.
 
-`--no-godot` startet nur das Backend. Bei manuellem Godot-Start gilt weiter die
-[Token-Verbindung aus der Verwaltungsanleitung](agent-management.md).
+Auch mit `--no-godot` wird diese Verbindung eingerichtet. Danach kannst du Godot
+manuell öffnen und F5 drücken: **Manage agents** verbindet sich ohne Token-Eingabe.
+Das gilt auch nach einem Godot-Neustart. Bei erneuter Einrichtung aktualisiert der
+Starter die Datei; **Connect / Refresh** lädt sie erneut. **Connection settings**
+blendet bei Bedarf die manuelle Eingabe ein. Ein explizites `VAC_MANAGEMENT_TOKEN`
+im Godot-Prozess hat Vorrang. Exportierte Clients können den Dateipfad mit
+`VAC_CONNECTION_FILE` angeben. Gespeicherte Tokens gelten nur für die zugehörige
+Backend-Adresse.
 
 ## Im Assistenten
 

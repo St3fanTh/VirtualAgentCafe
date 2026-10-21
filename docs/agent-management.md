@@ -74,13 +74,14 @@ be reused; assignment and task state belong to each agent/execution.
    production recommendation. Managed agents still start inside restricted mounts.
    On Linux/WSL with user namespaces available: `scripts/demo.sh codex`.
 2. Log Codex in using the existing `codex_home` volume or local installation.
-3. Retrieve the generated management token **locally**:
-   `docker compose exec backend cat /workspace/.runtime/management/control-token`.
-   For local execution, read `.runtime/management/control-token`. Do not paste it
-   into chat, logs, configuration files, task Markdown or Git.
+3. Run `python3 scripts/setup-project.py --privileged --no-godot` once to configure
+   the selected project and save the local Godot connection. This also works when
+   Godot is launched later manually. See [project setup](project-setup.md).
 4. Open `game/project.godot` in Godot 4.4.1, press F5, then **Manage agents**.
-   Enter the token and choose **Connect / Refresh**. Alternatively set
-   `VAC_MANAGEMENT_TOKEN` in the Godot process environment. The UI keeps it in memory.
+   The connection is loaded automatically; no token entry is needed. If necessary,
+   **Connection settings** exposes manual authorization. An explicit
+   `VAC_MANAGEMENT_TOKEN` environment variable takes precedence. Keep the local
+   `.runtime/setup/godot-connection.json` private; never add it to Git.
 5. Create a `project` workspace in **Workspaces and Git**. Copy your existing
    project there or initialize Git, stage a reviewed file and make an initial commit.
    A worktree needs a real initial commit; the platform never commits to main for you.

@@ -964,3 +964,23 @@
   abrufbar. Die fehlerhaften CI-Voraussetzungen sind auf dem Feature-Branch behoben.
 - Dieser Nachtrag ändert nur Dokumentation; Code identisch zum vollständig grünen
   GitHub-Lauf und zur zuletzt bestandenen lokalen Gesamtsuite mit 163 Tests.
+
+## Automatische lokale Management-Verbindung — 2026-10-21
+
+- Starter speichert die Verbindung atomar mit Modus 0600 unter
+  `.runtime/setup/godot-connection.json`, auch bei `--no-godot` und wenn Godot
+  nicht automatisch gefunden wird. Keine Token-Ausgabe; bestehende Git-/Docker-
+  Ausschlüsse für `.runtime` gelten. Token bleibt außerhalb der Agent-Workspaces.
+- Godot lädt die Verbindung bei manuellem Neustart und über Connect / Refresh.
+  Das Tokenfeld ist standardmäßig verborgen; Connection settings öffnet es für
+  Sonderfälle. Gespeicherte Tokens gelten ausschließlich für die gespeicherte
+  Backend-URL. Explizite Umgebungsvariablen haben Vorrang. Backend-Auth bleibt aktiv.
+- Dateien: scripts/setup-project.py; game/scripts/local_connection.gd (+ UID),
+  management.gd; Launcher-/Godot-/GUI-Integrationstests; Setup-/Management-Anleitungen.
+- Tests: `scripts/check.sh` vollständig PASS, 165 pytest, Ruff/Format, Godot-Import,
+  Zustands-/Headless- und WebSocket-Smoke. Neuer nativer GUI-Integrationstest
+  verwaltet Agenten mit gespeicherter Datei ohne Token-Umgebungsvariable. Tests
+  prüfen 0600, Backend-Bindung und beschädigte JSON-Dateien.
+- Einrichtung einmal erneut starten, danach Godot neu öffnen. Exportierte Clients
+  können VAC_CONNECTION_FILE verwenden. Keine Änderung an main.
+- Commit-ID über `git log --grep='connect Godot automatically after project setup'`.

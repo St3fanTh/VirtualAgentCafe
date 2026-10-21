@@ -228,13 +228,15 @@ func _ready() -> void:
 	token.placeholder_text = "Management access token"
 	token.custom_minimum_size = Vector2(340, 46)
 	token.secret = true
-	token.text = OS.get_environment("VAC_MANAGEMENT_TOKEN")
+	token.text = preload("res://scripts/local_connection.gd").load_token(backend_url)
+	token.hide()
 	token.text_submitted.connect(func(_text): refresh())
 	connection.add_child(token)
+	button(connection, "Connection settings", func(): token.visible = not token.visible)
 	button(connection, "Connect / Refresh", refresh)
 	button(connection, "Setup project", open_setup)
 	button(connection, "Close", hide)
-	notice = caption("Enter your access token, then connect to manage your team.")
+	notice = caption("Local connection ready. Open Setup project to manage your team.")
 	notice.custom_minimum_size.y = 28
 	notice.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	outer.add_child(notice)
@@ -455,6 +457,9 @@ func show_management() -> void:
 		refresh()
 
 func refresh() -> void:
+	var saved := preload("res://scripts/local_connection.gd").load_token(backend_url)
+	if not saved.is_empty() and not token.visible:
+		token.text = saved
 	call_api("overview", "")
 
 func poll_updates() -> void:
@@ -513,7 +518,7 @@ func received(_result: int, code: int, _headers: PackedStringArray, body: Packed
 	active_request = {}
 	var data = JSON.parse_string(body.get_string_from_utf8())
 	if code < 200 or code >= 300 or not data is Dictionary:
-		var message := "Access token not accepted. Check your token and reconnect." if code == 401 else "Request failed: " + str(data.get("detail", "Backend unavailable") if data is Dictionary else "Backend unavailable")
+		var message := "Local connection expired. Run setup-project.py again, then click Connect / Refresh." if code == 401 else "Request failed: " + str(data.get("detail", "Backend unavailable") if data is Dictionary else "Backend unavailable")
 		if _result == HTTPRequest.RESULT_TIMEOUT:
 			message = "Request timed out. Check the backend and retry; disable the optional remote check first."
 		request_error(completed, message)
@@ -1039,7 +1044,7 @@ func open_setup() -> void:
 	show_management()
 	tabs.current_tab = 4
 	if token.text.strip_edges().is_empty():
-		set_notice("Connect with your local management token first. The project starter connects automatically.", true)
+		set_notice("Run setup-project.py once to connect this Godot project automatically.", true)
 		return
 	call_api("setup_projects", "/setup")
 

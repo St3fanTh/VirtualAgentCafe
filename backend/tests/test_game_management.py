@@ -1,3 +1,4 @@
+import json
 import os
 import shutil
 import socket
@@ -15,16 +16,17 @@ ROOT = Path(__file__).resolve().parents[2]
 
 @pytest.mark.skipif(shutil.which("godot") is None, reason="Godot CLI unavailable")
 @pytest.mark.parametrize(
-    "script",
+    "script, saved_connection",
     [
-        "test_management.gd",
-        "test_agent_deletion.gd",
-        "test_gui_input.gd",
-        "test_setup_input.gd",
-        "test_setup_input_blocked.gd",
+        ("test_management.gd", False),
+        ("test_management.gd", True),
+        ("test_agent_deletion.gd", False),
+        ("test_gui_input.gd", False),
+        ("test_setup_input.gd", False),
+        ("test_setup_input_blocked.gd", False),
     ],
 )
-def test_native_management_ui_to_isolated_runtime(tmp_path, script):
+def test_native_management_ui_to_isolated_runtime(tmp_path, script, saved_connection):
     setup_test = script.startswith("test_setup_input")
     with socket.socket() as reserve:
         reserve.bind(("127.0.0.1", 0))
@@ -84,6 +86,19 @@ def test_native_management_ui_to_isolated_runtime(tmp_path, script):
                 "--resolution",
                 os.getenv("VAC_GUI_RESOLUTION", "1920x1080"),
             ]
+        client_env = env.copy()
+        if saved_connection:
+            connection = tmp_path / "connection.json"
+            connection.write_text(
+                json.dumps(
+                    {
+                        "backend_url": url,
+                        "token": env["VAC_MANAGEMENT_TOKEN"],
+                    }
+                )
+            )
+            client_env.pop("VAC_MANAGEMENT_TOKEN")
+            client_env["VAC_CONNECTION_FILE"] = str(connection)
         result = subprocess.run(
             [
                 "godot",
@@ -93,7 +108,7 @@ def test_native_management_ui_to_isolated_runtime(tmp_path, script):
                 "--script",
                 "res://tests/" + script,
             ],
-            env=env,
+            env=client_env,
             capture_output=True,
             text=True,
             timeout=270 if os.getenv("VAC_GUI_RENDERED") == "1" else 60,

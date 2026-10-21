@@ -217,7 +217,10 @@ def test_launcher_restricts_mounts_forwards_socket_and_keeps_keys_out(tmp_path, 
         launcher.selected_project(str(ROOT))
 
 
-def test_launcher_connects_without_printing_or_persisting_token(tmp_path, monkeypatch, capsys):
+@pytest.mark.parametrize("no_godot", [False, True])
+def test_launcher_saves_private_connection_for_manual_starts(
+    tmp_path, monkeypatch, capsys, no_godot
+):
     from types import SimpleNamespace
 
     root = tmp_path / "cafe"
@@ -227,7 +230,9 @@ def test_launcher_connects_without_printing_or_persisting_token(tmp_path, monkey
     monkeypatch.setattr(launcher, "ROOT", root)
     monkeypatch.setattr(launcher.shutil, "which", lambda _name: "/usr/bin/fake")
     monkeypatch.setattr(
-        "sys.argv", ["setup-project.py", "--project", str(repo), "--godot", "fake-godot"]
+        "sys.argv",
+        ["setup-project.py", "--project", str(repo), "--godot", "fake-godot"]
+        + (["--no-godot"] if no_godot else []),
     )
     calls = []
 
@@ -239,10 +244,14 @@ def test_launcher_connects_without_printing_or_persisting_token(tmp_path, monkey
 
     monkeypatch.setattr(launcher.subprocess, "run", run)
     launcher.main()
-    assert calls[-1][0] == ["fake-godot", "--path", str(root / "game")]
-    assert calls[-1][1]["env"]["VAC_MANAGEMENT_TOKEN"] == "fixture-private-token"
-    assert calls[-1][1]["env"]["VAC_OPEN_SETUP"] == "1"
-    assert calls[-1][1]["env"]["VAC_BACKEND_URL"] == "http://127.0.0.1:8000"
+    if not no_godot:
+        assert calls[-1][0] == ["fake-godot", "--path", str(root / "game")]
+        assert calls[-1][1]["env"]["VAC_MANAGEMENT_TOKEN"] == "fixture-private-token"
+        assert calls[-1][1]["env"]["VAC_OPEN_SETUP"] == "1"
+        assert calls[-1][1]["env"]["VAC_BACKEND_URL"] == "http://127.0.0.1:8000"
+    saved = root / ".runtime/setup/godot-connection.json"
+    assert json.loads(saved.read_text())["token"] == "fixture-private-token"
+    assert saved.stat().st_mode & 0o777 == 0o600
     config = (root / ".runtime/setup/project.compose.json").read_text()
     assert "fixture-private-token" not in config + capsys.readouterr().out
     assert not any("privileged" in str(command) for command, _ in calls)
