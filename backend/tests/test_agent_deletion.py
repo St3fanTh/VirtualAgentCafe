@@ -137,3 +137,69 @@ def test_delete_api_requires_auth_confirmation_and_rejects_browser_requests(tmp_
             ).status_code
             == 404
         )
+
+
+def test_task_and_workspace_delete_api_guards_and_file_behavior(tmp_path):
+    app = create_app("codex", management_root=tmp_path)
+    manager = app.state.management
+    workspace = agent(manager)
+    (workspace / "keep.txt").write_text("workspace contents")
+    headers = {"Authorization": "Bearer " + manager.access.token}
+    with TestClient(app) as client:
+        task_response = client.request(
+            "DELETE",
+            "/management/definitions/tasks/task.md",
+            headers=headers,
+            json={"confirmed": True},
+        )
+        workspace_response = client.request(
+            "DELETE",
+            "/management/workspaces/project",
+            headers=headers,
+            json={"confirmed": True},
+        )
+        assert task_response.status_code == 409
+        assert "assigned" in task_response.json()["detail"]
+        assert workspace_response.status_code == 409
+        assert "assigned" in workspace_response.json()["detail"]
+        missing_confirmation = client.request(
+            "DELETE", "/management/workspaces/project", headers=headers, json={}
+        )
+        assert missing_confirmation.status_code == 422
+
+        manager.configure(
+            AgentConfig(
+                id="backend-agent",
+                name="Backend",
+                workspace="project",
+                task=None,
+                roles=["backend.md"],
+            )
+        )
+        task_response = client.request(
+            "DELETE",
+            "/management/definitions/tasks/task.md",
+            headers=headers,
+            json={"confirmed": True},
+        )
+        assert task_response.status_code == 200 and task_response.json()["deleted"]
+        assert not (manager.tasks.files.root / "task.md").exists()
+
+        assert (
+            client.request(
+                "DELETE",
+                "/management/agents/backend-agent",
+                headers=headers,
+                json={"confirmed": True},
+            ).status_code
+            == 200
+        )
+        workspace_response = client.request(
+            "DELETE",
+            "/management/workspaces/project",
+            headers=headers,
+            json={"confirmed": True},
+        )
+        assert workspace_response.status_code == 200
+        assert workspace_response.json()["files_preserved"]
+        assert (workspace / "keep.txt").read_text() == "workspace contents"

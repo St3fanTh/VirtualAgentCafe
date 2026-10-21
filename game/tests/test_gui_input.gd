@@ -18,6 +18,12 @@ func check(value: bool, message: String) -> void:
 		quit(1)
 		assert(value, message)
 
+func contains(items: Array, key: String, value: String) -> bool:
+	for item in items:
+		if str(item.get(key, "")) == value:
+			return true
+	return false
+
 func frames(count := 2) -> void:
 	for _index in count:
 		await process_frame
@@ -232,13 +238,38 @@ func run() -> void:
 	check("no tracked file changes" in ui.git_result.text, "Diff button handles a clean working tree")
 	ui.call_api("mutation", "/workspaces", HTTPClient.METHOD_POST, {"id": "old-project"})
 	await settled(ui)
+	await tab(ui, 0)
+	await select_option(ui.task_file, 0)
+	await click(ui.buttons["Save configuration"])
+	await settled(ui)
+	check(ui.chosen(ui.task_file).is_empty(), "Task can be unassigned before deletion")
+	await select_option(ui.task_file, 1)
+	check(not ui.buttons["Delete selected task"].disabled, "Unassigned task can be deleted")
+	await click(ui.buttons["Delete selected task"])
+	check(ui.task_delete_dialog.visible, "Task deletion requires confirmation")
+	ui.task_delete_dialog.get_ok_button().grab_focus()
+	await key(KEY_ENTER)
+	check(not ui.task_delete_dialog.visible, "Task confirmation accepts Enter")
+	await settled(ui)
+	check(ui.cache.tasks.is_empty(), "Confirmed task deletion refreshes the Markdown list: " + ui.notice.text + " · " + str(ui.cache.tasks))
+	await tab(ui, 2)
 	ui.choose(ui.git_workspace, "old-project")
 	await click(ui.buttons["View diff"])
 	await settled(ui)
 	check("Selected workspace has no Git repository" in ui.git_result.text, "Missing repository error appears in Git panel")
 	check(not "no tracked file changes" in ui.git_result.text, "Failed diff clears previous successful result")
+	await tab(ui, 0)
+	await select_option(ui.workspace, 1)
+	check(not ui.buttons["Remove selected workspace"].disabled, "Unused workspace can be removed")
+	await click(ui.buttons["Remove selected workspace"])
+	check(ui.workspace_delete_dialog.visible, "Workspace removal requires confirmation")
+	ui.workspace_delete_dialog.get_ok_button().grab_focus()
+	await key(KEY_ENTER)
+	await settled(ui)
+	check(not contains(ui.cache.workspaces, "id", "old-project"), "Confirmed workspace removal updates the list")
 	ui.load_agent(0)
 	check(ui.chosen(ui.git_workspace) == "project", "Agent selection chooses its own Git workspace")
+	await tab(ui, 2)
 	await click(ui.buttons["Inspect repository"])
 	await settled(ui)
 	check("BRANCH" in ui.git_result.text, "Repository inspection recovers after choosing current workspace")

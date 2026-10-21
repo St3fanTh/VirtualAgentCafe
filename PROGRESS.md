@@ -984,3 +984,23 @@
 - Einrichtung einmal erneut starten, danach Godot neu öffnen. Exportierte Clients
   können VAC_CONNECTION_FILE verwenden. Keine Änderung an main.
 - Commit-ID über `git log --grep='connect Godot automatically after project setup'`.
+
+## Workspace- und Task-Löschung — 2026-10-21
+
+- Agents-Seite ergänzt: ausgewählten Workspace-Eintrag entfernen und Markdown-Task
+  löschen; beide Aktionen verlangen Bestätigung. Workspaces werden aus der
+  Registrierung genommen, ihre Ordner, Dateien und Git-Daten bleiben erhalten.
+  Tasks werden dauerhaft gelöscht; aktive Zuordnungen verhindern die Aktion.
+- Backend-DELETE-Endpunkte verlangen `confirmed: true`, prüfen Pfade, persistente
+  Agentenzuordnungen und Projektquellen unter derselben Management-Sperre.
+- GUI setzt eine gelöschte Auswahl auf die gespeicherte Agentenkonfiguration zurück.
+  Zusätzlich wird die Agentenliste nach Agentenlöschung lokal aktualisiert; zuvor
+  wurde die Serverantwort bestätigt, ohne die lokale Liste zu entfernen.
+- Geändert: `management/api.py`, `execution.py`, `files.py`, API-/GUI-Tests,
+  `game/scripts/management.gd`, `docs/agent-management.md`.
+- Tests: `scripts/check.sh` vollständig PASS; 168 pytest bestanden, Ruff und Format
+  grün, Godot-Import/Zustände/Headless grün, Live-WebSocket-Smoke grün.
+  Vorhandene Starlette/httpx-Deprecation-Warnung bleibt bestehen.
+- Commit-ID: nachfolgender PROGRESS-Eintrag.
+- Offen: Workspace-Ordner werden absichtlich nicht physisch gelöscht, damit
+  Projektdateien und Git-Verläufe nicht versehentlich verloren gehen.

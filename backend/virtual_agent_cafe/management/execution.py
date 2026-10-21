@@ -264,6 +264,22 @@ class ExecutionManager:
                 ],
             }
 
+    async def delete_workspace(self, identifier: str) -> dict:
+        async with self.control:
+            self.workspaces.get(identifier)
+            for record in self.store.list("agents"):
+                config = record["config"]
+                if identifier in {config.get("workspace"), config.get("git", {}).get("repository")}:
+                    raise ValueError(
+                        f"Workspace is assigned to agent {config['id']}; reassign or remove "
+                        "that agent first"
+                    )
+            if any(identifier == project.get("id") for project in self.store.list("projects")):
+                raise ValueError(
+                    "Workspace is a managed project source; delete the project from Setup first"
+                )
+            return self.workspaces.unregister(identifier)
+
     def register(self, config: AgentConfig):
         record = self.registry.get(config.id)
         previous = None

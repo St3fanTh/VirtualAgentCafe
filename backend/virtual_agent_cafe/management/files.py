@@ -68,6 +68,15 @@ class MarkdownManager:
         # Files, rather than cached database text, are always authoritative.
         return [self.load(p.name) for p in sorted(self.files.root.glob("*.md"))]
 
+    def delete(self, name: str) -> dict:
+        TypeAdapter(MarkdownRef).validate_python(name)
+        path = self.files.path(name)
+        if not path.is_file():
+            raise KeyError(name)
+        path.unlink()
+        self.store.delete(self.kind, name)
+        return {"file": name, "deleted": True}
+
 
 class WorkspaceManager:
     def __init__(self, root: Path, store: Store):
@@ -89,3 +98,12 @@ class WorkspaceManager:
         if not path.is_dir():
             raise ValueError("Workspace is unavailable")
         return path
+
+    def unregister(self, identifier: str) -> dict:
+        TypeAdapter(Identifier).validate_python(identifier)
+        path = self.files.path(identifier)
+        self.store.get("workspaces", identifier)
+        self.store.delete("workspaces", identifier)
+        # Workspace contents and Git metadata can include user work; registry removal
+        # must never silently erase the underlying directory.
+        return {"id": identifier, "removed": True, "path": str(path), "files_preserved": True}

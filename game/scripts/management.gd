@@ -40,6 +40,10 @@ var editing := false
 var active_agent := ""
 var delete_dialog := ConfirmationDialog.new()
 var delete_candidate := ""
+var workspace_delete_dialog := ConfirmationDialog.new()
+var task_delete_dialog := ConfirmationDialog.new()
+var workspace_delete_candidate := ""
+var task_delete_candidate := ""
 var project_delete_dialog := ConfirmationDialog.new()
 var project_delete_ids: Array[String] = []
 var delete_all_projects_pending := false
@@ -292,7 +296,9 @@ func build_agents(tabs: TabContainer) -> void:
 	workspace_info.custom_minimum_size.x = 320
 	middle.add_child(workspace_info)
 	workspace.item_selected.connect(func(_index): update_workspace_info())
+	button(middle, "Remove selected workspace", ask_delete_workspace)
 	task_file = option(middle, "Markdown task")
+	button(middle, "Delete selected task", ask_delete_task)
 	middle.add_child(caption("Roles — select multiple with Ctrl"))
 	roles = ItemList.new()
 	roles.select_mode = ItemList.SELECT_MULTI
@@ -354,6 +360,20 @@ func build_agents(tabs: TabContainer) -> void:
 	delete_dialog.confirmed.connect(confirm_delete_agent)
 	delete_dialog.canceled.connect(func(): delete_candidate = "")
 	add_child(delete_dialog)
+	workspace_delete_dialog.title = "Remove workspace"
+	workspace_delete_dialog.ok_button_text = "Remove from list"
+	workspace_delete_dialog.dialog_autowrap = true
+	workspace_delete_dialog.theme = theme
+	workspace_delete_dialog.confirmed.connect(confirm_delete_workspace)
+	workspace_delete_dialog.canceled.connect(func(): workspace_delete_candidate = "")
+	add_child(workspace_delete_dialog)
+	task_delete_dialog.title = "Delete Markdown task"
+	task_delete_dialog.ok_button_text = "Delete task file"
+	task_delete_dialog.dialog_autowrap = true
+	task_delete_dialog.theme = theme
+	task_delete_dialog.confirmed.connect(confirm_delete_task)
+	task_delete_dialog.canceled.connect(func(): task_delete_candidate = "")
+	add_child(task_delete_dialog)
 
 func build_definitions(tabs: TabContainer) -> void:
 	var row := page(tabs, "Markdown")
@@ -626,9 +646,34 @@ func received(_result: int, code: int, _headers: PackedStringArray, body: Packed
 		var removed := str(data.get("id", ""))
 		if pending_agent == removed:
 			pending_agent = ""
+		cache["agents"] = cache.get("agents", []).filter(func(item):
+			return str(item.get("config", {}).get("id", "")) != removed)
 		if active_agent == removed:
 			new_agent()
+		populate()
 		set_notice("Agent deleted. Workspace, Git branches, Markdown and execution history kept.")
+		pending_refresh = true
+	elif finished_action == "delete_workspace":
+		var removed_workspace := str(data.get("id", ""))
+		cache["workspaces"] = cache.get("workspaces", []).filter(func(item): return str(item.get("id", "")) != removed_workspace)
+		for record in cache.get("agents", []):
+			if str(record.get("config", {}).get("id", "")) == active_agent:
+				choose(workspace, str(record.config.get("workspace", "")))
+		populate()
+		workspace_info.text = "Workspace registration removed. Files and Git data are preserved."
+		set_notice("Workspace removed from VirtualAgentCafe. Its files remain on disk.")
+	elif finished_action == "delete_task":
+		var removed_task := str(data.get("file", ""))
+		var was_editing_removed_task := chosen(definition_kind) == "tasks" and chosen(definition_select) == removed_task
+		cache["tasks"] = cache.get("tasks", []).filter(func(item): return str(item.get("file", "")) != removed_task)
+		for record in cache.get("agents", []):
+			if str(record.get("config", {}).get("id", "")) == active_agent:
+				choose(task_file, str(record.config.get("task", "")))
+		populate()
+		if was_editing_removed_task:
+			markdown.text = ""
+			definition_file.text = ""
+		set_notice("Markdown task deleted.")
 		pending_refresh = true
 	elif finished_action in ["mutation", "control", "review"]:
 		if finished_action == "mutation" and data.has("config") and str(completed.get("path", "")).begins_with("/agents") and completed.get("method") in [HTTPClient.METHOD_PUT, HTTPClient.METHOD_POST]:
@@ -719,6 +764,18 @@ func update_buttons() -> void:
 	buttons["Delete agent"].disabled = busy or running or active_agent.is_empty()
 	buttons["Delete agent"].tooltip_text = "Stop the agent before deleting it." if running else "Remove this agent; keep its workspace, Git branches and history."
 	buttons["Save configuration"].disabled = busy or running
+	var workspace_used := false
+	var task_used := false
+	for record in cache.get("agents", []):
+		var config: Dictionary = record.get("config", {})
+		workspace_used = workspace_used or chosen(workspace) in [config.get("workspace", ""), config.get("git", {}).get("repository", "")]
+		task_used = task_used or chosen(task_file) == str(config.get("task", ""))
+	for project in cache.get("projects", []):
+		workspace_used = workspace_used or chosen(workspace) == str(project.get("id", ""))
+	buttons["Remove selected workspace"].disabled = busy or chosen(workspace).is_empty() or workspace_used
+	buttons["Remove selected workspace"].tooltip_text = "Reassign agents and repositories, or remove the project in Setup first." if workspace_used else "Remove from this list; keep all files and Git data."
+	buttons["Delete selected task"].disabled = busy or chosen(task_file).is_empty() or task_used
+	buttons["Delete selected task"].tooltip_text = "Unassign this task from its agents and save first." if task_used else "Permanently delete the Markdown task file."
 	var can_retry := false
 	for execution in cache.get("executions", []):
 		if execution.id == selected_execution:
@@ -950,6 +1007,38 @@ func confirm_delete_agent() -> void:
 	var identifier := delete_candidate
 	delete_candidate = ""
 	call_api("delete_agent", "/agents/" + identifier, HTTPClient.METHOD_DELETE, {"confirmed": true})
+
+func ask_delete_workspace() -> void:
+	var identifier := chosen(workspace)
+	if identifier.is_empty():
+		set_notice("Select a workspace to remove.", true)
+		return
+	workspace_delete_candidate = identifier
+	workspace_delete_dialog.dialog_text = "Remove workspace '" + identifier + "' from VirtualAgentCafe?\n\nIts folder, files, Git repository and branches are preserved. Assigned agent workspaces, Git repositories and managed project sources must be reassigned first."
+	workspace_delete_dialog.popup_centered(Vector2i(760, 300))
+
+func confirm_delete_workspace() -> void:
+	var identifier := workspace_delete_candidate
+	workspace_delete_candidate = ""
+	if identifier.is_empty():
+		return
+	call_api("delete_workspace", "/workspaces/" + identifier, HTTPClient.METHOD_DELETE, {"confirmed": true})
+
+func ask_delete_task() -> void:
+	var filename := chosen(task_file)
+	if filename.is_empty():
+		set_notice("Select a task to delete.", true)
+		return
+	task_delete_candidate = filename
+	task_delete_dialog.dialog_text = "Permanently delete task '" + filename + "'?\n\nThis removes its Markdown file. Unassign it from every agent and save each configuration first. Existing execution records and snapshots remain."
+	task_delete_dialog.popup_centered(Vector2i(720, 280))
+
+func confirm_delete_task() -> void:
+	var filename := task_delete_candidate
+	task_delete_candidate = ""
+	if filename.is_empty():
+		return
+	call_api("delete_task", "/definitions/tasks/" + filename, HTTPClient.METHOD_DELETE, {"confirmed": true})
 
 func control(operation: String) -> void:
 	if active_agent.is_empty():

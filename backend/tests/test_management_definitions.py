@@ -78,3 +78,27 @@ def test_workspace_and_markdown_escape_rejected(tmp_path):
         registry.save(AgentConfig(id="agent", name="Agent", workspace="unknown"))
     with pytest.raises(ValueError):
         tasks.save("empty.md", "not markdown instructions")
+
+
+def test_delete_markdown_and_unregister_workspace_preserves_workspace_files(tmp_path):
+    store, tasks, _, workspaces, _ = managers(tmp_path)
+    tasks.save("unused.md", "# Task\nDo useful work.")
+    workspaces.create("unused")
+    preserved_file = workspaces.get("unused") / "result.txt"
+    preserved_file.write_text("keep this project data")
+
+    assert tasks.delete("unused.md") == {"file": "unused.md", "deleted": True}
+    assert not (tasks.files.root / "unused.md").exists()
+    assert store.list("tasks") == []
+    result = workspaces.unregister("unused")
+    assert result["files_preserved"]
+    assert preserved_file.read_text() == "keep this project data"
+    assert store.list("workspaces") == []
+
+
+def test_markdown_delete_rejects_path_traversal_and_missing_files(tmp_path):
+    _, tasks, _, _, _ = managers(tmp_path)
+    with pytest.raises(ValidationError):
+        tasks.delete("../outside.md")
+    with pytest.raises(KeyError):
+        tasks.delete("missing.md")

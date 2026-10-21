@@ -200,19 +200,44 @@ def management_router(manager: ExecutionManager, validated_body, mode: str) -> A
         files = manager.tasks if kind == "tasks" else manager.roles
 
         async def save():
-            result = await asyncio.to_thread(files.save, filename, data.content)
-            if kind == "tasks":
-                for agent in manager.store.list("agents"):
-                    if agent["config"].get("task") == filename and agent["state"] != "RUNNING":
-                        manager.registry.update(agent["config"]["id"], task_state="ASSIGNED")
-            return result
+            async with manager.control:
+                result = await asyncio.to_thread(files.save, filename, data.content)
+                if kind == "tasks":
+                    for agent in manager.store.list("agents"):
+                        if agent["config"].get("task") == filename and agent["state"] != "RUNNING":
+                            manager.registry.update(agent["config"]["id"], task_state="ASSIGNED")
+                return result
 
         return await guarded(save)
+
+    @router.delete("/definitions/tasks/{filename}")
+    async def delete_task(filename: str, request: Request):
+        await validated_body(request, DeleteInput)
+
+        async def remove():
+            async with manager.control:
+                users = [
+                    record["config"]["id"]
+                    for record in manager.store.list("agents")
+                    if record["config"].get("task") == filename
+                ]
+                if users:
+                    raise ValueError(
+                        "Task is assigned to " + ", ".join(users) + "; unassign it and save first"
+                    )
+                return await asyncio.to_thread(manager.tasks.delete, filename)
+
+        return await guarded(remove)
 
     @router.post("/workspaces", status_code=201)
     async def create_workspace(request: Request):
         data = await validated_body(request, WorkspaceInput)
         return await guarded(lambda: asyncio.to_thread(manager.workspaces.create, data.id))
+
+    @router.delete("/workspaces/{identifier}")
+    async def delete_workspace(identifier: str, request: Request):
+        await validated_body(request, DeleteInput)
+        return await guarded(lambda: manager.delete_workspace(identifier))
 
     @router.post("/agents/{identifier}/{action}", status_code=202)
     async def control(

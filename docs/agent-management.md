@@ -319,6 +319,26 @@ Authenticated API clients can use `DELETE /management/agents/{id}` with JSON
 `{"confirmed": true}`. Missing confirmation is rejected; active execution blocks
 deletion. The refreshed WebSocket snapshot removes the character in connected clients.
 
+## Remove workspaces and delete Markdown tasks
+
+In **Agents**, select the workspace or task and use **Remove selected workspace** or
+**Delete selected task**. Both actions ask for confirmation. A workspace can only be
+removed after agents and Git settings are reassigned and it is no longer a managed
+project source. Removing it unregisters the workspace from VirtualAgentCafe; its
+folder, files, repository and branches stay on disk. To make it available again, add
+the workspace through **Workspaces**.
+
+A task can only be deleted after every agent has been unassigned from it and its
+configuration saved. Deleting it permanently removes the Markdown file. Existing
+execution history remains available. Select the task in the agent form even when it
+is not currently assigned; the delete request checks persisted assignments on the
+backend, so an unsaved selection cannot bypass that guard.
+
+Authenticated API clients can call `DELETE /management/workspaces/{id}` or
+`DELETE /management/definitions/tasks/{filename}` with JSON `{"confirmed": true}`.
+The API rejects missing confirmation, path traversal, and resources still referenced
+by active agents or managed projects.
+
 ## Inspect an agent's Git changes
 
 Select the agent in **Agents**, then open **Workspaces**. Agent selection also
