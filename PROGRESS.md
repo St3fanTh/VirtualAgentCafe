@@ -1,5 +1,26 @@
 # VirtualAgentCafe — Fortschritt
 
+## Projektlöschung nach einzeln gelöschten Agents — 2026-10-21
+
+- Ursache: Projektmitgliedschaften bleiben nach Agentenlöschung für die Historie
+  erhalten. Die Projektlöschung verlangte dennoch alle Mitglieder in der aktiven
+  Registry und brach deshalb mit „Management resource not found“ ab.
+- Korrektur: Aktive und archivierte Mitglieder getrennt behandeln; erhaltene
+  Worktrees anhand der archivierten Konfiguration bereinigen, aktive Mitglieder
+  nur einmal archivieren. Quellrepository, Branches und Historie bleiben erhalten.
+- Godot lädt nach Projektlöschung die Workspace-Liste neu, auch wenn die Agents
+  bereits vorher aus der Oberfläche entfernt wurden.
+- Dateien: management/execution.py, test_project_deletion.py,
+  game/scripts/management.gd und PROGRESS.md.
+- Regression: Projektlöschung mit null, einem und zwei vorab gelöschten Agents,
+  inklusive Neustart sowie Schutz uncommitteter Dateien: 6 Tests bestanden.
+- Gesamtcheck: `scripts/check.sh` vollständig PASS: 171 pytest, Ruff/Format,
+  Godot-Import, Zustände, Headless und Live-WebSocket-Smoke. Bestehende
+  Starlette/httpx-Deprecation-Warnung unverändert.
+- Commit auffindbar über `git log --grep='delete projects after agents were archived'`.
+- Einschränkung: Uncommittete Arbeit und laufende Ausführungen blockieren weiterhin
+  die Worktree-Bereinigung. Nutzerprojekte wurden hier nicht gelöscht.
+
 ## M0 — Bestandsaufnahme und sichere Grundlage
 - SSH-Authentifizierung und Remote-Zugriff erfolgreich; leerer Test-Commit
   `12b356acabd9dc1451240487de1eb7ccc75c5a60` erfolgreich gepusht.

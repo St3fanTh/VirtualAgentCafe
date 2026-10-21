@@ -195,8 +195,22 @@ class ExecutionManager:
                 raise ValueError(
                     "Stop all project agents and integration before deleting the project"
                 )
-            agent_records = [(member, self.registry.get(member)) for member in members]
-            for member, record in agent_records:
+            active = {record["config"]["id"]: record for record in self.store.list("agents")}
+            archived = {}
+            for entry in self.store.list("deleted_agents"):
+                record = entry.get("agent", {})
+                config = record.get("config", {})
+                if config.get("id"):
+                    archived[config["id"]] = record
+            project_records = [
+                (member, active.get(member, archived.get(member)))
+                for member in members
+                if active.get(member, archived.get(member)) is not None
+            ]
+            agent_records = [
+                (member, record) for member, record in project_records if member in active
+            ]
+            for member, record in project_records:
                 if record.get("state") == State.RUNNING:
                     raise ValueError("Stop all project agents before deleting the project")
                 for other in self.store.list("projects"):
@@ -208,7 +222,7 @@ class ExecutionManager:
                             "An agent is shared by another project; delete it separately"
                         )
             workspaces = list(
-                dict.fromkeys(record["config"]["workspace"] for _, record in agent_records)
+                dict.fromkeys(record["config"]["workspace"] for _, record in project_records)
             )
             for workspace in workspaces:
                 if any(
@@ -231,11 +245,11 @@ class ExecutionManager:
                 archived_agents,
                 workspaces,
             )
-            for member, _record in agent_records:
+            for member, _record in project_records:
                 self.registry.configs.path(member + ".json").unlink(missing_ok=True)
                 self.bus.agents.pop(member, None)
             remaining = self.store.list("agents")
-            for _, record in agent_records:
+            for _, record in project_records:
                 config = record["config"]
                 for manager, key in (
                     (self.tasks, "task"),

@@ -25,7 +25,10 @@ def configured(manager):
     return source
 
 
-async def test_delete_project_removes_clean_worktrees_and_archives_history(tmp_path):
+@pytest.mark.parametrize("deleted_members", [0, 1, 2])
+async def test_delete_project_removes_clean_worktrees_and_archives_history(
+    tmp_path, deleted_members
+):
     manager = ExecutionManager(tmp_path, EventBus(), Idle())
     source = configured(manager)
     await manager.git.init("project")
@@ -65,7 +68,14 @@ async def test_delete_project_removes_clean_worktrees_and_archives_history(tmp_p
     await manager.git.worktree("project", second.workspace, second.git.branch)
     manager.configure(second)
     manager.store.put("projects", "project", {"id": "project", "agents": [worker.id, second.id]})
-    manager.store.put("executions", "run-1", {"id": "run-1", "agent_id": worker.id})
+    manager.store.put(
+        "executions", "run-1", {"id": "run-1", "agent_id": worker.id, "status": "COMPLETED"}
+    )
+    for member in [worker.id, second.id][:deleted_members]:
+        await manager.delete(member)
+    # Exercise the persisted archives as a restarted backend would.
+    if deleted_members:
+        manager = ExecutionManager(tmp_path, EventBus(), Idle())
     result = await manager.delete_project("project")
     assert result["deleted"] and (source / "README.md").read_text() == "source project"
     assert not manager.store.list("projects") and not manager.store.list("agents")
@@ -80,7 +90,8 @@ async def test_delete_project_removes_clean_worktrees_and_archives_history(tmp_p
     )
 
 
-async def test_delete_project_refuses_dirty_or_running_worktrees(tmp_path):
+@pytest.mark.parametrize("delete_agent_first", [False, True])
+async def test_delete_project_refuses_dirty_or_running_worktrees(tmp_path, delete_agent_first):
     manager = ExecutionManager(tmp_path, EventBus(), Idle())
     configured(manager)
     await manager.git.init("project")
@@ -104,6 +115,8 @@ async def test_delete_project_refuses_dirty_or_running_worktrees(tmp_path):
     worktree = await manager.git.worktree("project", worker.workspace, worker.git.branch)
     manager.configure(worker)
     manager.store.put("projects", "project", {"id": "project", "agents": [worker.id]})
+    if delete_agent_first:
+        await manager.delete(worker.id)
     (worktree / "uncommitted.txt").write_text("keep")
     with pytest.raises(ValueError, match="Commit or resolve"):
         await manager.delete_project("project")

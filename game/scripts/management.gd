@@ -641,6 +641,7 @@ func received(_result: int, code: int, _headers: PackedStringArray, body: Packed
 		setup_result.text = "Project management entries and clean worker worktrees removed. Source repositories, Git branches and execution history kept."
 		set_notice("Managed project and assigned worker workspaces deleted; source repository kept.")
 		populate()
+		pending_refresh = true
 		call_api("setup_projects", "/setup")
 	elif finished_action == "delete_agent":
 		var removed := str(data.get("id", ""))
