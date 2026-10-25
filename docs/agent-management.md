@@ -323,8 +323,10 @@ deletion. The refreshed WebSocket snapshot removes the character in connected cl
 
 In **Agents**, select the workspace or task and use **Remove selected workspace** or
 **Delete selected task**. Both actions ask for confirmation. A workspace can only be
-removed after agents and Git settings are reassigned and it is no longer a managed
-project source. Removing it unregisters the workspace from VirtualAgentCafe; its
+removed after agents and Git settings are reassigned. If it is the source of an
+abandoned managed project whose agents have all been deleted, confirmation also
+archives that project registration. Existing project members or running integration
+block removal; the button tooltip names known blockers. Removing it unregisters the workspace from VirtualAgentCafe; its
 folder, files, repository and branches stay on disk. To make it available again, add
 the workspace through **Workspaces**.
 
@@ -337,7 +339,7 @@ backend, so an unsaved selection cannot bypass that guard.
 Authenticated API clients can call `DELETE /management/workspaces/{id}` or
 `DELETE /management/definitions/tasks/{filename}` with JSON `{"confirmed": true}`.
 The API rejects missing confirmation, path traversal, and resources still referenced
-by active agents or managed projects.
+by existing agents or projects with existing members or running integration.
 
 ## Inspect an agent's Git changes
 

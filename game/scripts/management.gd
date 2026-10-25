@@ -656,6 +656,8 @@ func received(_result: int, code: int, _headers: PackedStringArray, body: Packed
 		pending_refresh = true
 	elif finished_action == "delete_workspace":
 		var removed_workspace := str(data.get("id", ""))
+		if data.get("project_removed", false):
+			cache["projects"] = cache.get("projects", []).filter(func(item): return str(item.get("id", "")) != removed_workspace)
 		cache["workspaces"] = cache.get("workspaces", []).filter(func(item): return str(item.get("id", "")) != removed_workspace)
 		for record in cache.get("agents", []):
 			if str(record.get("config", {}).get("id", "")) == active_agent:
@@ -663,6 +665,7 @@ func received(_result: int, code: int, _headers: PackedStringArray, body: Packed
 		populate()
 		workspace_info.text = "Workspace registration removed. Files and Git data are preserved."
 		set_notice("Workspace removed from VirtualAgentCafe. Its files remain on disk.")
+		pending_refresh = true
 	elif finished_action == "delete_task":
 		var removed_task := str(data.get("file", ""))
 		var was_editing_removed_task := chosen(definition_kind) == "tasks" and chosen(definition_select) == removed_task
@@ -767,14 +770,29 @@ func update_buttons() -> void:
 	buttons["Save configuration"].disabled = busy or running
 	var workspace_used := false
 	var task_used := false
+	var active_ids: Array = []
+	var workspace_blockers: Array[String] = []
 	for record in cache.get("agents", []):
 		var config: Dictionary = record.get("config", {})
-		workspace_used = workspace_used or chosen(workspace) in [config.get("workspace", ""), config.get("git", {}).get("repository", "")]
+		active_ids.append(str(config.get("id", "")))
+		if chosen(workspace) in [config.get("workspace", ""), config.get("git", {}).get("repository", "")]:
+			workspace_used = true
+			workspace_blockers.append("Agent: " + str(config.get("id", "")))
 		task_used = task_used or chosen(task_file) == str(config.get("task", ""))
 	for project in cache.get("projects", []):
-		workspace_used = workspace_used or chosen(workspace) == str(project.get("id", ""))
+		if chosen(workspace) != str(project.get("id", "")):
+			continue
+		var members: Array = project.get("agents", []).duplicate()
+		members.append(project.get("integrator", ""))
+		for member in members:
+			if member in active_ids:
+				workspace_used = true
+				workspace_blockers.append("Project agent: " + str(member))
+		if project.get("integration", {}).get("status", "") == "RUNNING":
+			workspace_used = true
+			workspace_blockers.append("Project integration is running")
 	buttons["Remove selected workspace"].disabled = busy or chosen(workspace).is_empty() or workspace_used
-	buttons["Remove selected workspace"].tooltip_text = "Reassign agents and repositories, or remove the project in Setup first." if workspace_used else "Remove from this list; keep all files and Git data."
+	buttons["Remove selected workspace"].tooltip_text = "In use by:\n" + "\n".join(workspace_blockers) if workspace_used else "Remove this entry and any abandoned project registration; keep files and Git data."
 	buttons["Delete selected task"].disabled = busy or chosen(task_file).is_empty() or task_used
 	buttons["Delete selected task"].tooltip_text = "Unassign this task from its agents and save first." if task_used else "Permanently delete the Markdown task file."
 	var can_retry := false
@@ -1015,7 +1033,7 @@ func ask_delete_workspace() -> void:
 		set_notice("Select a workspace to remove.", true)
 		return
 	workspace_delete_candidate = identifier
-	workspace_delete_dialog.dialog_text = "Remove workspace '" + identifier + "' from VirtualAgentCafe?\n\nIts folder, files, Git repository and branches are preserved. Assigned agent workspaces, Git repositories and managed project sources must be reassigned first."
+	workspace_delete_dialog.dialog_text = "Remove workspace '" + identifier + "' from VirtualAgentCafe?\n\nAny abandoned project registration for this workspace will also be archived. Its folder, files, worktrees, Git repository and branches are preserved. Existing agents and running integration block removal."
 	workspace_delete_dialog.popup_centered(Vector2i(760, 300))
 
 func confirm_delete_workspace() -> void:

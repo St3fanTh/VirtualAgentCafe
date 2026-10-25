@@ -6,6 +6,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from uuid import UUID, uuid4
 
+from pydantic import TypeAdapter
+
 from ..adapters.base import AgentAdapter
 from ..bus import EventBus
 from ..models import AgentState, Event, EventType, Payload
@@ -281,18 +283,45 @@ class ExecutionManager:
     async def delete_workspace(self, identifier: str) -> dict:
         async with self.control:
             # Removing a registration must also work after its directory disappeared.
+            TypeAdapter(Identifier).validate_python(identifier)
+            path = self.workspaces.files.path(identifier)
             self.store.get("workspaces", identifier)
-            for record in self.store.list("agents"):
+            agents = self.store.list("agents")
+            for record in agents:
                 config = record["config"]
                 if identifier in {config.get("workspace"), config.get("git", {}).get("repository")}:
                     raise ValueError(
                         f"Workspace is assigned to agent {config['id']}; reassign or remove "
                         "that agent first"
                     )
-            if any(identifier == project.get("id") for project in self.store.list("projects")):
-                raise ValueError(
-                    "Workspace is a managed project source; delete the project from Setup first"
+            project = next(
+                (p for p in self.store.list("projects") if p.get("id") == identifier), None
+            )
+            if project:
+                members = {*project.get("agents", []), project.get("integrator")} - {None}
+                active_ids = {record["config"]["id"] for record in agents}
+                if (
+                    members & (active_ids | self.running.keys())
+                    or identifier in self.integrations.running
+                ):
+                    raise ValueError(
+                        "Project still has agents or running integration; remove it in Setup"
+                    )
+                # Archive only abandoned management metadata. Files, worktrees and history stay.
+                self.store.delete_project(
+                    identifier,
+                    str(uuid4()),
+                    {"id": identifier, "deleted_at": now(), "project": project},
+                    [],
+                    [identifier],
                 )
+                return {
+                    "id": identifier,
+                    "removed": True,
+                    "path": str(path),
+                    "files_preserved": True,
+                    "project_removed": True,
+                }
             return self.workspaces.unregister(identifier)
 
     def register(self, config: AgentConfig):

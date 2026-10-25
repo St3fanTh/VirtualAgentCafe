@@ -1,5 +1,26 @@
 # VirtualAgentCafe — Fortschritt
 
+## Ausgegraute Löschaktion bei verwaisten Projekten — 2026-10-25
+
+- Nutzer meldet ausgegrauten Button bei drei alten Projekt-Workspace-IDs. Ursache
+  im UI: Jeder Projekteintag sperrte den Workspace, unabhängig davon, ob seine
+  Agents längst gelöscht waren. Backend hatte dieselbe pauschale Sperre.
+- Unbenutzte Projektquellen lassen sich nun nach Bestätigung aus der Verwaltung
+  entfernen. Verwaiste Projektregistrierung wird dabei atomar archiviert. Dateien,
+  Worktrees, Branches und Historie bleiben bestehen, auch bei fehlendem Quellordner.
+- Bestehende Projektmitglieder, direkte Workspace-/Git-Zuordnungen und laufende
+  Integration bleiben geschützt. Tooltip nennt die konkret blockierenden Agents.
+- Dateien: management/execution.py, test_agent_deletion.py, management.gd,
+  test_gui_input.gd, docs/agent-management.md und PROGRESS.md.
+- Tests: API-Regression für verwaiste Registrierung, Neustart und Erhalt fremder
+  Dateien; Sperren für Projektmitglieder/Integration; GUI-Eingabetest prüft Button
+  und Tooltip mit vorhandenen gegenüber gelöschten Mitgliedern. Vollcheck
+  `scripts/check.sh` PASS: 174 pytest, Ruff/Format, Godot-Import/Zustände/Headless
+  und Live-WebSocket-Smoke; bestehende Starlette-Deprecation-Warnung.
+- Commit: `git log --grep='remove orphaned project workspace registrations'`.
+- Nutzerhost-Daten wurden nicht verändert. Löschung erfolgt erst durch bestätigte
+  Bedienung im aktualisierten Client.
+
 ## Veraltete Workspace-Einträge entfernen — 2026-10-25
 
 - Registrierung eines unbenutzten Workspace kann jetzt auch entfernt werden,

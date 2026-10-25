@@ -205,11 +205,26 @@ def test_task_and_workspace_delete_api_guards_and_file_behavior(tmp_path):
         assert (workspace / "keep.txt").read_text() == "workspace contents"
 
 
-def test_unregister_missing_workspace_directory_through_api(tmp_path):
+@pytest.mark.parametrize("orphaned_project", [False, True])
+def test_unregister_missing_workspace_directory_through_api(tmp_path, orphaned_project):
     app = create_app("codex", management_root=tmp_path)
     manager = app.state.management
     manager.workspaces.create("stale")
     manager.workspaces.get("stale").rmdir()
+    if orphaned_project:
+        manager.store.put(
+            "projects",
+            "stale",
+            {
+                "id": "stale",
+                "agents": ["deleted-backend", "deleted-frontend"],
+                "integrator": "deleted-integration",
+                "auto_integrate": False,
+            },
+        )
+    manager.workspaces.create("preserved-worker")
+    work = manager.workspaces.get("preserved-worker") / "uncommitted.txt"
+    work.write_text("keep this work")
     headers = {"Authorization": "Bearer " + manager.access.token}
     with TestClient(app) as client:
         response = client.request(
@@ -217,5 +232,31 @@ def test_unregister_missing_workspace_directory_through_api(tmp_path):
         )
         assert response.status_code == 200
         assert response.json()["removed"]
-        assert not client.get("/management", headers=headers).json()["workspaces"]
-    assert not ExecutionManager(tmp_path, EventBus()).store.list("workspaces")
+        overview = client.get("/management", headers=headers).json()
+        assert [w["id"] for w in overview["workspaces"]] == ["preserved-worker"]
+        assert not overview["projects"]
+    restored = ExecutionManager(tmp_path, EventBus())
+    assert [w["id"] for w in restored.store.list("workspaces")] == ["preserved-worker"]
+    assert bool(restored.store.list("deleted_projects")) == orphaned_project
+    assert work.read_text() == "keep this work"
+
+
+async def test_unregister_project_source_protects_members_and_integration(tmp_path):
+    manager = ExecutionManager(tmp_path, EventBus())
+    agent(manager)
+    manager.workspaces.create("source")
+    manager.store.put("projects", "source", {"id": "source", "agents": ["backend-agent"]})
+    with pytest.raises(ValueError, match="Project still has agents"):
+        await manager.delete_workspace("source")
+    await manager.delete("backend-agent")
+    running = asyncio.create_task(asyncio.Event().wait())
+    manager.integrations.running["source"] = running
+    try:
+        with pytest.raises(ValueError, match="running integration"):
+            await manager.delete_workspace("source")
+        assert manager.store.get("workspaces", "source")
+        assert manager.store.get("projects", "source")
+    finally:
+        manager.integrations.running.pop("source")
+        running.cancel()
+        await asyncio.gather(running, return_exceptions=True)

@@ -260,6 +260,13 @@ func run() -> void:
 	check(not "no tracked file changes" in ui.git_result.text, "Failed diff clears previous successful result")
 	await tab(ui, 0)
 	await select_option(ui.workspace, 1)
+	# Old project membership must not keep a workspace locked after agent deletion.
+	ui.cache["projects"] = [{"id": "old-project", "agents": ["gui-agent"]}]
+	ui.update_buttons()
+	check(ui.buttons["Remove selected workspace"].disabled, "Existing project member blocks removal")
+	check("gui-agent" in ui.buttons["Remove selected workspace"].tooltip_text, "Tooltip names the blocking agent")
+	ui.cache["projects"] = [{"id": "old-project", "agents": ["deleted-agent"]}]
+	ui.update_buttons()
 	check(not ui.buttons["Remove selected workspace"].disabled, "Unused workspace can be removed")
 	await click(ui.buttons["Remove selected workspace"])
 	check(ui.workspace_delete_dialog.visible, "Workspace removal requires confirmation")
