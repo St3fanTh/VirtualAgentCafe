@@ -1,5 +1,20 @@
 # VirtualAgentCafe — Fortschritt
 
+## Veraltete Workspace-Einträge entfernen — 2026-10-25
+
+- Registrierung eines unbenutzten Workspace kann jetzt auch entfernt werden,
+  wenn sein Ordner bereits fehlt. Bisher blockierte `Workspace is unavailable`
+  genau die Bereinigung solcher veralteten Einträge.
+- Agenten-/Projektzuordnungen und Pfadvalidierung bleiben geprüft; es werden
+  weiterhin ausschließlich Verwaltungseinträge entfernt.
+- Dateien: management/execution.py, test_agent_deletion.py, PROGRESS.md.
+- Regression prüft DELETE über HTTP, aktualisierte Übersicht und persistente
+  Entfernung nach Neustart. `scripts/check.sh` vollständig PASS: 172 pytest,
+  Ruff/Format, Godot-Import/Zustände/Headless und Live-WebSocket-Smoke.
+- Commit über `git log --grep='allow unregistering missing workspace directories'`.
+- Die drei konkreten Workspace-Einträge auf dem Nutzerhost sind nicht eingesehen;
+  ausgegraute Buttons können weiterhin auf gespeicherte Zuordnungen hinweisen.
+
 ## Projektlöschung nach einzeln gelöschten Agents — 2026-10-21
 
 - Ursache: Projektmitgliedschaften bleiben nach Agentenlöschung für die Historie

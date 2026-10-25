@@ -203,3 +203,19 @@ def test_task_and_workspace_delete_api_guards_and_file_behavior(tmp_path):
         assert workspace_response.status_code == 200
         assert workspace_response.json()["files_preserved"]
         assert (workspace / "keep.txt").read_text() == "workspace contents"
+
+
+def test_unregister_missing_workspace_directory_through_api(tmp_path):
+    app = create_app("codex", management_root=tmp_path)
+    manager = app.state.management
+    manager.workspaces.create("stale")
+    manager.workspaces.get("stale").rmdir()
+    headers = {"Authorization": "Bearer " + manager.access.token}
+    with TestClient(app) as client:
+        response = client.request(
+            "DELETE", "/management/workspaces/stale", headers=headers, json={"confirmed": True}
+        )
+        assert response.status_code == 200
+        assert response.json()["removed"]
+        assert not client.get("/management", headers=headers).json()["workspaces"]
+    assert not ExecutionManager(tmp_path, EventBus()).store.list("workspaces")

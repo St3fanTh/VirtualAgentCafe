@@ -280,7 +280,8 @@ class ExecutionManager:
 
     async def delete_workspace(self, identifier: str) -> dict:
         async with self.control:
-            self.workspaces.get(identifier)
+            # Removing a registration must also work after its directory disappeared.
+            self.store.get("workspaces", identifier)
             for record in self.store.list("agents"):
                 config = record["config"]
                 if identifier in {config.get("workspace"), config.get("git", {}).get("repository")}:
