@@ -1109,3 +1109,18 @@
   Bestehende Starlette/httpx-Deprecation-Warnung unverändert.
 - Nächster Schritt: Backend neu bauen, Godot neu öffnen und falschen Setup-Eintrag
   entfernen. Feature-Branch wird gepusht; kein Merge nach main.
+
+## Rückmeldung bei leerer Projektsuche — 2026-10-26
+
+- Find projects zeigte bei leerem Ergebnis weiterhin die normale Auswahl-Anleitung.
+  Nun zeigt der Client Suchfortschritt, Ergebnisanzahl beziehungsweise einen
+  eindeutigen Leerzustand in Ergebnisfeld und Statusmeldung.
+- Die Anzeige unterscheidet Wiederherstellen entfernter Ordner von Einbinden eines
+  neuen Host-Ordners per setup-project.py. Suche hebt keine Entfernung still auf.
+- Dateien: game/scripts/management.gd, game/tests/test_setup_input.gd, PROGRESS.md.
+- Native GUI-Regression prüft leere Suche und beide konkreten Handlungshinweise.
+- Commit-ID: `git log --grep='explain empty project discovery results'`.
+- Validierung: scripts/check.sh vollständig PASS, 178 pytest inklusive nativer
+  GUI-Tests; Ruff, Godot-Import/Zustände/Headless und WebSocket-Smoke grün.
+  Bestehende Starlette/httpx-Warnung unverändert.
+- Nächster Schritt: Feature-Branch aktualisieren und Godot neu öffnen.

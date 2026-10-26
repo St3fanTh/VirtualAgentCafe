@@ -565,7 +565,13 @@ func received(_result: int, code: int, _headers: PackedStringArray, body: Packed
 		if not OS.get_environment("VAC_SETUP_PROJECT").is_empty():
 			choose(setup_project, OS.get_environment("VAC_SETUP_PROJECT"))
 		setup_ready = false
-		setup_result.text = "Select your project, describe the goal and run Check project.\n\nApproved folder: " + str(data.get("approved_root", "")) + "\n\nProject missing? Run scripts/setup-project.py on your Docker host to select and mount its folder."
+		var found: Array = data.get("projects", [])
+		var discovery_message := "Found " + str(found.size()) + " mounted Git project(s). Select one and run Check project."
+		if found.is_empty():
+			discovery_message = "No visible Git projects found. Removed a folder? Click Restore removed folders. For a different project, run python3 scripts/setup-project.py on your Docker host and select its folder."
+		setup_result.text = discovery_message + "\n\nFind projects scans mounted folders only; it does not open a folder picker.\nApproved folder: " + str(data.get("approved_root", ""))
+		setup_result.scroll_vertical = 0
+		set_notice(discovery_message)
 	elif finished_action in ["setup_docs_load", "setup_docs_save"]:
 		if str(data.get("project", "")) == chosen(setup_project):
 			setup_documents = data.get("documents", {})
@@ -1204,7 +1210,11 @@ func build_setup(parent_tabs: TabContainer) -> void:
 			call_api("setup_remove", "/setup/projects/" + identifier, HTTPClient.METHOD_DELETE, {"confirmed": true}))
 	setup_remove_dialog.canceled.connect(func(): setup_remove_candidate = "")
 	add_child(setup_remove_dialog)
-	button(form, "Find projects", func(): call_api("setup_projects", "/setup"))
+	button(form, "Find projects", func():
+		set_notice("Searching mounted Git folders…")
+		setup_result.text = "Searching mounted Git folders…"
+		call_api("setup_projects", "/setup"))
+	form.add_child(caption("Find projects searches mounted folders. Removed entries: Restore removed folders. New project folder: run python3 scripts/setup-project.py on your Docker host."))
 	button(form, "Delete selected project", ask_delete_selected_project)
 	button(form, "Delete all managed projects", ask_delete_all_projects)
 	form.add_child(caption("Optional goal override. A loaded PLANNING.md supplies the next incomplete milestone. Define the shared API contract when possible."))
