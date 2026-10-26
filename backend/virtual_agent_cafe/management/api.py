@@ -75,6 +75,16 @@ def management_router(manager: ExecutionManager, validated_body, mode: str) -> A
     async def setup_projects():
         return await guarded(lambda: asyncio.to_thread(setup.projects))
 
+    @router.delete("/setup/projects/{identifier}")
+    async def remove_project_choice(identifier: str, request: Request):
+        await validated_body(request, DeleteInput)
+        return await guarded(lambda: setup.remove_project_choice(identifier))
+
+    @router.post("/setup/restore")
+    async def restore_project_choices(request: Request):
+        await validated_body(request, DeleteInput)
+        return await guarded(setup.restore_project_choices)
+
     @router.post("/setup/check")
     async def setup_check(request: Request):
         data = await validated_body(request, SetupCheck)

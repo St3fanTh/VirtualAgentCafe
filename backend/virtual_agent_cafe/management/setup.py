@@ -47,15 +47,46 @@ class ProjectSetup:
     def projects(self):
         root = self.manager.workspaces.files.root
         projects = []
+        hidden = {item["id"] for item in self.manager.store.list("hidden_setup_projects")}
         for path in sorted(root.iterdir()):
             try:
                 TypeAdapter(Identifier).validate_python(path.name)
                 self.manager.workspaces.files.path(path.name)
-                if path.is_dir() and (path / ".git").is_dir():
+                if path.name not in hidden and path.is_dir() and (path / ".git").is_dir():
                     projects.append(path.name)
             except ValueError:
                 continue
         return {"projects": projects, "approved_root": str(root)}
+
+    async def remove_project_choice(self, identifier: str):
+        manager = self.manager
+        async with manager.control:
+            TypeAdapter(Identifier).validate_python(identifier)
+            manager.workspaces.files.path(identifier)
+            if any(p["id"] == identifier for p in manager.store.list("projects")):
+                raise ValueError(
+                    "Delete the managed project in Setup first; "
+                    "then remove its folder from the list"
+                )
+            for agent in manager.store.list("agents"):
+                config = agent["config"]
+                if identifier in {config.get("workspace"), config.get("git", {}).get("repository")}:
+                    raise ValueError(
+                        f"Workspace is assigned to agent {config['id']}; "
+                        "reassign or delete it first"
+                    )
+            if identifier in manager.integrations.running:
+                raise ValueError("Wait for integration to finish")
+            # Discovery includes folders that have never been registered or checked.
+            manager.store.put("hidden_setup_projects", identifier, {"id": identifier})
+            manager.store.delete("workspaces", identifier)
+            return {"id": identifier, "removed": True, "files_preserved": True}
+
+    async def restore_project_choices(self):
+        async with self.manager.control:
+            for item in self.manager.store.list("hidden_setup_projects"):
+                self.manager.store.delete("hidden_setup_projects", item["id"])
+            return self.projects()
 
     async def command_ok(self, command: list[str]) -> bool:
         # No command output reaches the API: login status may contain account data.

@@ -491,3 +491,30 @@ def test_project_identity_reuses_remote_across_mount_paths_and_remembers_overrid
     assert launcher.project_id(second) == legacy
     mapping = (root / ".runtime/setup/project-mounts.json").read_text()
     assert "github.com" not in mapping and legacy in mapping
+
+
+async def test_remove_setup_choice_preserves_files_and_survives_restart(tmp_path, monkeypatch):
+    manager, setup, source = await project(tmp_path, monkeypatch)
+    assert "sample" in setup.projects()["projects"]
+    result = await setup.remove_project_choice("sample")
+    assert result["files_preserved"]
+    assert (source / ".git").is_dir()
+    assert (source / "README.md").read_text() == "# Existing project\n"
+    assert not manager.store.list("workspaces")
+    restarted = ProjectSetup(ExecutionManager(tmp_path, EventBus()), "codex")
+    assert "sample" not in restarted.projects()["projects"]
+    assert "sample" in (await restarted.restore_project_choices())["projects"]
+    # An unregistered discovered folder must also be removable, without Check project.
+    await restarted.remove_project_choice("sample")
+    assert "sample" not in restarted.projects()["projects"]
+    with pytest.raises(ValueError):
+        await restarted.remove_project_choice("../outside")
+
+
+async def test_remove_setup_choice_rejects_managed_team(tmp_path, monkeypatch):
+    manager, setup, source = await project(tmp_path, monkeypatch)
+    await setup.create(SetupInput(project="sample", objective="Build an API and frontend."))
+    with pytest.raises(ValueError, match="managed project"):
+        await setup.remove_project_choice("sample")
+    assert "sample" in setup.projects()["projects"]
+    assert manager.workspaces.get("sample") == source

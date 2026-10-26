@@ -44,6 +44,8 @@ var delete_candidate := ""
 var workspace_delete_dialog := ConfirmationDialog.new()
 var task_delete_dialog := ConfirmationDialog.new()
 var workspace_delete_candidate := ""
+var setup_remove_candidate := ""
+var setup_remove_dialog := ConfirmationDialog.new()
 var task_delete_candidate := ""
 var project_delete_dialog := ConfirmationDialog.new()
 var project_delete_ids: Array[String] = []
@@ -558,7 +560,7 @@ func received(_result: int, code: int, _headers: PackedStringArray, body: Packed
 		call_deferred("after_response")
 		return
 	var finished_action: String = completed.get("action", action)
-	if finished_action == "setup_projects":
+	if finished_action in ["setup_projects", "setup_restore"]:
 		fill_options(setup_project, data.get("projects", []))
 		if not OS.get_environment("VAC_SETUP_PROJECT").is_empty():
 			choose(setup_project, OS.get_environment("VAC_SETUP_PROJECT"))
@@ -664,6 +666,17 @@ func received(_result: int, code: int, _headers: PackedStringArray, body: Packed
 		populate()
 		set_notice("Agent deleted. Workspace, Git branches, Markdown and execution history kept.")
 		pending_refresh = true
+	elif finished_action == "setup_remove":
+		setup_ready = false
+		setup_checked_project = ""
+		setup_document_project = ""
+		setup_documents = {}
+		setup_document_editor.text = ""
+		cache["workspaces"] = cache.get("workspaces", []).filter(func(item): return str(item.get("id", "")) != str(data.get("id", "")))
+		populate()
+		set_notice("Folder removed from setup. Files and Git data are preserved.")
+		pending_refresh = true
+		call_api("setup_projects", "/setup")
 	elif finished_action == "delete_workspace":
 		var removed_workspace := str(data.get("id", ""))
 		if data.get("project_removed", false):
@@ -744,6 +757,7 @@ func update_buttons() -> void:
 		var managed_ids: Array = []
 		for project in cache.get("projects", []):
 			managed_ids.append(project.get("id", ""))
+		buttons["Remove folder from setup"].disabled = busy or chosen(setup_project).is_empty()
 		buttons["Delete selected project"].disabled = busy or not managed_ids.has(chosen(setup_project))
 		buttons["Delete all managed projects"].disabled = busy or managed_ids.is_empty()
 		buttons["Check project"].disabled = busy or chosen(setup_project).is_empty()
@@ -1174,6 +1188,22 @@ func build_setup(parent_tabs: TabContainer) -> void:
 	setup_project.item_selected.connect(func(_index):
 		setup_ready = false
 		update_buttons())
+	button(form, "Remove folder from setup", func():
+		setup_remove_candidate = chosen(setup_project)
+		setup_remove_dialog.dialog_text = "Remove '" + setup_remove_candidate + "' from Setup and the workspace list?\n\nFiles and Git data are preserved. Assigned agents or an existing managed team must be removed first. Use Restore removed folders to show this folder again."
+		setup_remove_dialog.popup_centered(Vector2i(760, 300)))
+	button(form, "Restore removed folders", func(): call_api("setup_restore", "/setup/restore", HTTPClient.METHOD_POST, {"confirmed": true}))
+	setup_remove_dialog.title = "Remove folder from setup"
+	setup_remove_dialog.ok_button_text = "Remove from list"
+	setup_remove_dialog.dialog_autowrap = true
+	setup_remove_dialog.theme = theme
+	setup_remove_dialog.confirmed.connect(func():
+		var identifier := setup_remove_candidate
+		setup_remove_candidate = ""
+		if not identifier.is_empty():
+			call_api("setup_remove", "/setup/projects/" + identifier, HTTPClient.METHOD_DELETE, {"confirmed": true}))
+	setup_remove_dialog.canceled.connect(func(): setup_remove_candidate = "")
+	add_child(setup_remove_dialog)
 	button(form, "Find projects", func(): call_api("setup_projects", "/setup"))
 	button(form, "Delete selected project", ask_delete_selected_project)
 	button(form, "Delete all managed projects", ask_delete_all_projects)

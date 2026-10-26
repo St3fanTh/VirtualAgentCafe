@@ -1086,3 +1086,26 @@
   Eine bestehende Starlette/httpx-Deprecation-Warnung; keine Testfehler.
 - Nächster Schritt: Backend neu bauen und Godot neu öffnen; einen neuen Lauf im
   Bericht prüfen. Kein automatischer Merge nach main.
+
+## Falsche Setup-Ordner entfernen — 2026-10-26
+
+- Ursache: Setup entdeckt Git-Ordner direkt auf dem Dateisystem; Projektlöschung
+  war nur für angelegte Teams verfügbar und Registrierungsentfernung blendete
+  den Ordner nicht aus der Suche aus.
+- Setup erhält Remove folder from setup mit Bestätigung, auch vor erfolgreichem
+  Projektcheck. Persistente Ausblendung verhindert Wiederauftauchen bei Suche und
+  Neustart. Restore removed folders macht die Auswahl wieder verfügbar.
+- Workspace-Registrierung wird entfernt, Dateien/Git/Mounts bleiben erhalten.
+  Aktive Zuordnungen und verwaltete Teams verhindern die Aktion mit Fehlermeldung.
+- Dateien: management/setup.py, api.py; game/scripts/management.gd;
+  test_project_setup.py, game/tests/test_setup_input.gd; Anleitung und Fortschritt.
+- Tests ergänzen Dateierhalt, Neustart, unregistrierte Ordner, Pfadprüfung,
+  Team-Schutz sowie echte GUI-Klicks für Bestätigung/Abbruch/Entfernen/Wiederherstellen.
+- Commit-ID: `git log --grep='remove unwanted folders from project setup'`.
+- Grenze: entfernt keine physischen Ordner oder Docker-Mounts; für neue Host-Pfade
+  den Starter erneut verwenden.
+- Validierung: `scripts/check.sh` vollständig PASS; 178 pytest inklusive nativer
+  GUI-Tests, Ruff/Format, Godot-Import/Zustände/Headless und Live-WebSocket grün.
+  Bestehende Starlette/httpx-Deprecation-Warnung unverändert.
+- Nächster Schritt: Backend neu bauen, Godot neu öffnen und falschen Setup-Eintrag
+  entfernen. Feature-Branch wird gepusht; kein Merge nach main.

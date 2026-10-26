@@ -374,3 +374,18 @@ die Testausgabe im Workspace; ältere Ausführungen erhalten keine rückwirkend
 erfundenen Testdetails. Der Changelog ist der Bericht des Modells, kein Nachweis
 für einen Push oder erfüllte Anforderungen: dafür gelten die separat angezeigten
 Controller-Ergebnisse und die gemeinsame Requirements-Validierung.
+
+### Falschen Projektordner aus dem Setup entfernen
+
+Unter **Setup** den falschen Eintrag in **Approved Git project** auswählen und
+**Remove folder from setup** bestätigen. Das funktioniert auch vor einem
+ erfolgreichen **Check project**, ohne angelegtes Team. Die Workspace-Registrierung
+wird entfernt und der Ordner dauerhaft aus der Setup-Suche ausgeblendet; Dateien,
+Git-Daten und Docker-Mounts bleiben unverändert. **Find projects** und Backend-
+Neustarts blenden ihn nicht wieder ein. **Restore removed folders** stellt die
+entfernten Ordner in der Suche wieder her.
+
+Ein zugeordnetes Team zuerst mit **Delete selected project** entfernen; bei einzeln
+zugeordneten Agenten deren Workspace ändern oder die Agenten löschen. Laufende
+Arbeit bleibt geschützt. Einen anderen Host-Ordner weiterhin über
+`scripts/setup-project.py` auswählen und mounten.
