@@ -595,7 +595,7 @@ func received(_result: int, code: int, _headers: PackedStringArray, body: Packed
 			publication_hint = "Successful runs will push their own branches. Shared integration disabled."
 		if data.get("auto_integrate", false):
 			publication_hint = "Automatic shared integration, requirements tests and main promotion enabled."
-		setup_result.text = "TEAM READY\n\n" + "\n".join(data.get("agents", [])) + "\n\nTwo persistent worktrees and branches are ready. Worker files are saved there, not in your source folder. Start new worker runs from Agents; enabled integration uses ready published results automatically.\n\nNext: open Agents, review each Markdown task and its interface contract, then Start agent. Monitor execution logs and the shared test results. " + publication_hint
+		setup_result.text = "TEAM READY\n\n" + "\n".join(data.get("agents", [])) + "\n\nTwo persistent worktrees and branches are ready. Worker files are saved there, not in your source folder. Start new worker runs from Agents; enabled integration uses ready published results automatically.\n\nExisting Markdown tasks and roles are kept unchanged, including files from an earlier team. Next: open Agents, review each Markdown task and its interface contract, then Start agent. Monitor execution logs and the shared test results. " + publication_hint
 		setup_ready = false
 		pending_refresh = true
 		if data.get("auto_integrate", false):

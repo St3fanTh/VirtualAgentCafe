@@ -389,3 +389,14 @@ Ein zugeordnetes Team zuerst mit **Delete selected project** entfernen; bei einz
 zugeordneten Agenten deren Workspace ändern oder die Agenten löschen. Laufende
 Arbeit bleibt geschützt. Einen anderen Host-Ordner weiterhin über
 `scripts/setup-project.py` auswählen und mounten.
+
+### Team nach dem Löschen erneut anlegen
+
+Das Setup verwendet vorhandene Markdown-Aufgaben und Rollen für dieselben
+Agenten-IDs erneut, auch für Integration & Tests. Nicht mehr zugeordnete Dateien können nach dem
+Löschen eines Teams erhalten bleiben. Die frühere Meldung „Team Markdown already
+exists“ blockiert die Wiederanlage nicht mehr. Vorhandene Inhalte werden validiert
+und niemals durch die Vorlagen oder ein neues Setup-Ziel überschrieben. Vor dem
+Start unter Agents/Markdown prüfen, ob die Aufgaben noch zum aktuellen Ziel passen.
+Ungültige Markdown-Dateien müssen dort korrigiert werden. Nichtleere fremde
+Arbeitsverzeichnisse und bereits belegte Agenten-IDs bleiben geschützt.

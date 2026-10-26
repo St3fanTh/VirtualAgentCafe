@@ -102,10 +102,6 @@ async def test_conflicts_preserve_files_and_partial_setup_can_resume(tmp_path, m
     manager, setup, _ = await project(tmp_path, monkeypatch)
     data = SetupInput(project="sample", objective="Build an API with frontend.")
     manager.tasks.save("sample-backend.md", "# Existing\nKeep me")
-    with pytest.raises(ValueError, match="Markdown already exists"):
-        await setup.create(data)
-    assert not manager.store.list("projects")
-    manager.tasks.files.path("sample-backend.md").unlink()
     worktree = manager.git.worktree
     calls = 0
 
@@ -120,6 +116,7 @@ async def test_conflicts_preserve_files_and_partial_setup_can_resume(tmp_path, m
     with pytest.raises(ValueError, match="Interrupted"):
         await setup.create(data)
     assert manager.store.get("projects", "sample")["status"] == "PREPARING"
+    assert manager.tasks.load("sample-backend.md")["content"] == "# Existing\nKeep me"
     from virtual_agent_cafe.bus import EventBus
     from virtual_agent_cafe.management.execution import ExecutionManager
 
@@ -518,3 +515,43 @@ async def test_remove_setup_choice_rejects_managed_team(tmp_path, monkeypatch):
         await setup.remove_project_choice("sample")
     assert "sample" in setup.projects()["projects"]
     assert manager.workspaces.get("sample") == source
+
+
+async def test_recreate_deleted_team_reuses_worker_and_integration_markdown(tmp_path, monkeypatch):
+    manager, setup, _ = await project(tmp_path, monkeypatch)
+    data = SetupInput(project="sample", objective="Build an API with frontend.")
+    await setup.create(data)
+    for role in ("backend", "frontend"):
+        # Reassigned definitions leave the original names unowned on project deletion.
+        record = manager.registry.get("sample-" + role)
+        from virtual_agent_cafe.management.config import AgentConfig
+
+        config = AgentConfig.model_validate(record["config"])
+        replacement = "replacement-" + role + ".md"
+        manager.tasks.save(replacement, "# Replacement task\nBuild the project.")
+        manager.roles.save(replacement, "# Replacement role\nImplement the task.")
+        config.task = replacement
+        config.roles = [replacement]
+        manager.configure(config)
+    for name in ("sample-backend.md", "sample-frontend.md", "sample-integration.md"):
+        manager.tasks.save(name, "# Custom task\nPreserve this task exactly.")
+        manager.roles.save(name, "# Custom role\nPreserve this role exactly.")
+    await manager.delete_project("sample")
+    assert not manager.store.list("projects")
+    recreated = await setup.create(data)
+    assert recreated["status"] == "READY"
+    await setup.enable_integration(recreated)
+    await manager.integrations.close()
+    assert len(manager.store.list("agents")) == 3
+    for name in ("sample-backend.md", "sample-frontend.md", "sample-integration.md"):
+        assert manager.tasks.load(name)["content"] == "# Custom task\nPreserve this task exactly."
+        assert manager.roles.load(name)["content"] == "# Custom role\nPreserve this role exactly."
+
+
+async def test_invalid_preserved_markdown_fails_before_creating_team(tmp_path, monkeypatch):
+    manager, setup, _ = await project(tmp_path, monkeypatch)
+    manager.tasks.files.path("sample-backend.md").write_text("Invalid instructions")
+    with pytest.raises(ValueError, match="heading"):
+        await setup.create(SetupInput(project="sample", objective="Build an API with frontend."))
+    assert not manager.store.list("projects")
+    assert not manager.store.list("agents")

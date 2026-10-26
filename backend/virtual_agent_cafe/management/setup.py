@@ -303,13 +303,11 @@ class ProjectSetup:
                         raise ValueError(
                             "Team destination is not empty; existing files are preserved"
                         )
-                    if any(
-                        files.files.path(config.id + ".md").exists()
-                        for files in (manager.tasks, manager.roles)
-                    ):
-                        raise ValueError(
-                            "Team Markdown already exists; existing instructions are preserved"
-                        )
+                    # Unassigned Markdown can survive team deletion. Validate and reuse
+                    # those definitions rather than blocking recreation or overwriting edits.
+                    for definitions in (manager.tasks, manager.roles):
+                        if definitions.files.path(config.id + ".md").exists():
+                            definitions.load(config.id + ".md")
                 if len(manager.bus.agents) + (3 if data.auto_integrate else 2) > 64:
                     raise ValueError("Agent capacity reached")
                 manager.store.put(
@@ -418,11 +416,9 @@ class ProjectSetup:
         if not record.get("integrator"):
             if any(a["config"]["id"] == identifier for a in manager.store.list("agents")):
                 raise ValueError("Integration agent ID is already in use")
-            if (
-                manager.tasks.files.path(identifier + ".md").exists()
-                or manager.roles.files.path(identifier + ".md").exists()
-            ):
-                raise ValueError("Integration instructions already exist; existing files preserved")
+            for definitions in (manager.tasks, manager.roles):
+                if definitions.files.path(identifier + ".md").exists():
+                    definitions.load(identifier + ".md")
             destination = manager.workspaces.files.path(identifier)
             if destination.exists() and any(destination.iterdir()):
                 raise ValueError("Integration destination is not empty; existing files preserved")

@@ -1124,3 +1124,24 @@
   GUI-Tests; Ruff, Godot-Import/Zustände/Headless und WebSocket-Smoke grün.
   Bestehende Starlette/httpx-Warnung unverändert.
 - Nächster Schritt: Feature-Branch aktualisieren und Godot neu öffnen.
+
+## Team-Wiederanlage mit erhaltenem Markdown — 2026-10-26
+
+- Ursache: Nicht mehr zugeordnete Aufgaben/Rollen können Projektlöschung überleben;
+  Setup verweigerte wegen dieser vorhandenen Dateien die Neuerstellung.
+- Worker- und Integrationssetup validieren vorhandene Definitionen und verwenden
+  sie unverändert. Fehlende Definitionen werden weiterhin aus Vorlagen erzeugt.
+  Belegte Agenten-IDs und nichtleere Zielverzeichnisse bleiben geschützt.
+- Setup weist auf erhaltene Aufgaben/Rollen und die Prüfung vor dem Start hin.
+- Dateien: management/setup.py; test_project_setup.py; management.gd;
+  docs/agent-management.md und PROGRESS.md.
+- Regression: echtes Team erstellen/löschen/erneut erstellen, Worker- und
+  Integrationsdefinitionen bytegleich erhalten; ungültiges Markdown ablehnen;
+  unterbrochenes Setup mit vorhandenen Definitionen wiederaufnehmen.
+- Commit-ID: `git log --grep='reuse preserved team markdown during setup'`.
+- Nächster Schritt: Aktualisieren und Team-Setup erneut ausführen; vorhandene
+  Aufgaben vor neuen Läufen prüfen. Keine Datenmigration oder Dateilöschung nötig.
+- Validierung nach korrigierter Testannahme zur Löschung zugeordneter Dateien:
+  scripts/check.sh vollständig PASS; 180 pytest, Ruff/Format, native GUI-Tests,
+  Godot-Import/Zustände/Headless und WebSocket-Smoke. Bestehende
+  Starlette/httpx-Deprecation-Warnung unverändert.
