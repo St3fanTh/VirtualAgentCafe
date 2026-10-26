@@ -32,6 +32,7 @@ var commit_message: LineEdit
 var git_result: TextEdit
 var executions: ItemList
 var logs: TextEdit
+var execution_report: TextEdit
 var execution_status: Label
 var selected_execution := ""
 var log_sequence := 0
@@ -448,6 +449,7 @@ func build_executions(tabs: TabContainer) -> void:
 		selected_execution = str(executions.get_item_metadata(index))
 		log_sequence = 0
 		logs.text = ""
+		execution_report.text = "Loading execution report…"
 		call_api("logs", "/executions/" + selected_execution + "/logs"))
 	list_column.add_child(executions)
 	button(list_column, "Refresh execution history", func():
@@ -461,7 +463,17 @@ func build_executions(tabs: TabContainer) -> void:
 	logs = TextEdit.new()
 	logs.editable = false
 	logs.custom_minimum_size = Vector2(760, 360)
-	monitor.add_child(logs)
+	var report_tabs := TabContainer.new()
+	report_tabs.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	monitor.add_child(report_tabs)
+	logs.name = "Live logs"
+	report_tabs.add_child(logs)
+	execution_report = TextEdit.new()
+	execution_report.name = "Changelog & tests"
+	execution_report.editable = false
+	execution_report.wrap_mode = TextEdit.LINE_WRAPPING_BOUNDARY
+	execution_report.custom_minimum_size = Vector2(760, 360)
+	report_tabs.add_child(execution_report)
 	monitor.add_child(caption("Team runs integrate automatically. Main is updated only after shared requirements tests pass."))
 	button(monitor, "Retry team integration", retry_integration)
 
@@ -599,9 +611,7 @@ func received(_result: int, code: int, _headers: PackedStringArray, body: Packed
 		var published: Dictionary = record.get("published", {})
 		if not published.is_empty():
 			execution_status.text += "\nPushed: " + str(published.get("branch", "")) + " · " + str(published.get("commit", ""))
-		var changelog := str(record.get("changelog", "")).strip_edges()
-		if not changelog.is_empty():
-			execution_status.text += "\n\nRECAP\n" + changelog.left(1400)
+		execution_report.text = format_execution_report(record)
 		if record.has("validation"):
 			var validation: Dictionary = record.validation
 			execution_status.text += "\nRequirements: " + str(validation.get("requirements", []).size()) + " · Shared tests: " + ("PASS" if validation.get("passed", false) else "FAIL")
@@ -1304,3 +1314,24 @@ func check_setup_project() -> void:
 	setup_result.text = "Checking " + chosen(setup_project) + "…\n\nValidating workspace isolation, Codex login and Git."
 	setup_result.scroll_vertical = 0
 	call_api("setup_check", "/setup/check", HTTPClient.METHOD_POST, {"project": chosen(setup_project), "check_remote": setup_remote.button_pressed})
+
+func format_execution_report(record: Dictionary) -> String:
+	var text := "RESULT\n" + str(record.get("detail", "Execution in progress"))
+	text += "\n\nPUBLICATION (verified by controller)\n" + str(record.get("publication", "NOT_REQUESTED"))
+	var published: Dictionary = record.get("published", {})
+	if not published.is_empty():
+		text += "\nBranch: " + str(published.get("branch", "")) + "\nCommit: " + str(published.get("commit", ""))
+	text += "\n\nOBSERVED TEST RUNS\n"
+	var runs: Array = record.get("test_runs", [])
+	if runs.is_empty():
+		text += "No structured test evidence recorded for this execution.\n"
+	for run in runs:
+		text += str(run.get("tool", "")) + " · " + ("PASS" if run.get("passed", false) else "FAIL") + " · exit " + str(run.get("exit_code", "unknown")) + "\n"
+		for cause in run.get("causes", []):
+			text += "  " + str(cause) + "\n"
+		for test in run.get("tests", []):
+			text += "  " + str(test) + "\n"
+	text += "\nCHANGELOG (agent recap)\n" + str(record.get("changelog", "No recap available yet."))
+	if record.has("changelog_path"):
+		text += "\n\nRepository changelog: " + str(record.changelog_path)
+	return text

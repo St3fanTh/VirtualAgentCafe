@@ -600,6 +600,7 @@ class ExecutionManager:
                 runtime_success=result.success,
                 detail=result.reason[:256],
                 changelog=changelog,
+                test_runs=list(result.test_runs),
                 # COMPLETED describes the process. Acceptance remains separately unverified.
                 task_state=TaskState.ASSIGNED if result.success else TaskState.FAILED,
                 acceptance="PENDING_INTEGRATION"

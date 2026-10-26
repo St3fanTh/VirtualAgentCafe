@@ -106,6 +106,18 @@ func _process(_delta: float) -> bool:
 		8:
 			if not "CODING" in ui.logs.text or not "TESTING" in ui.logs.text:
 				return false
+			assert("CHANGELOG (agent recap)" in ui.execution_report.text)
+			assert("OBSERVED TEST RUNS" in ui.execution_report.text)
+			assert(ui.execution_report.get_parent() is TabContainer)
+			var long_recap := "Implemented feature.\n".repeat(200) + "END OF RECAP"
+			var rendered: String = ui.format_execution_report({
+				"changelog": long_recap, "publication": "PUSHED",
+				"published": {"branch": "agent/backend", "commit": "abc123"},
+				"test_runs": [{"tool": "pytest", "exit_code": 2, "passed": false,
+					"causes": ["ModuleNotFoundError"], "tests": ["tests/test_api.py"]}]})
+			assert("END OF RECAP" in rendered)
+			assert("ModuleNotFoundError" in rendered and "tests/test_api.py" in rendered)
+			assert("abc123" in rendered and "agent/backend" in rendered)
 			check_no_manual_acceptance(ui)
 			stage = 9
 		9:

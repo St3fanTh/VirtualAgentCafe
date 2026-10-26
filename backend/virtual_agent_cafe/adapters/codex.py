@@ -8,6 +8,7 @@ from pathlib import Path
 
 from ..models import EventType
 from .base import Emit, RunResult
+from .diagnostics import test_diagnostic
 
 
 def test_command_label(command: str, depth: int = 0) -> str | None:
@@ -70,6 +71,8 @@ class CodexObserver:
         self.emit = emit
         self.turn_complete = False
         self.fatal = False
+        self.test_runs: list[dict] = []
+        self.failed_diagnostics: dict[str, str] = {}
         self.failed_tests = False
         self.failed_frameworks: set[str] = set()
         self.failed_patch = False
@@ -114,11 +117,24 @@ class CodexObserver:
                     if failed:
                         self.command_warnings += 1
                     if testing:
+                        diagnostic = test_diagnostic(
+                            test_label,
+                            item.get("exit_code"),
+                            str(item.get("aggregated_output", "")),
+                        )
+                        diagnostic["passed"] = not failed
+                        self.test_runs.append(diagnostic)
+                        self.test_runs = self.test_runs[-100:]
                         framework = test_label.removeprefix("python -m ")
                         if failed:
                             self.failed_frameworks.add(framework)
+                            cause = "; ".join(diagnostic["causes"]) or "Test command failed"
+                            self.failed_diagnostics[framework] = (
+                                f"{test_label} (exit {diagnostic['exit_code']}): {cause}"
+                            )
                         else:
                             self.failed_frameworks.discard(framework)
+                            self.failed_diagnostics.pop(framework, None)
                         self.failed_tests = bool(self.failed_frameworks)
                     # Known environment failure must never become a success animation.
                     output = str(item.get("aggregated_output", ""))
@@ -131,7 +147,11 @@ class CodexObserver:
                     elif failed:
                         label = test_label or "shell command"
                         self.emit(
-                            EventType.ERROR, f"CLI: {label} · FAIL (exit {item.get('exit_code')})"
+                            EventType.ERROR,
+                            (
+                                f"CLI: {label} · FAIL (exit {item.get('exit_code')})"
+                                + (" · " + "; ".join(diagnostic["causes"]) if testing else "")
+                            )[:256],
                         )
                     elif testing:
                         self.emit(EventType.TESTING, f"CLI: {test_label} · PASS (exit 0)")
@@ -286,18 +306,36 @@ class CodexAdapter:
                         detail = (
                             "Codex turn completed with command warnings; see .cafe/last-response.md"
                         )
-                    return RunResult(True, detail)
+                    return RunResult(True, detail, tuple(observer.test_runs))
                 if observer.sandbox_failed:
-                    return RunResult(False, "Codex sandbox unavailable; check container namespaces")
+                    return RunResult(
+                        False,
+                        "Codex sandbox unavailable; check container namespaces",
+                        tuple(observer.test_runs),
+                    )
                 if observer.failed_tests:
-                    return RunResult(False, "Codex task ended with failing tests")
+                    return RunResult(
+                        False,
+                        "Unresolved tests: " + "; ".join(observer.failed_diagnostics.values()),
+                        tuple(observer.test_runs),
+                    )
                 if observer.failed_patch:
-                    return RunResult(False, "Codex task ended with a failed file edit")
-                return RunResult(False, "Codex runtime failed or turn did not complete")
+                    return RunResult(
+                        False, "Codex task ended with a failed file edit", tuple(observer.test_runs)
+                    )
+                return RunResult(
+                    False,
+                    "Codex runtime failed or turn did not complete",
+                    tuple(observer.test_runs),
+                )
         except TimeoutError:
-            return RunResult(False, "Codex task timed out")
+            return RunResult(False, "Codex task timed out", tuple(observer.test_runs))
         except (OSError, ValueError, json.JSONDecodeError):
-            return RunResult(False, "Codex unavailable or invalid runtime event stream")
+            return RunResult(
+                False,
+                "Codex unavailable or invalid runtime event stream",
+                tuple(observer.test_runs),
+            )
         finally:
             if process:
                 # Also reap children if the leader exited; no background tools survive a task.

@@ -416,3 +416,57 @@ async def test_runtime_files_are_not_invented_coding_activity(tmp_path):
         "task", tmp_path, lambda kind, detail: events.append((kind, detail))
     )
     assert EventType.CODING not in [kind for kind, _ in events]
+
+
+async def test_failed_collection_has_actionable_private_evidence(tmp_path):
+    transcript = [
+        {"type": "turn.started"},
+        {
+            "type": "item.completed",
+            "item": {
+                "type": "command_execution",
+                "command": "python -m pytest",
+                "exit_code": 2,
+                "aggregated_output": (
+                    "ModuleNotFoundError: SECRET\nERROR tests/test_api.py - SECRET\n"
+                ),
+            },
+        },
+        {"type": "turn.completed"},
+    ]
+    events = []
+    cli = fake_cli(tmp_path, f"for row in {transcript!r}: print(json.dumps(row), flush=True)\n")
+    result = await CodexAdapter(cli).run("task", tmp_path, lambda *e: events.append(e))
+    assert not result.success
+    assert "exit 2" in result.reason
+    assert "collection/import" in result.reason
+    assert "ModuleNotFoundError" in result.reason
+    assert result.test_runs[0]["tests"] == ["tests/test_api.py"]
+    assert "SECRET" not in repr(result) + repr(events)
+    assert "test_api.py" not in repr(events)
+
+
+def test_diagnostics_remove_assertion_values_and_keep_rerun_history():
+    observer = CodexObserver(lambda *_: None)
+    for code in (1, 0):
+        observer.consume(
+            {
+                "type": "item.completed",
+                "item": {
+                    "type": "command_execution",
+                    "command": "pytest",
+                    "exit_code": code,
+                    "aggregated_output": (
+                        "FAILED tests/test_auth.py::test_login[SECRET] - AssertionError: SECRET"
+                        if code
+                        else "1 passed"
+                    ),
+                },
+            }
+        )
+    observer.consume({"type": "turn.completed"})
+    assert observer.successful
+    assert not observer.failed_diagnostics
+    assert [run["passed"] for run in observer.test_runs] == [False, True]
+    assert observer.test_runs[0]["tests"] == ["tests/test_auth.py::test_login"]
+    assert "SECRET" not in repr(observer.test_runs)

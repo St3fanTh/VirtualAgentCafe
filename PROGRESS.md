@@ -1062,3 +1062,27 @@
   erfolgreich auf `feat/virtual-agent-cafe-mvp` gepusht.
 - Offen: Workspace-Ordner werden absichtlich nicht physisch gelöscht, damit
   Projektdateien und Git-Verläufe nicht versehentlich verloren gehen.
+
+## Präzise Testfehler und lesbarer Abschlussbericht — 2026-10-26
+
+- Codex-Testmeldungen nennen Werkzeug, Exit-Code und erkannte Fehlerklasse statt
+  nur „task ended with failing tests“. Pytest-Exit-Codes erhalten eine Erklärung.
+  Begrenzte Testbezeichner ohne Parameter-/Assertionwerte werden im privaten
+  Ausführungsbericht gespeichert; öffentliche Events enthalten keine Testpfade.
+- Persistente Ausführungen enthalten Testaufrufe inklusive erfolgreicher Reruns.
+  Godot zeigt unter Executions → Changelog & tests einen scrollbar lesbaren
+  Agentenbericht und getrennt die bestätigte Veröffentlichung mit Branch/Commit.
+  Die bisherige zusätzliche Kürzung auf 1.400 Zeichen entfällt.
+- Dateien: adapters/base.py, codex.py, neues diagnostics.py; management/execution.py;
+  game/scripts/management.gd; Codex-, Lifecycle- und native Godot-Managementtests;
+  docs/agent-management.md und diese Datei.
+- Grenzen: strukturierte Testdetails nur für neue Läufe, maximal 100 Aufrufe des
+  letzten Versuchs; Fehlerklassifikation ist begrenzt, keine kompletten Tool-Logs.
+  Abschlussbericht bleibt auf 6.000 Zeichen begrenzt. Requirements-Abnahme bleibt
+  unabhängig von Laufzeitstatus und Modellbericht.
+- Commit-ID: `git log --grep='explain test failures and expose execution changelogs'`.
+- Validierung: `scripts/check.sh` vollständig PASS: 176 pytest, Ruff/Format,
+  native Godot-Managementtests, Godot-Import/Zustände/Headless und Live-WebSocket.
+  Eine bestehende Starlette/httpx-Deprecation-Warnung; keine Testfehler.
+- Nächster Schritt: Backend neu bauen und Godot neu öffnen; einen neuen Lauf im
+  Bericht prüfen. Kein automatischer Merge nach main.

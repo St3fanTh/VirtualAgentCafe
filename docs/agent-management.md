@@ -349,3 +349,28 @@ workspace explicitly. Use the current worker worktree, not a disconnected projec
 folder from an older setup. **View diff** shows tracked changes against HEAD;
 committed results appear in **Inspect repository** history instead. Errors replace
 stale results in the Git panel and identify the requested workspace.
+
+### Testfehler und Abschlussbericht lesen
+
+Unter **Executions** den gewünschten Lauf auswählen und **Changelog & tests** öffnen.
+Der Bericht zeigt das Laufzeitergebnis, vom Controller bestätigte Veröffentlichung
+(Branch und Commit), beobachtete Testläufe und den Abschlussbericht des Agenten.
+Der scrollbare Bericht ersetzt die früher auf 1.400 Zeichen gekürzte Statusanzeige.
+Der Agentenbericht ist auf 6.000 Zeichen begrenzt und bleibt mit der Ausführung
+in der Datenbank gespeichert, auch ohne aktivierten Push. Bei Veröffentlichung
+bleibt zusätzlich `agent-changelogs/<agent-id>.md` im Repository verfügbar.
+
+Neue Codex-Läufe speichern bis zu 100 Testaufrufe des letzten Laufzeitversuchs:
+Werkzeug, Exit-Code, erkannte Fehlerklassen und bis zu 20 pytest-Testbezeichner.
+Beispiel: `pytest (exit 2)` bedeutet einen unterbrochenen Testlauf, häufig durch
+Sammlungs-/Importfehler; ein zusätzlich erkanntes `ModuleNotFoundError` weist auf
+eine fehlende Abhängigkeit oder einen fehlerhaften Importpfad hin. Exit 5 bedeutet,
+dass keine Tests gefunden wurden. Frühere fehlgeschlagene Aufrufe bleiben auch nach
+erfolgreicher Wiederholung im Bericht sichtbar.
+
+Kommandoargumente, Parameterwerte, Assertionsinhalte und vollständige Tool-Ausgaben
+werden nicht veröffentlicht. Unbekannte Fehler erfordern weiterhin einen Blick in
+die Testausgabe im Workspace; ältere Ausführungen erhalten keine rückwirkend
+erfundenen Testdetails. Der Changelog ist der Bericht des Modells, kein Nachweis
+für einen Push oder erfüllte Anforderungen: dafür gelten die separat angezeigten
+Controller-Ergebnisse und die gemeinsame Requirements-Validierung.

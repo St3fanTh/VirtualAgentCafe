@@ -12,6 +12,7 @@ Emit = Callable[[EventType, str], None]
 class RunResult:
     success: bool
     reason: str
+    test_runs: tuple[dict, ...] = ()
 
 
 class AgentAdapter(Protocol):
