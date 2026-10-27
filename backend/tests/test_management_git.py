@@ -228,3 +228,26 @@ async def test_empty_former_project_mount_has_actionable_git_read_errors(tmp_pat
     for read in (git.info, git.diff):
         with pytest.raises(ValueError, match="Select the current agent worktree"):
             await read("old-project")
+
+
+async def test_missing_worktree_registration_reports_recovery_without_deleting_data(tmp_path):
+    import shutil
+
+    workspaces = WorkspaceManager(tmp_path / "workspaces", Store(tmp_path))
+    git = GitService(workspaces)
+    for name in ("project", "worker"):
+        workspaces.create(name)
+    await git.init("project")
+    source = workspaces.get("project")
+    (source / "README.md").write_text("original")
+    await git.stage("project", ["README.md"])
+    await git.commit("project", "feat: initial")
+    target = await git.worktree("project", "worker", "agent/worker/task")
+    # Simulate loss of a mounted worktree while its source metadata remains.
+    shutil.rmtree(target)
+    workspaces.create("worker")
+    with pytest.raises(ValueError, match="old Git worktree registration"):
+        await git.worktree("project", "worker", "agent/worker/task")
+    assert (source / "README.md").read_text() == "original"
+    assert (source / ".git/worktrees/worker").is_dir()
+    assert not any(target.iterdir())

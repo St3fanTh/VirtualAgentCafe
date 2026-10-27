@@ -176,6 +176,21 @@ class GitService:
                 "Review and integrate changes explicitly; force-push is disabled.",
             ),
             (
+                ("missing but already registered worktree", "is already registered"),
+                "The destination still has an old Git worktree registration. "
+                "Restore the original project mount and inspect git worktree list --porcelain "
+                "before repairing metadata; no files or branches were removed.",
+            ),
+            (
+                ("locked working tree", "locked worktree", "is locked"),
+                "Git worktree is locked. Inspect git worktree list --porcelain and "
+                "resolve its lock explicitly; no automatic unlock or force was attempted.",
+            ),
+            (
+                ("no space left on device", "disk quota exceeded"),
+                "Insufficient workspace storage. Free space or increase the volume quota.",
+            ),
+            (
                 ("already checked out", "already used by worktree"),
                 "Branch is already assigned to another worktree. Select a different "
                 "branch; existing files are preserved.",

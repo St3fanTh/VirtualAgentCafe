@@ -1145,3 +1145,19 @@
   scripts/check.sh vollständig PASS; 180 pytest, Ruff/Format, native GUI-Tests,
   Godot-Import/Zustände/Headless und WebSocket-Smoke. Bestehende
   Starlette/httpx-Deprecation-Warnung unverändert.
+
+## Diagnose blockierter Worktree-Wiederanlage — 2026-10-27
+
+- Reproduziert: Ein entferntes Worktree-Verzeichnis mit verbleibender Registrierung
+  wird durch Git abgelehnt. Die bisherige Sammelmeldung erklärt diesen Fall nicht.
+- GitService unterscheidet nun alte Worktree-Registrierung, gesperrten Worktree und
+  erschöpften Speicher. Meldungen enthalten keine rohen Pfade/Remote-Zugangsdaten.
+- Reproduktionstest mit echtem Git prüft Diagnose sowie Erhalt von Branch-Metadaten
+  und Projektdateien. Keine automatische Bereinigung, Entsperrung oder Force-Aktion.
+- Dateien: management/git.py, test_management_git.py, PROGRESS.md.
+- Offene Diagnose: tatsächliche Worktree-Liste des Nutzerprojekts angefragt;
+  Reproduktion beweist noch nicht die Ursache im entfernten Container.
+- Commit-ID: `git log --grep='diagnose stale and locked worktree registrations'`.
+- Validierung: scripts/check.sh vollständig PASS; 181 pytest, Ruff/Format,
+  Godot-Import/Zustände/Headless und WebSocket-Smoke grün. Bestehende
+  Starlette/httpx-Deprecation-Warnung unverändert.
