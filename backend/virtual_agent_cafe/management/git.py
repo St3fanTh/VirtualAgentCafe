@@ -477,7 +477,10 @@ class GitService:
 
     async def remove_worktree(self, repository: str, destination: str) -> None:
         source = await self.repository(repository)
-        target = self.workspaces.get(destination)
+        self.workspaces.store.get("workspaces", destination)
+        target = self.workspaces.files.path(destination)
+        if not target.exists():
+            return
         if not (target / ".git").exists():
             if target.is_dir() and not any(target.iterdir()):
                 await asyncio.to_thread(target.rmdir)
@@ -511,10 +514,48 @@ class GitService:
             raise ValueError("Worktree path is outside approved workspace roots")
         await asyncio.to_thread(shutil.rmtree, target)
 
-    async def prune_worktrees(self, repository: str) -> None:
-        """Prune stale metadata once after a group of managed worktrees is removed."""
+    async def prune_worktrees(self, repository: str, destinations: list[str]) -> None:
+        """Remove only unlocked stale entries for explicitly removed managed trees.
+
+        A sandbox-wide Git prune cannot distinguish absent mounts from lost trees.
+        Inspect approved paths in the controller instead; never touch other entries.
+        """
         source = await self.repository(repository)
-        await self.run(source, "worktree", "prune", "--expire", "now")
+        admin = self.workspaces.files.path(
+            str((source / ".git/worktrees").relative_to(self.workspaces.files.root))
+        )
+        if not admin.is_dir():
+            return
+        targets = {self.workspaces.files.path(name) / ".git" for name in destinations}
+        for entry in admin.iterdir():
+            entry = self.workspaces.files.path(str(entry.relative_to(self.workspaces.files.root)))
+            if not entry.is_dir() or (entry / "locked").exists():
+                continue
+            pointer = self.workspaces.files.path(
+                str((entry / "gitdir").relative_to(self.workspaces.files.root))
+            )
+            if not pointer.is_file() or pointer.stat().st_size > 4096:
+                continue
+            target = Path(pointer.read_text().strip())
+            if target in targets and await asyncio.to_thread(
+                lambda target=target: not target.exists() and not target.is_symlink()
+            ):
+                await asyncio.to_thread(shutil.rmtree, entry)
+
+    async def validate_existing_worktree(self, repository: str, destination: str, branch: str):
+        source = await self.repository(repository)
+        target = self.workspaces.files.path(destination)
+        if not (target / ".git").is_file():
+            raise ValueError("Destination is not a linked Git worktree; existing files preserved")
+        common = (
+            await self.run(target, "rev-parse", "--path-format=absolute", "--git-common-dir")
+        ).strip()
+        if (target / common).resolve() != (source / ".git").resolve():
+            raise ValueError("Workspace is connected to a different repository")
+        actual_branch = (await self.run(target, "symbolic-ref", "--short", "HEAD")).strip()
+        if actual_branch != self.branch_name(branch):
+            raise ValueError("Existing workspace has a different branch")
+        return target
 
     async def worktree(self, repository: str, destination: str, branch: str) -> Path:
         path = await self.repository(repository)
@@ -522,17 +563,7 @@ class GitService:
         name = self.branch_name(branch)
         async with self.locks.setdefault(repository, asyncio.Lock()):
             if (target / ".git").exists():
-                actual = await self.repository(destination)
-                common = (
-                    await self.run(
-                        actual, "rev-parse", "--path-format=absolute", "--git-common-dir"
-                    )
-                ).strip()
-                if (actual / common).resolve() != (path / ".git").resolve():
-                    raise ValueError("Workspace is connected to a different repository")
-                if (await self.info(destination))["branch"] != name:
-                    raise ValueError("Existing workspace has a different branch")
-                return target
+                return await self.validate_existing_worktree(repository, destination, name)
             if any(target.iterdir()):
                 raise ValueError("Worktree destination must be empty")
             # Require one reviewed initial commit; never manufacture a commit on main.

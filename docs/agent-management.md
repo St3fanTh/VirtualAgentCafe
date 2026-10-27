@@ -400,3 +400,17 @@ und niemals durch die Vorlagen oder ein neues Setup-Ziel überschrieben. Vor dem
 Start unter Agents/Markdown prüfen, ob die Aufgaben noch zum aktuellen Ziel passen.
 Ungültige Markdown-Dateien müssen dort korrigiert werden. Nichtleere fremde
 Arbeitsverzeichnisse und bereits belegte Agenten-IDs bleiben geschützt.
+
+### Vorhandene Worktrees bei erneuter Einrichtung
+
+Setup kann vorhandene Backend-, Frontend- und Integrations-Worktrees wiederverwenden,
+wenn sie zum ausgewählten Repository und zum erwarteten Agentenbranch gehören.
+Uncommittete Dateien bleiben erhalten. Fremde Repositories, andere Branches und
+Ordner ohne gültige Worktree-Verknüpfung werden weiterhin abgelehnt.
+
+Beim Löschen eines verwalteten Projekts werden auch fehlende Worker-Verzeichnisse
+behandelt. Die Bereinigung entfernt nur veraltete, ungesperrte Git-Registrierungen
+für die betroffenen Workspaces. Andere Worktree-Registrierungen und Agentenbranches
+bleiben erhalten; es findet kein pauschales Prune mit unvollständiger Mount-Sicht
+statt. Das Entfernen eines Ordners nur aus der Setup-Auswahl löscht weiterhin
+keine Arbeitsdateien.

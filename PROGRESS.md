@@ -1161,3 +1161,25 @@
 - Validierung: scripts/check.sh vollständig PASS; 181 pytest, Ruff/Format,
   Godot-Import/Zustände/Headless und WebSocket-Smoke grün. Bestehende
   Starlette/httpx-Deprecation-Warnung unverändert.
+
+## Worktree-Wiederverwendung und gezielte Löschbereinigung — 2026-10-27
+
+- Setup prüft vorhandene nichtleere Worker-/Integrationsziele auf passende Git-
+  Verknüpfung und erwarteten Branch statt pauschal abzubrechen. Dateien, lokale
+  Änderungen und Branches bleiben bei Wiederverwendung unverändert.
+- Projektlöschung toleriert bereits fehlende Worktree-Ordner und bereinigt nur
+  deren konkrete, ungesperrte administrative Einträge. Kein pauschales Git prune
+  in einer Sandbox, die andere vorhandene Worktrees nicht sehen kann.
+- Dateien: management/git.py, execution.py, setup.py; test_management_git.py,
+  test_project_setup.py; docs/agent-management.md und PROGRESS.md.
+- Gezielte Tests: 46 Git-/Setup-/Projektlöschtests PASS, inklusive Wiederverwendung
+  mit uncommitteten Dateien, Ablehnung falscher Branches und Erhalt lebender sowie
+  unbeteiligter alter Registrierungen bei Bereinigung.
+- Commit-ID: `git log --grep='reuse matching worktrees and prune only deleted registrations'`.
+- Grenze: beschädigte Verknüpfungen und fremde Zielordner werden nicht automatisch
+  überschrieben. Setup-Ausblendung ist weiterhin keine physische Dateilöschung.
+- Vollständige Validierung: scripts/check.sh PASS; 184 pytest, Ruff/Format,
+  native GUI-Tests, Godot-Import/Zustände/Headless und WebSocket-Smoke grün.
+  Bestehende Starlette/httpx-Deprecation-Warnung unverändert.
+- Nächster Schritt: Backend aktualisieren und Team-Setup erneut ausführen;
+  vorhandener passender Integrations-Worktree wird übernommen.

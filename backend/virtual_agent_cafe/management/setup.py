@@ -300,8 +300,8 @@ class ProjectSetup:
                         raise ValueError("Team agent ID already exists; choose another project ID")
                     target = manager.workspaces.files.path(config.workspace)
                     if target.exists() and any(target.iterdir()):
-                        raise ValueError(
-                            "Team destination is not empty; existing files are preserved"
+                        await manager.git.validate_existing_worktree(
+                            data.project, config.workspace, config.git.branch
                         )
                     # Unassigned Markdown can survive team deletion. Validate and reuse
                     # those definitions rather than blocking recreation or overwriting edits.
@@ -421,7 +421,9 @@ class ProjectSetup:
                     definitions.load(identifier + ".md")
             destination = manager.workspaces.files.path(identifier)
             if destination.exists() and any(destination.iterdir()):
-                raise ValueError("Integration destination is not empty; existing files preserved")
+                await manager.git.validate_existing_worktree(
+                    record["id"], identifier, f"agent/{identifier}/validation"
+                )
             # Persist ownership before creating files, so interrupted setup can resume.
             record["integrator"] = identifier
             record["auto_integrate"] = True

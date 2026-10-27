@@ -555,3 +555,35 @@ async def test_invalid_preserved_markdown_fails_before_creating_team(tmp_path, m
         await setup.create(SetupInput(project="sample", objective="Build an API with frontend."))
     assert not manager.store.list("projects")
     assert not manager.store.list("agents")
+
+
+async def test_setup_reuses_matching_worktrees_and_preserves_uncommitted_work(
+    tmp_path, monkeypatch
+):
+    manager, setup, _ = await project(tmp_path, monkeypatch)
+    for role in ("backend", "frontend", "integration"):
+        name = "sample-" + role
+        manager.workspaces.create(name)
+        branch = "agent/" + name + ("/validation" if role == "integration" else "/implementation")
+        target = await manager.git.worktree("sample", name, branch)
+        (target / "unfinished.txt").write_text("Keep this work")
+    record = await setup.create(
+        SetupInput(project="sample", objective="Build an API and frontend.")
+    )
+    await setup.enable_integration(record)
+    await manager.integrations.close()
+    for role in ("backend", "frontend", "integration"):
+        assert (
+            manager.workspaces.get("sample-" + role) / "unfinished.txt"
+        ).read_text() == "Keep this work"
+
+
+async def test_setup_rejects_wrong_branch_worktree_without_touching_files(tmp_path, monkeypatch):
+    manager, setup, _ = await project(tmp_path, monkeypatch)
+    manager.workspaces.create("sample-backend")
+    target = await manager.git.worktree("sample", "sample-backend", "agent/unrelated/task")
+    (target / "unfinished.txt").write_text("Keep")
+    with pytest.raises(ValueError, match="different branch"):
+        await setup.create(SetupInput(project="sample", objective="Build an API and frontend."))
+    assert (target / "unfinished.txt").read_text() == "Keep"
+    assert not manager.store.list("projects")

@@ -251,3 +251,29 @@ async def test_missing_worktree_registration_reports_recovery_without_deleting_d
     assert (source / "README.md").read_text() == "original"
     assert (source / ".git/worktrees/worker").is_dir()
     assert not any(target.iterdir())
+
+
+async def test_targeted_prune_preserves_live_and_unrelated_registrations(tmp_path):
+    import shutil
+
+    workspaces = WorkspaceManager(tmp_path / "workspaces", Store(tmp_path))
+    git = GitService(workspaces)
+    workspaces.create("project")
+    await git.init("project")
+    source = workspaces.get("project")
+    (source / "README.md").write_text("original")
+    await git.stage("project", ["README.md"])
+    await git.commit("project", "feat: initial")
+    for name in ("lost", "live", "unrelated"):
+        workspaces.create(name)
+        await git.worktree("project", name, "agent/" + name + "/task")
+    shutil.rmtree(workspaces.get("lost"))
+    shutil.rmtree(workspaces.get("unrelated"))
+    await git.remove_worktree("project", "lost")
+    await git.prune_worktrees("project", ["lost", "live"])
+    assert not (source / ".git/worktrees/lost").exists()
+    assert (source / ".git/worktrees/unrelated").exists()
+    assert (await git.info("live"))["branch"] == "agent/live/task"
+    workspaces.create("lost")
+    await git.worktree("project", "lost", "agent/lost/task")
+    assert (await git.info("lost"))["branch"] == "agent/lost/task"

@@ -235,7 +235,7 @@ class ExecutionManager:
                     raise ValueError("A project worktree is shared by another agent")
                 await self.git.remove_worktree(identifier, workspace)
             if workspaces:
-                await self.git.prune_worktrees(identifier)
+                await self.git.prune_worktrees(identifier, workspaces)
             archived_agents = [
                 (member, {"id": member, "deleted_at": now(), "agent": record})
                 for member, record in agent_records
