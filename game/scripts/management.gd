@@ -35,6 +35,8 @@ var logs: TextEdit
 var execution_report: TextEdit
 var execution_status: Label
 var integration_status: Label
+var retry_feedback: TextEdit
+var retry_messages: Dictionary = {}
 var selected_execution := ""
 var log_sequence := 0
 var action := ""
@@ -450,6 +452,7 @@ func build_executions(tabs: TabContainer) -> void:
 	executions.custom_minimum_size = Vector2(340, 430)
 	executions.item_selected.connect(func(index):
 		selected_execution = str(executions.get_item_metadata(index))
+		show_retry_feedback()
 		log_sequence = 0
 		logs.text = ""
 		execution_report.text = "Loading execution report…"
@@ -457,6 +460,7 @@ func build_executions(tabs: TabContainer) -> void:
 	list_column.add_child(executions)
 	button(list_column, "Refresh execution history", func():
 		selected_execution = ""
+		show_retry_feedback()
 		refresh())
 	var monitor := card(row, "Live activity & integration", 950)
 	monitor.add_child(caption("Observed execution, shared requirements checks and main promotion."))
@@ -482,6 +486,12 @@ func build_executions(tabs: TabContainer) -> void:
 	integration_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	monitor.add_child(integration_status)
 	button(monitor, "Retry team integration", retry_integration)
+	retry_feedback = TextEdit.new()
+	retry_feedback.editable = false
+	retry_feedback.wrap_mode = TextEdit.LINE_WRAPPING_BOUNDARY
+	retry_feedback.custom_minimum_size = Vector2(760, 110)
+	retry_feedback.placeholder_text = "Last retry response stays here while live status updates above."
+	monitor.add_child(retry_feedback)
 
 func show_agent(identifier: String) -> void:
 	tabs.current_tab = 0
@@ -715,8 +725,9 @@ func received(_result: int, code: int, _headers: PackedStringArray, body: Packed
 		set_notice("Markdown task deleted.")
 		pending_refresh = true
 	elif finished_action == "integration_retry":
-		integration_status.text = str(data.get("status", "")) + "\n" + str(data.get("detail", ""))
-		set_notice(integration_status.text)
+		var reply := str(data.get("status", "")) + "\n" + str(data.get("detail", ""))
+		remember_retry(str(completed.get("execution", "")), reply)
+		set_notice(reply)
 		pending_refresh = true
 	elif finished_action in ["mutation", "control", "review"]:
 		if finished_action == "mutation" and data.has("config") and str(completed.get("path", "")).begins_with("/agents") and completed.get("method") in [HTTPClient.METHOD_PUT, HTTPClient.METHOD_POST]:
@@ -1150,7 +1161,7 @@ func retry_integration() -> void:
 	for project in cache.get("projects", []):
 		for execution in cache.get("executions", []):
 			if execution.id == selected_execution and (execution.agent_id in project.get("agents", []) or execution.agent_id == project.get("integrator", "")):
-				integration_status.text = "Requesting team integration…"
+				remember_retry(selected_execution, "Requesting team integration…")
 				call_api("integration_retry", "/projects/" + str(project.id) + "/integrate", HTTPClient.METHOD_POST, {})
 				return
 	set_notice("Select a run belonging to a team with automatic integration enabled.", true)
@@ -1351,7 +1362,7 @@ func setup_feedback(message: String, error := false) -> void:
 func request_error(command: Dictionary, message: String) -> void:
 	set_notice(message, true)
 	if command.get("action") == "integration_retry":
-		integration_status.text = message
+		remember_retry(str(command.get("execution", selected_execution)), message)
 		pending_refresh = true
 	if command.get("action") == "git":
 		git_result.text = "GIT ACTION FAILED\n\nWorkspace: " + str(command.get("path", "")) + "\n\n" + message
@@ -1389,3 +1400,11 @@ func format_execution_report(record: Dictionary) -> String:
 	if record.has("changelog_path"):
 		text += "\n\nRepository changelog: " + str(record.changelog_path)
 	return text
+
+func remember_retry(execution: String, message: String) -> void:
+	retry_messages[execution] = "LAST RETRY · " + Time.get_time_string_from_system() + "\n" + message
+	show_retry_feedback()
+
+func show_retry_feedback() -> void:
+	if retry_feedback != null:
+		retry_feedback.text = str(retry_messages.get(selected_execution, ""))

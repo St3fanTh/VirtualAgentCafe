@@ -1207,3 +1207,23 @@
   Bestehende Starlette/httpx-Deprecation-Warnung unverändert.
 - Nächster Schritt: Backend aktualisieren, Godot neu öffnen und Retry klicken;
   konkrete Rückmeldung direkt am Button prüfen.
+
+## Retry-Antwort gegen Polling-Überschreiben schützen — 2026-10-28
+
+- Reproduzierbare UI-Ursache: Log-Antworten überschrieben dasselbe Label wie die
+  Retry-Antwort. Besonders HTTP-Fehler verschwanden beim nächsten Poll.
+- Eigenes schreibgeschütztes, kopierbares LAST RETRY-Feld mit Zeitstempel und
+  Zuordnung zum ausgewählten Lauf. Live-Teamstatus wird unabhängig aktualisiert;
+  Laufwechsel zeigt nur die zu diesem Lauf gehörende Antwort.
+- Native Godot-Regression sendet eine echte fehlgeschlagene Retry-Anfrage ans
+  Fixture-Backend, lädt danach echte Logs und prüft Erhalt sowie Laufwechsel.
+- Dateien: game/scripts/management.gd, game/tests/test_management.gd,
+  docs/automatic-integration.md und PROGRESS.md.
+- Commit-ID: `git log --grep='keep integration retry responses visible across polling'`.
+- Grenze: LAST RETRY ist Sitzungszustand; der persistierte Teamstatus bleibt separat.
+  Der konkrete Blockierungsgrund des Nutzerprojekts muss nach Update abgelesen werden.
+- Vollständige Validierung: scripts/check.sh PASS; 189 pytest einschließlich echter
+  Godot-/Backend-Regressionsprüfung, Ruff/Format, Godot-Import/Zustände/Headless und
+  WebSocket-Smoke. Bestehende Starlette/httpx-Deprecation-Warnung unverändert.
+- Nächster Schritt: Client aktualisieren/neustarten, Retry klicken und den Text im
+  dauerhaften LAST RETRY-Feld auslesen.

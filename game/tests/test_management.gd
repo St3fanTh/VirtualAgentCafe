@@ -118,9 +118,24 @@ func _process(_delta: float) -> bool:
 			assert("END OF RECAP" in rendered)
 			assert("ModuleNotFoundError" in rendered and "tests/test_api.py" in rendered)
 			assert("abc123" in rendered and "agent/backend" in rendered)
-			ui.request_error({"action": "integration_retry"}, "worker: task changed; rerun this worker")
-			assert("task changed" in ui.integration_status.text)
 			check_no_manual_acceptance(ui)
+			# Real rejected retry followed by real log polling must preserve its response.
+			ui.call_api("integration_retry", "/projects/missing-project/integrate", HTTPClient.METHOD_POST, {})
+			stage = 80
+		80:
+			if not "Management resource not found" in ui.retry_feedback.text:
+				return false
+			ui.call_api("logs", "/executions/" + execution_id + "/logs")
+			stage = 81
+		81:
+			assert("Management resource not found" in ui.retry_feedback.text)
+			assert("No automatic integration team" in ui.integration_status.text)
+			ui.selected_execution = "different-run"
+			ui.show_retry_feedback()
+			assert(ui.retry_feedback.text.is_empty())
+			ui.selected_execution = execution_id
+			ui.show_retry_feedback()
+			assert("Management resource not found" in ui.retry_feedback.text)
 			stage = 9
 		9:
 			ui.selected_execution = ""

@@ -144,3 +144,10 @@ fehlgeschlagene Ausführungen, fehlende Veröffentlichung sowie geänderte Aufga
 Projekt-Markdown-Dateien oder Rollen. Bei geänderten Vorgaben reichen ältere
 `COMPLETED`-/`PUSHED`-Ergebnisse nicht aus. Die Meldung wird auch bei automatisch
 angestoßener Integration als Team-Status gespeichert.
+
+Die letzte Retry-Antwort bleibt zusätzlich im kopierbaren Feld **LAST RETRY**
+unter dem Button stehen. Automatische Log-Abfragen ändern nur den aktuellen
+Team-Status darüber. Die Antwort ist dem ausgewählten Lauf zugeordnet und bleibt
+beim Wechsel zwischen Läufen in derselben Godot-Sitzung erhalten. Eine neue
+Retry-Anfrage für diesen Lauf ersetzt sie; nach einem Client-Neustart kann die
+Antwort erneut angefordert werden.
