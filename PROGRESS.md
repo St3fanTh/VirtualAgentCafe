@@ -1183,3 +1183,27 @@
   Bestehende Starlette/httpx-Deprecation-Warnung unverändert.
 - Nächster Schritt: Backend aktualisieren und Team-Setup erneut ausführen;
   vorhandener passender Integrations-Worktree wird übernommen.
+
+## Sichtbare Integration-Retry-Rückmeldung — 2026-10-28
+
+- Ursache der undurchsichtigen Anzeige: Retry gab nur QUEUED zurück; der Client
+  zeigte generisch Action completed. Fehlende aktuelle Worker-Eingaben führten
+  anschließend nur zu einer allgemeinen WAITING_FOR_WORKERS-Meldung.
+- Retry prüft Eingaben vor dem Einreihen und nennt betroffenen Agenten sowie
+  fehlenden Lauf, Veröffentlichung oder geänderte Aufgaben/Projektvorgaben/Rollen.
+  Bereits promovierte identische Ergebnisse werden als PROMOTED bestätigt.
+- Executions erhält eine eigene Statusanzeige direkt am Retry-Button, inklusive
+  Anforderung, Backend-Fehler und Vorbereitung. Automatische Läufe speichern
+  dieselben konkreten Wartegründe; PREPARING zeigt Worktree-/Git-Vorbereitung an.
+- Dateien: management/api.py, integration.py; game/scripts/management.gd;
+  neues test_integration_retry.py; game/tests/test_management.gd;
+  docs/automatic-integration.md und PROGRESS.md.
+- Fünf gezielte API-Tests PASS; GUI-Regression prüft sichtbare Retry-Fehleranzeige.
+- Commit-ID: `git log --grep='show actionable integration retry status'`.
+- Offen: tatsächlicher Blockierungsgrund im Nutzerprojekt wird mit dem nächsten
+  Retry sichtbar. Keine Behauptung, dass dessen Integration bereits läuft.
+- Vollständige Validierung: scripts/check.sh PASS; 189 pytest, Ruff/Format,
+  native GUI-Tests, Godot-Import/Zustände/Headless und WebSocket-Smoke grün.
+  Bestehende Starlette/httpx-Deprecation-Warnung unverändert.
+- Nächster Schritt: Backend aktualisieren, Godot neu öffnen und Retry klicken;
+  konkrete Rückmeldung direkt am Button prüfen.

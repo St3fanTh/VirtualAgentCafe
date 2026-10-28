@@ -34,6 +34,7 @@ var executions: ItemList
 var logs: TextEdit
 var execution_report: TextEdit
 var execution_status: Label
+var integration_status: Label
 var selected_execution := ""
 var log_sequence := 0
 var action := ""
@@ -477,6 +478,9 @@ func build_executions(tabs: TabContainer) -> void:
 	execution_report.custom_minimum_size = Vector2(760, 360)
 	report_tabs.add_child(execution_report)
 	monitor.add_child(caption("Team runs integrate automatically. Main is updated only after shared requirements tests pass."))
+	integration_status = caption("Select a team execution to see integration status.")
+	integration_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	monitor.add_child(integration_status)
 	button(monitor, "Retry team integration", retry_integration)
 
 func show_agent(identifier: String) -> void:
@@ -629,10 +633,12 @@ func received(_result: int, code: int, _headers: PackedStringArray, body: Packed
 			log_sequence = int(entry.sequence)
 			logs.text += str(entry.get("timestamp", "")).substr(11, 8) + "  " + str(entry.get("type", "")).trim_prefix("agent.").to_upper() + "\n" + str(entry.get("detail", "")) + "\n\n"
 		logs.text = logs.text.right(48000)
+		integration_status.text = "No automatic integration team found for this execution."
 		for project in cache.get("projects", []):
 			if record.get("agent_id", "") in project.get("agents", []) or record.get("agent_id", "") == project.get("integrator", ""):
 				var integration: Dictionary = project.get("integration", {})
 				execution_status.text += "\nTeam: " + str(integration.get("status", "NOT_CONFIGURED")) + " · " + str(integration.get("detail", ""))
+				integration_status.text = "Team: " + str(integration.get("status", "NOT_CONFIGURED")) + "\n" + str(integration.get("detail", ""))
 	elif finished_action in ["delete_project", "delete_projects"]:
 		var removed_ids := project_delete_ids.duplicate()
 		var removed_agents: Array = []
@@ -707,6 +713,10 @@ func received(_result: int, code: int, _headers: PackedStringArray, body: Packed
 			markdown.text = ""
 			definition_file.text = ""
 		set_notice("Markdown task deleted.")
+		pending_refresh = true
+	elif finished_action == "integration_retry":
+		integration_status.text = str(data.get("status", "")) + "\n" + str(data.get("detail", ""))
+		set_notice(integration_status.text)
 		pending_refresh = true
 	elif finished_action in ["mutation", "control", "review"]:
 		if finished_action == "mutation" and data.has("config") and str(completed.get("path", "")).begins_with("/agents") and completed.get("method") in [HTTPClient.METHOD_PUT, HTTPClient.METHOD_POST]:
@@ -830,7 +840,7 @@ func update_buttons() -> void:
 		if execution.id == selected_execution:
 			for project in cache.get("projects", []):
 				if project.get("auto_integrate", false) and (execution.agent_id in project.get("agents", []) or execution.agent_id == project.get("integrator", "")):
-					can_retry = project.get("integration", {}).get("status", "") != "RUNNING"
+					can_retry = project.get("integration", {}).get("status", "") not in ["RUNNING", "PREPARING"]
 	buttons["Retry team integration"].disabled = busy or not can_retry
 	buttons["Start agent"].tooltip_text = "Save your changes before starting." if dirty else "Run the assigned Markdown task."
 	if automatic:
@@ -1140,7 +1150,8 @@ func retry_integration() -> void:
 	for project in cache.get("projects", []):
 		for execution in cache.get("executions", []):
 			if execution.id == selected_execution and (execution.agent_id in project.get("agents", []) or execution.agent_id == project.get("integrator", "")):
-				call_api("control", "/projects/" + str(project.id) + "/integrate", HTTPClient.METHOD_POST, {})
+				integration_status.text = "Requesting team integration…"
+				call_api("integration_retry", "/projects/" + str(project.id) + "/integrate", HTTPClient.METHOD_POST, {})
 				return
 	set_notice("Select a run belonging to a team with automatic integration enabled.", true)
 
@@ -1339,6 +1350,9 @@ func setup_feedback(message: String, error := false) -> void:
 
 func request_error(command: Dictionary, message: String) -> void:
 	set_notice(message, true)
+	if command.get("action") == "integration_retry":
+		integration_status.text = message
+		pending_refresh = true
 	if command.get("action") == "git":
 		git_result.text = "GIT ACTION FAILED\n\nWorkspace: " + str(command.get("path", "")) + "\n\n" + message
 	if str(command.get("action", "")).begins_with("setup"):

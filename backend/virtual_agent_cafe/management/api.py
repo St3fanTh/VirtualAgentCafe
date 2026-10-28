@@ -158,8 +158,28 @@ def management_router(manager: ExecutionManager, validated_body, mode: str) -> A
                 raise ValueError("Enable automatic team integration in Setup first")
             if identifier in manager.integrations.running:
                 raise ValueError("Team integration is already running")
+            try:
+                sources = manager.integrations.sources(record, explain=True)
+            except ValueError as error:
+                record["integration"] = {
+                    "status": "WAITING_FOR_WORKERS",
+                    "detail": str(error)[:256],
+                }
+                manager.store.put("projects", identifier, record)
+                raise
+            prior = record.get("integration", {})
+            if prior.get("signature") == sources["signature"] and prior.get("status") == "PROMOTED":
+                return {
+                    "project": identifier,
+                    "status": "PROMOTED",
+                    "detail": "These worker results are already integrated on main.",
+                }
             manager.integrations.schedule(record["agents"][0])
-            return {"project": identifier, "status": "QUEUED"}
+            return {
+                "project": identifier,
+                "status": "QUEUED",
+                "detail": "Integration requested; preparing worktree and checking remote main.",
+            }
 
         return await guarded(retry)
 

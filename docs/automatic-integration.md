@@ -130,3 +130,17 @@ Teams wieder auf geeignete Worker-Ergebnisse geprüft.
 isolierten pytest-Läufen die erfolgreiche Main-Promotion sowie Test-, Worker-,
 Plan- und Merge-Fehler, konkurrierende Main-Updates und geänderte Requirements.
 Das erfordert weder externe Git-Hosts noch Modellaufrufe.
+
+### Retry zeigt keinen sichtbaren Start
+
+Unter Executions steht der Team-Status direkt über **Retry team integration**.
+Ein Klick zeigt sofort die Anfrage, anschließend `QUEUED`, `PREPARING`, den
+konkreten Blockierungsgrund oder `PROMOTED`, wenn genau diese Worker-Ergebnisse
+bereits integriert wurden. Eine angenommene Anfrage bedeutet noch keinen Abschluss.
+
+Der Controller prüft vor dem Einreihen den jeweils neuesten Worker-Lauf. Die
+Rückmeldung nennt den betroffenen Agenten und unterscheidet fehlende/laufende/
+fehlgeschlagene Ausführungen, fehlende Veröffentlichung sowie geänderte Aufgaben,
+Projekt-Markdown-Dateien oder Rollen. Bei geänderten Vorgaben reichen ältere
+`COMPLETED`-/`PUSHED`-Ergebnisse nicht aus. Die Meldung wird auch bei automatisch
+angestoßener Integration als Team-Status gespeichert.

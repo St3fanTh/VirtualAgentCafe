@@ -95,7 +95,12 @@ class Integrations:
                 "Worker tasks or requirements changed; integrate current inputs and rerun tests"
             )
 
-    def sources(self, project):
+    def sources(self, project, *, explain=False):
+        def blocked(detail):
+            if explain:
+                raise ValueError(detail)
+            return None
+
         manager = self.manager
         documents = load_documents(manager.workspaces.get(project["id"]))
         shas = {name: doc["sha256"] for name, doc in documents.items() if doc["exists"]}
@@ -106,22 +111,32 @@ class Integrations:
         runs = []
         for identifier in project["agents"]:
             agent = manager.registry.get(identifier)
-            if identifier in manager.running or not agent.get("last_execution"):
-                return None
+            if identifier in manager.running:
+                return blocked(f"{identifier}: worker is still running")
+            if not agent.get("last_execution"):
+                return blocked(f"{identifier}: no execution yet; start this worker first")
             run = manager.store.get("executions", agent["last_execution"])
             config = AgentConfig.model_validate(agent["config"])
             task = manager.tasks.load(config.task)
-            if (
-                run["status"] != State.COMPLETED
-                or run.get("publication") != "PUSHED"
-                or run["task_sha256"] != task["sha256"]
-                or run.get("project_sha256", {}) != shas
-            ):
-                return None
+            if run["status"] != State.COMPLETED:
+                return blocked(f"{identifier}: latest run is {run['status']}; resolve it first")
+            if run.get("publication") != "PUSHED":
+                return blocked(f"{identifier}: latest run is not published; check its Git result")
+            if run["task_sha256"] != task["sha256"]:
+                return blocked(
+                    f"{identifier}: task changed since the published run; rerun this worker"
+                )
+            if run.get("project_sha256", {}) != shas:
+                return blocked(
+                    f"{identifier}: AGENTS.md or PLANNING.md changed since the published run; "
+                    "rerun with current project instructions"
+                )
             if run.get("role_sha256", {}) != {
                 name: manager.roles.load(name)["sha256"] for name in config.roles
             }:
-                return None
+                return blocked(
+                    f"{identifier}: roles changed since the published run; rerun this worker"
+                )
             text += f"\n## Source: task for {identifier}\n{task['content']}\n"
             runs.append(run)
         digest = hashlib.sha256(text.encode()).hexdigest()
@@ -134,11 +149,12 @@ class Integrations:
         manager = self.manager
         record = manager.store.get("projects", identifier)
         try:
-            data = self.sources(record)
-            if not data:
+            try:
+                data = self.sources(record, explain=True)
+            except ValueError as error:
                 record["integration"] = {
                     "status": "WAITING_FOR_WORKERS",
-                    "detail": "Both current worker tasks must finish and push successfully",
+                    "detail": str(error)[:256],
                 }
                 manager.store.put("projects", identifier, record)
                 return
@@ -152,6 +168,12 @@ class Integrations:
                 config = AgentConfig.model_validate(
                     manager.registry.get(record["integrator"])["config"]
                 )
+                record["integration"] = {
+                    "status": "PREPARING",
+                    "signature": data["signature"],
+                    "detail": "Preparing worktree, fetching main and merging worker commits",
+                }
+                manager.store.put("projects", identifier, record)
                 await manager.git.worktree(identifier, config.workspace, config.git.branch)
                 base = await manager.git.fetch_main(config)
                 for commit in [base, *(r["published"]["commit"] for r in data["runs"])]:

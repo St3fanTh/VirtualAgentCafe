@@ -118,6 +118,8 @@ func _process(_delta: float) -> bool:
 			assert("END OF RECAP" in rendered)
 			assert("ModuleNotFoundError" in rendered and "tests/test_api.py" in rendered)
 			assert("abc123" in rendered and "agent/backend" in rendered)
+			ui.request_error({"action": "integration_retry"}, "worker: task changed; rerun this worker")
+			assert("task changed" in ui.integration_status.text)
 			check_no_manual_acceptance(ui)
 			stage = 9
 		9:
