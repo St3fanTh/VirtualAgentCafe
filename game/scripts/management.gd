@@ -637,12 +637,7 @@ func received(_result: int, code: int, _headers: PackedStringArray, body: Packed
 		if record.has("validation"):
 			var validation: Dictionary = record.validation
 			execution_status.text += "\nRequirements: " + str(validation.get("requirements", []).size()) + " · Shared tests: " + ("PASS" if validation.get("passed", false) else "FAIL")
-		for entry in data.get("logs", []):
-			if int(entry.get("sequence", 0)) <= log_sequence:
-				continue
-			log_sequence = int(entry.sequence)
-			logs.text += str(entry.get("timestamp", "")).substr(11, 8) + "  " + str(entry.get("type", "")).trim_prefix("agent.").to_upper() + "\n" + str(entry.get("detail", "")) + "\n\n"
-		logs.text = logs.text.right(48000)
+		append_live_logs(data.get("logs", []))
 		integration_status.text = "No automatic integration team found for this execution."
 		for project in cache.get("projects", []):
 			if record.get("agent_id", "") in project.get("agents", []) or record.get("agent_id", "") == project.get("integrator", ""):
@@ -1408,3 +1403,30 @@ func remember_retry(execution: String, message: String) -> void:
 func show_retry_feedback() -> void:
 	if retry_feedback != null:
 		retry_feedback.text = str(retry_messages.get(selected_execution, ""))
+
+func append_live_logs(entries: Array) -> void:
+	var added := ""
+	for entry in entries:
+		if int(entry.get("sequence", 0)) <= log_sequence:
+			continue
+		log_sequence = int(entry.sequence)
+		added += str(entry.get("timestamp", "")).substr(11, 8) + "  " + str(entry.get("type", "")).trim_prefix("agent.").to_upper() + "\n" + str(entry.get("detail", "")) + "\n\n"
+	if added.is_empty():
+		return
+	var bar := logs.get_v_scroll_bar()
+	var follow_end := bar.value >= bar.max_value - bar.page - 1.0
+	var previous_scroll := logs.scroll_vertical
+	var previous_horizontal := logs.scroll_horizontal
+	var combined := logs.text + added
+	var removed_lines := 0
+	if combined.length() > 48000:
+		var cut := combined.length() - 48000
+		var newline := combined.find("\n", cut)
+		if newline >= 0:
+			cut = newline + 1
+		removed_lines = combined.left(cut).count("\n")
+		combined = combined.substr(cut)
+	logs.text = combined
+	# Restore after TextEdit recalculates its scroll range for the new content.
+	logs.set_deferred("scroll_vertical", logs.get_line_count() if follow_end else maxf(0.0, previous_scroll - removed_lines))
+	logs.set_deferred("scroll_horizontal", previous_horizontal)

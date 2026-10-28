@@ -19,6 +19,7 @@ ROOT = Path(__file__).resolve().parents[2]
     "script, saved_connection",
     [
         ("test_management.gd", False),
+        ("test_log_scrolling.gd", False),
         ("test_management.gd", True),
         ("test_agent_deletion.gd", False),
         ("test_gui_input.gd", False),

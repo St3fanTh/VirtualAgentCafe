@@ -1254,3 +1254,24 @@
   Starlette/httpx-Deprecation-Warnung unverändert.
 - Nächster Schritt: Backend neu bauen und Retry team integration für den bestehenden
   Konflikt verwenden; kein Löschen/Zurücksetzen des Nutzerprojekts notwendig.
+
+## Scrollposition der Live-Logs erhalten — 2026-10-28
+
+- Ursache: Jede Log-Abfrage setzte den gesamten Text neu, auch ohne neue Events.
+  TextEdit setzte dabei die Scrollposition zurück.
+- Neue Events werden gesammelt und einmal angehängt. Leere/duplizierte Antworten
+  verändern den Text nicht. Die bisherige horizontale/vertikale Position bleibt;
+  nur am Listenende folgt die Ansicht neuen Einträgen. Beim 48.000-Zeichen-Limit
+  werden ganze alte Zeilen entfernt und die Leseposition entsprechend verschoben.
+- Dateien: game/scripts/management.gd, neues game/tests/test_log_scrolling.gd,
+  backend/tests/test_game_management.py und PROGRESS.md.
+- Gezielter nativer Godot-Test PASS: leere Abfrage, neue/duplizierte Events,
+  automatisches Folgen am Ende und Scrollposition bei gekürztem Log.
+- Commit-ID: `git log --grep='preserve live log scroll position during updates'`.
+- Grenze: bereits aus dem begrenzten Log entfernte Zeilen können nicht im
+  aktuellen Textfenster erhalten bleiben; der Backend-Verlauf bleibt unverändert.
+- Vollständige Validierung: scripts/check.sh PASS; 193 pytest inklusive nativer
+  Scroll-Regression, Ruff/Format, Godot-Import/Zustände/Headless und WebSocket-Smoke.
+  Bestehende Starlette/httpx-Deprecation-Warnung unverändert.
+- Nächster Schritt: Repository aktualisieren und Godot neu starten. Backend-Neubau
+  für diese reine Anzeigeänderung nicht erforderlich.
