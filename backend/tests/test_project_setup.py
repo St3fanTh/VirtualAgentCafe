@@ -587,3 +587,18 @@ async def test_setup_rejects_wrong_branch_worktree_without_touching_files(tmp_pa
         await setup.create(SetupInput(project="sample", objective="Build an API and frontend."))
     assert (target / "unfinished.txt").read_text() == "Keep"
     assert not manager.store.list("projects")
+
+
+async def test_recreate_individually_deleted_agents_keeps_existing_worktrees(tmp_path, monkeypatch):
+    manager, setup, _ = await project(tmp_path, monkeypatch)
+    data = SetupInput(project="sample", objective="Build an API with frontend.")
+    await setup.create(data)
+    for identifier in ("sample-backend", "sample-frontend"):
+        (manager.workspaces.get(identifier) / "unfinished.txt").write_text("keep work")
+        await manager.delete(identifier)
+    assert not manager.store.list("agents")
+    result = await setup.create(data)
+    assert result["status"] == "READY"
+    assert len(manager.store.list("agents")) == 2
+    for identifier in result["agents"]:
+        assert (manager.workspaces.get(identifier) / "unfinished.txt").read_text() == "keep work"

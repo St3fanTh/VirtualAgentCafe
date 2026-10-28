@@ -1227,3 +1227,30 @@
   WebSocket-Smoke. Bestehende Starlette/httpx-Deprecation-Warnung unverändert.
 - Nächster Schritt: Client aktualisieren/neustarten, Retry klicken und den Text im
   dauerhaften LAST RETRY-Feld auslesen.
+
+## Konfliktauflösung durch Integrationsagent und Team-Wiederanlage — 2026-10-28
+
+- Controller startet den Integrationsagenten auch bei begonnenem Merge oder
+  erhaltenen uncommitteten Änderungen. Exakte Eingangscommits und Anweisungen zur
+  Auflösung/Stage/Commit/Merge werden im Ausführungskontext mitgegeben.
+- Git-Helper erlaubt Merge ausschließlich für den Integrationsagenten und dessen
+  aktuell freigegebene Eingangscommits. Branchwechsel bleiben dabei gesperrt.
+- Zusätzliche Abschlussprüfung vor Veröffentlichung: sauberer Projektstand,
+  abgeschlossener Merge, Main- und Worker-Commits müssen Vorfahren von HEAD sein.
+  Requirements-Tests und Schutz vor zwischenzeitlich verändertem Main bleiben aktiv.
+- Setup kann einzeln gelöschte Worker eines bestehenden Projekts erneut anlegen,
+  statt READY mit nicht mehr vorhandenen Agenten zurückzugeben. Worktrees erhalten.
+- Dateien: management/git.py, git_helper.py, integration.py, execution.py, setup.py;
+  test_team_integration.py, test_project_setup.py; Integrationsanleitung/Fortschritt.
+- Tests bilden Add/Add-Konflikt ab, lösen ihn über den echten Helper, prüfen Tests
+  und Promotion; Erfolg ohne Konfliktauflösung bleibt gesperrt. Ergänzt: Retry eines
+  erhaltenen Konflikts und Wiederanlage einzeln gelöschter Worker mit lokalen Dateien.
+- Commit-ID: `git log --grep='let integration agents resolve preserved merge conflicts'`.
+- Grenze: Widersprüchliche Anforderungen sind nicht garantiert automatisch lösbar;
+  keine erzwungene Auswahl einer Seite, kein Reset/Abort/Force-Push.
+- Vollständige Validierung: scripts/check.sh PASS; 192 pytest inklusive echter
+  Konflikt-/Helper-/Validierungs-/Promotiontests, Ruff/Format, native GUI-Tests,
+  Godot-Import/Zustände/Headless und WebSocket-Smoke grün. Bestehende
+  Starlette/httpx-Deprecation-Warnung unverändert.
+- Nächster Schritt: Backend neu bauen und Retry team integration für den bestehenden
+  Konflikt verwenden; kein Löschen/Zurücksetzen des Nutzerprojekts notwendig.

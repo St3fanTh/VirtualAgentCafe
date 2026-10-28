@@ -264,7 +264,12 @@ class ProjectSetup:
                 raise ValueError(
                     "Start setup-project.py with --publish-results to enable remote Git"
                 )
-            if existing and existing[0]["status"] == "READY":
+            active_ids = {agent["config"]["id"] for agent in manager.store.list("agents")}
+            if (
+                existing
+                and existing[0]["status"] == "READY"
+                and all(identifier in active_ids for identifier in existing[0]["agents"])
+            ):
                 record = existing[0]
                 if data.publish_results:
                     await self.enable_publication(record)

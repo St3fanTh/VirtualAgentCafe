@@ -13,7 +13,7 @@ from pathlib import Path
 from uuid import uuid4
 parser = argparse.ArgumentParser(description="Git operations in this assigned workspace")
 parser.add_argument("operation",
-    choices=["status", "history", "diff", "stage", "commit", "branch", "switch"])
+    choices=["status", "history", "diff", "stage", "commit", "branch", "switch", "merge"])
 parser.add_argument("arguments", nargs="*")
 args = parser.parse_args()
 root = Path(__file__).resolve().parent
@@ -74,7 +74,18 @@ async def watch(manager, config, run: dict, workspace: Path):
                     result = await git.stage(config.workspace, arguments)
                 elif operation == "commit" and len(arguments) == 1:
                     result = await git.commit(config.workspace, arguments[0])
+                elif operation == "merge" and len(arguments) == 1:
+                    inputs = manager.integrations.inputs.get(config.id, {})
+                    if not config.execution.integration_validation or arguments[
+                        0
+                    ] not in inputs.get("commits", []):
+                        raise ValueError("Only current integration input commits may be merged")
+                    manager.integrations.assert_current(config.id)
+                    await git.merge_commit(config.workspace, arguments[0])
+                    result = await git.info(config.workspace)
                 elif operation in {"branch", "switch"} and len(arguments) == 1:
+                    if config.execution.integration_validation:
+                        raise ValueError("Integration must stay on its assigned branch")
                     if not arguments[0].startswith(f"agent/{config.id}/"):
                         raise ValueError("Choose this agent's own branch namespace")
                     result = await git.branch(config.workspace, arguments[0], operation == "branch")

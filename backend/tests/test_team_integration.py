@@ -15,7 +15,14 @@ from virtual_agent_cafe.management.setup import ProjectSetup, SetupInput
 
 
 async def team(
-    tmp_path, monkeypatch, *, fail_test=False, fail_worker=False, conflict=False, bad_plan=False
+    tmp_path,
+    monkeypatch,
+    *,
+    fail_test=False,
+    fail_worker=False,
+    conflict=False,
+    bad_plan=False,
+    repair=False,
 ):
     monkeypatch.setenv("VAC_ALLOW_REMOTE_GIT", "1")
     manager = ExecutionManager(tmp_path / "controller", EventBus())
@@ -79,10 +86,40 @@ async def team(
     )
 
     class Runtime:
+        def __init__(self):
+            self.repair = repair
+
         async def run(self, context, workspace, emit):
             if workspace.name.endswith("integration"):
                 data = manager.integrations.inputs[workspace.name]
                 assert "Read .cafe/instructions/requirements.md" in context
+                if conflict:
+                    assert await git.merge_pending(workspace.name)
+                    if not self.repair:
+                        # A model success claim must not publish an unfinished merge.
+                        return RunResult(True, "Claimed success without resolving conflicts")
+
+                    async def helper(*args, accepted=True):
+                        process = await asyncio.create_subprocess_exec(
+                            *Sandbox().command(
+                                workspace, ["python3", ".cafe/git.py", *args], writable_git=False
+                            ),
+                            stdout=asyncio.subprocess.PIPE,
+                            stderr=asyncio.subprocess.PIPE,
+                        )
+                        output, error = await process.communicate()
+                        assert (process.returncode == 0) == accepted, (output + error).decode()
+
+                    await helper("merge", "f" * 40, accepted=False)
+                    await helper("switch", "agent/project-integration/other", accepted=False)
+                    document = workspace / "docs/decisions.md"
+                    assert "<<<<<<<" in document.read_text()
+                    document.write_text("# Decisions\nBackend: fixed tick.\nFrontend: Godot.\n")
+                    await helper("stage", "docs/decisions.md")
+                    await helper("commit", "merge: reconcile component decisions")
+                    for commit in data["commits"]:
+                        await helper("merge", commit)
+
                 assert (workspace / "backend.py").is_file() and (
                     workspace / "frontend.py"
                 ).is_file()
@@ -123,11 +160,13 @@ async def team(
                 role = "backend" if workspace.name.endswith("backend") else "frontend"
                 if fail_worker and role == "backend":
                     return RunResult(False, "Backend tests failed")
-                name = "shared.py" if conflict else role + ".py"
-                (workspace / name).write_text(
-                    "VALUE = " + ("2" if conflict and role == "frontend" else "1") + "\n"
-                )
+                name = role + ".py"
+                (workspace / name).write_text("VALUE = 1\n")
                 files = [name]
+                if conflict:
+                    (workspace / "docs").mkdir(exist_ok=True)
+                    (workspace / "docs/decisions.md").write_text("# " + role + " decisions\n")
+                    files.append("docs/decisions.md")
             await git.stage(workspace.name, files)
             await git.commit(workspace.name, "feat: tested component")
             return RunResult(True, "Worker process finished")
@@ -288,3 +327,30 @@ async def test_simultaneous_worker_notifications_do_not_duplicate_failed_integra
     await settle(manager)
     assert len(manager.store.list("executions")) == before + 1
     assert not manager.integrations.pending
+
+
+async def test_conflicting_worker_docs_are_resolved_by_integration_before_promotion(
+    tmp_path, monkeypatch
+):
+    manager, remote, initial, pushed = await team(tmp_path, monkeypatch, conflict=True, repair=True)
+    await start_workers(manager)
+    project = manager.store.get("projects", "project")
+    assert project["integration"]["status"] == "PROMOTED", project
+    run = manager.store.get("executions", project["integration"]["execution"])
+    assert run["validation"]["passed"]
+    assert "Backend: fixed tick" in await manager.git.run(remote, "show", "main:docs/decisions.md")
+    assert "Frontend: Godot" in await manager.git.run(remote, "show", "main:docs/decisions.md")
+    assert not await manager.git.merge_pending("project-integration")
+    assert pushed[-1].endswith(":refs/heads/main")
+
+
+async def test_retry_hands_preserved_conflict_back_to_integration_agent(tmp_path, monkeypatch):
+    manager, remote, initial, _pushed = await team(tmp_path, monkeypatch, conflict=True)
+    await start_workers(manager)
+    assert manager.store.get("projects", "project")["integration"]["status"] == "FAILED"
+    assert await manager.git.merge_pending("project-integration")
+    assert (await manager.git.run(remote, "rev-parse", "main")).strip() == initial
+    manager.adapter.repair = True
+    manager.integrations.schedule("project-backend")
+    await settle(manager)
+    assert manager.store.get("projects", "project")["integration"]["status"] == "PROMOTED"

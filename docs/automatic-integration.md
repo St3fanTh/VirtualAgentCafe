@@ -108,8 +108,10 @@ werden nicht in den öffentlichen Eventstream übernommen.
 - `PROMOTED`: Der getestete gemeinsame Commit wurde erfolgreich auf `main` gepusht.
 
 Nach einer Korrektur kann **Retry team integration** im Ausführungsdialog den
-Ablauf erneut anstoßen. Merge-Konflikte bleiben zur Behebung im Integrations-
-Worktree erhalten; es gibt kein automatisches Reset, Clean, Abort oder Force-Push.
+Ablauf erneut anstoßen. Merge-Konflikte werden im Integrations-Worktree an den Integrationsagenten
+übergeben. Er löst Inhalte auf, staged die aufgelösten Dateien und committet den
+Merge. Retry kann auch einen zuvor unterbrochenen Merge wieder aufnehmen. Es gibt
+kein automatisches Reset, Clean, Abort oder Force-Push.
 Bei geändertem Main wird erneut zusammengeführt und getestet. Agenten desselben
 Teams können während der laufenden Integration nicht neu gestartet werden.
 
@@ -151,3 +153,23 @@ Team-Status darüber. Die Antwort ist dem ausgewählten Lauf zugeordnet und blei
 beim Wechsel zwischen Läufen in derselben Godot-Sitzung erhalten. Eine neue
 Retry-Anfrage für diesen Lauf ersetzt sie; nach einem Client-Neustart kann die
 Antwort erneut angefordert werden.
+
+
+### Konflikte und erneutes Team-Setup
+
+Ein Git-Merge-Konflikt verhindert den Start des Integrationsagenten nicht mehr.
+Er erhält die vorhandenen Dateien, den begonnenen Merge, die aktuellen Requirements
+und die exakten benötigten Main-/Worker-Commits. Über den Git-Helper darf nur dieser
+Agent die für seinen aktuellen Lauf freigegebenen Commits zusammenführen. Fremde
+Commits, Branchwechsel und direkte Pushes werden darüber nicht freigegeben.
+
+Vor Veröffentlichung und Requirements-Validierung prüft der Controller: keine
+uncommitteten Projektänderungen, kein offener Merge und alle benötigten Commits in
+der HEAD-Historie. Eine Erfolgsmeldung des Modells reicht nicht. Nicht lösbare
+Konflikte bleiben als fehlgeschlagener Lauf mit erhaltenen Dateien zur erneuten
+Bearbeitung verfügbar. Semantisch widersprüchliche Anforderungen können weiterhin
+menschliche Klärung erfordern.
+
+Einzeln gelöschte Worker werden beim erneuten Team-Setup wieder angelegt. Vorhandene
+passende Worktrees, Branches und Markdown-Dateien werden weiterverwendet; die
+Neueinrichtung verwirft keine lokale Arbeit und bedeutet keinen leeren Neustart.

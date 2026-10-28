@@ -5,11 +5,20 @@ import hashlib
 import json
 
 from .config import AgentConfig, State, TaskState
+from .git import GitOperationError
 from .project_documents import load_documents
 
 PLAN_INSTRUCTIONS = """# Task: Integrate the project and build the common requirements test base
 
-The controller has merged the backend/frontend commits into this feature worktree.
+The controller attempts to merge the backend/frontend commits into this feature worktree.
+An unfinished merge or preserved edits may remain: resolve these inside this worktree.
+Read conflict markers and both sides, preserve compatible requirements, and reconcile
+actual incompatibilities. Do not blindly choose ours/theirs or discard existing work.
+Stage resolved files and commit the merge using python3 .cafe/git.py stage <paths>
+and python3 .cafe/git.py commit "<message>". Then merge every required commit from
+the execution context using python3 .cafe/git.py merge <exact-commit>, resolving and
+committing each conflict before continuing. Never abort, reset, force or push.
+The controller verifies all required commits are ancestors before validation/publication.
 Read .cafe/instructions/requirements.md (the exact shared requirements snapshot),
 .cafe/instructions/project/AGENTS.md and PLANNING.md when present.
 Inspect both implementations, reconcile their interfaces and add real integration
@@ -176,16 +185,33 @@ class Integrations:
                 manager.store.put("projects", identifier, record)
                 await manager.git.worktree(identifier, config.workspace, config.git.branch)
                 base = await manager.git.fetch_main(config)
-                for commit in [base, *(r["published"]["commit"] for r in data["runs"])]:
-                    await manager.git.merge_commit(config.workspace, commit)
+                commits = [base, *(r["published"]["commit"] for r in data["runs"])]
+                workspace = manager.workspaces.get(config.workspace)
+                recovery = await manager.git.merge_pending(config.workspace)
+                try:
+                    await manager.git.require_clean(workspace)
+                except ValueError:
+                    recovery = True
+                if not recovery:
+                    for commit in commits:
+                        try:
+                            await manager.git.merge_commit(config.workspace, commit)
+                        except GitOperationError:
+                            if not await manager.git.merge_pending(config.workspace):
+                                raise
+                            recovery = True
+                            break
                 record["integration"] = {
                     "status": "RUNNING",
                     "signature": data["signature"],
                     "worker_runs": [r["id"] for r in data["runs"]],
                     "base": base,
+                    "detail": "Integration agent resolving preserved edits or merge conflicts"
+                    if recovery
+                    else "Integration agent implementing shared requirements tests",
                 }
                 manager.store.put("projects", identifier, record)
-                self.inputs[config.id] = {**data, "base": base}
+                self.inputs[config.id] = {**data, "base": base, "commits": commits}
             run = await manager.start(config.id, coordinated=True)
             await manager.running[config.id]
             result = manager.store.get("executions", run["id"])

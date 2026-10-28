@@ -8,7 +8,7 @@ from uuid import UUID, uuid4
 
 from pydantic import TypeAdapter
 
-from ..adapters.base import AgentAdapter
+from ..adapters.base import AgentAdapter, RunResult
 from ..bus import EventBus
 from ..models import AgentState, Event, EventType, Payload
 from . import git_helper, validation
@@ -445,6 +445,14 @@ class ExecutionManager:
                     "\nRead .cafe/instructions/requirements.md for exact common requirements.\n"
                 )
                 context += "Requirements SHA256: " + integration["sha256"] + "\n"
+                context += (
+                    "Resolve preserved edits or pending merges, stage resolved files and commit. "
+                    "Then use python3 .cafe/git.py merge <commit> for EVERY required commit "
+                    "below, resolving and committing conflicts before the next. Preserve both "
+                    "components; no reset/abort/force. All commits must be ancestors of HEAD.\n"
+                    + "\n".join(integration.get("commits", [integration["base"]]))
+                    + "\n"
+                )
             (instruction_root / "task.md").write_text(task["content"], encoding="utf-8")
             for role in roles:
                 (instruction_root / "roles" / role["file"]).write_text(
@@ -582,6 +590,14 @@ class ExecutionManager:
                     break
                 if attempt < config.execution.max_retries:
                     emit(EventType.WAITING, "Retrying failed runtime in the same workspace")
+            if result.success and config.execution.integration_validation:
+                try:
+                    self.integrations.assert_current(config.id)
+                    await self.git.verify_integration(
+                        config.workspace, self.integrations.inputs[config.id]["commits"]
+                    )
+                except ValueError as error:
+                    result = RunResult(False, str(error), result.test_runs)
             response_file = workspace / ".cafe" / "last-response.md"
             changelog = ""
             try:

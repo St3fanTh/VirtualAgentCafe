@@ -441,6 +441,29 @@ class GitService:
         await self.require_clean(path)
         await self.run(path, "merge", "--no-ff", "--no-edit", "--no-verify", commit)
 
+    async def merge_pending(self, workspace: str) -> bool:
+        path = await self.repository(workspace)
+        try:
+            await self.run(path, "rev-parse", "--verify", "MERGE_HEAD")
+            return True
+        except GitOperationError:
+            return False
+
+    async def verify_integration(self, workspace: str, commits: list[str]):
+        path = await self.repository(workspace)
+        await self.require_clean(path)
+        if await self.merge_pending(workspace):
+            raise ValueError("Integration merge is unfinished; resolve, stage and commit it")
+        for commit in commits:
+            if not re.fullmatch(r"[a-f0-9]{40,64}", commit):
+                raise ValueError("Integration requires exact published commits")
+            try:
+                await self.run(path, "merge-base", "--is-ancestor", commit, "HEAD")
+            except GitOperationError:
+                raise ValueError(
+                    "Integration is missing a required worker or main commit"
+                ) from None
+
     async def promote(self, config, commit: str, base: str) -> dict:
         path, branch = await self.push_target(config)
         if not config.execution.integration_validation or not re.fullmatch(
