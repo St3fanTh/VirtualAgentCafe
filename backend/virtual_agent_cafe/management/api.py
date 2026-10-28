@@ -12,6 +12,11 @@ from .project_documents import ProjectDocumentInput, load_documents, save_docume
 from .setup import ProjectSetup, SetupCheck, SetupInput
 
 
+class ChatInput(StrictModel):
+    content: str = Field(min_length=1, max_length=4000)
+    resume: bool = True
+
+
 class EmptyInput(StrictModel):
     pass
 
@@ -70,6 +75,21 @@ def management_router(manager: ExecutionManager, validated_body, mode: str) -> A
             raise HTTPException(409, detail) from None
 
     setup = ProjectSetup(manager, mode)
+
+    @router.get("/agents/{identifier}/chat")
+    async def agent_chat(identifier: str):
+        return await guarded(lambda: asyncio.to_thread(manager.conversations.read, identifier))
+
+    @router.post("/agents/{identifier}/chat")
+    async def send_agent_chat(identifier: str, request: Request):
+        data = await validated_body(request, ChatInput)
+        if not data.content.strip():
+            raise HTTPException(422, "Message must not be blank")
+        if data.resume and mode != "codex":
+            raise HTTPException(409, "Continuing an agent requires Codex mode")
+        return await guarded(
+            lambda: manager.conversations.send(identifier, data.content, data.resume)
+        )
 
     @router.get("/setup")
     async def setup_projects():
@@ -174,7 +194,7 @@ def management_router(manager: ExecutionManager, validated_body, mode: str) -> A
                     "status": "PROMOTED",
                     "detail": "These worker results are already integrated on main.",
                 }
-            manager.integrations.schedule(record["agents"][0])
+            manager.integrations.schedule(record["agents"][0], manual=True)
             return {
                 "project": identifier,
                 "status": "QUEUED",

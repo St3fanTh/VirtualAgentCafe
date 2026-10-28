@@ -73,16 +73,17 @@ class Integrations:
         if (
             identifier != project["integrator"]
             and project["id"] in self.running
-            and project.get("integration", {}).get("status") == "RUNNING"
+            and project.get("integration", {}).get("status")
+            in {"RUNNING", "PREPARING", "REPAIRING"}
         ):
             raise ValueError("Wait for the current integration before restarting a worker")
 
-    def schedule(self, identifier):
+    def schedule(self, identifier, *, manual=False):
         project = self.project(identifier)
         if not project or identifier == project["integrator"] or self.manager.closing:
             return
         if project["id"] not in self.running:
-            task = asyncio.create_task(self.advance(project["id"]))
+            task = asyncio.create_task(self.advance(project["id"], manual=manual))
             self.running[project["id"]] = task
 
             def finished(_task):
@@ -154,7 +155,7 @@ class Integrations:
         ).hexdigest()
         return {"text": text, "sha256": digest, "signature": signature, "runs": runs}
 
-    async def advance(self, identifier):
+    async def advance(self, identifier, *, manual=False):
         manager = self.manager
         record = manager.store.get("projects", identifier)
         try:
@@ -171,8 +172,11 @@ class Integrations:
             # the job started. Do not repeat a failed model run for the same kick.
             self.pending.discard(identifier)
             prior = record.get("integration", {})
-            if prior.get("signature") == data["signature"] and prior.get("status") == "PROMOTED":
-                return
+            if prior.get("signature") == data["signature"]:
+                if prior.get("status") == "PROMOTED" and not manual:
+                    return
+                if prior.get("status") in {"NEEDS_INPUT", "CANCELLED"} and not manual:
+                    return
             async with manager.control:
                 config = AgentConfig.model_validate(
                     manager.registry.get(record["integrator"])["config"]
@@ -212,14 +216,60 @@ class Integrations:
                 }
                 manager.store.put("projects", identifier, record)
                 self.inputs[config.id] = {**data, "base": base, "commits": commits}
-            run = await manager.start(config.id, coordinated=True)
-            await manager.running[config.id]
-            result = manager.store.get("executions", run["id"])
+            previous_failure = None
+            attempts = []
+            for attempt in range(config.execution.repair_attempts):
+                run = await manager.start(config.id, coordinated=True)
+                await manager.running[config.id]
+                result = manager.store.get("executions", run["id"])
+                attempts.append(run["id"])
+                if result.get("promotion") == "PROMOTED" or result["status"] == State.CANCELLED:
+                    break
+                evidence = {
+                    "detail": result.get("detail"),
+                    "tests": result.get("test_runs", []),
+                    "checks": [
+                        {key: value for key, value in check.items() if key != "output_sha256"}
+                        for check in result.get("validation", {}).get("checks", [])
+                    ],
+                }
+                # Check IDs/exit codes/diagnostics, not volatile output digests or timestamps.
+                signature = hashlib.sha256(
+                    json.dumps(evidence, sort_keys=True).encode()
+                ).hexdigest()
+                self.inputs[config.id]["repair_feedback"] = evidence
+                self.inputs[config.id]["repair_attempt"] = attempt + 2
+                if (
+                    signature == previous_failure
+                    or result.get("publication") == "FAILED"
+                    or result.get("promotion") == "FAILED"
+                ):
+                    break
+                previous_failure = signature
+                self.assert_current(config.id)
+                if attempt + 1 < config.execution.repair_attempts:
+                    record = manager.store.get("projects", identifier)
+                    record["integration"].update(
+                        status="REPAIRING",
+                        attempt=attempt + 2,
+                        detail="Repairing failed tests using the previous run's evidence",
+                    )
+                    manager.store.put("projects", identifier, record)
             record = manager.store.get("projects", identifier)
+            final_status = (
+                "PROMOTED"
+                if result.get("promotion") == "PROMOTED"
+                else ("CANCELLED" if result["status"] == State.CANCELLED else "NEEDS_INPUT")
+            )
+            detail = result["detail"]
+            if final_status == "NEEDS_INPUT":
+                detail = "Repair attempts stopped. Use Agent chat to clarify or unblock: " + detail
             record["integration"].update(
-                status="PROMOTED" if result.get("promotion") == "PROMOTED" else "FAILED",
+                status=final_status,
                 execution=run["id"],
-                detail=result["detail"],
+                detail=detail[:512],
+                attempts=attempts,
+                attempt=len(attempts),
             )
             if result.get("promotion") == "PROMOTED":
                 for worker in data["runs"]:

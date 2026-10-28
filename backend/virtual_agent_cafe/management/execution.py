@@ -1,6 +1,7 @@
 import asyncio
 import fcntl
 import hashlib
+import json
 import os
 from datetime import UTC, datetime
 from pathlib import Path
@@ -13,6 +14,7 @@ from ..bus import EventBus
 from ..models import AgentState, Event, EventType, Payload
 from . import git_helper, validation
 from .config import AgentConfig, Identifier, State, TaskState
+from .conversations import Conversations
 from .files import ApprovedFiles, MarkdownManager, WorkspaceManager
 from .git import GitOperationError, GitService
 from .integration import Integrations
@@ -76,6 +78,7 @@ class ExecutionManager:
         self.closing = False
         self.controller_lock = None
         self.integrations = Integrations(self)
+        self.conversations = Conversations(self)
         if recover:
             self.recover()
         for record in self.store.list("agents"):
@@ -112,7 +115,11 @@ class ExecutionManager:
                     run["id"], {"timestamp": now(), "type": "agent.error", "detail": run["detail"]}
                 )
         for project in self.store.list("projects"):
-            if project.get("integration", {}).get("status") == "RUNNING":
+            if project.get("integration", {}).get("status") in {
+                "RUNNING",
+                "PREPARING",
+                "REPAIRING",
+            }:
                 project["integration"]["status"] = "INTERRUPTED"
                 self.store.put("projects", project["id"], project)
         for agent in self.store.list("agents"):
@@ -428,6 +435,18 @@ class ExecutionManager:
                 "Precedence: system security > validated configuration > roles > "
                 "project AGENTS.md > project PLANNING.md > task.\n"
             )
+            context += self.conversations.context(identifier)
+            if integration and integration.get("repair_feedback"):
+                context += (
+                    "\nAUTOMATIC REPAIR ATTEMPT " + str(integration["repair_attempt"]) + "\n"
+                    "The previous run failed. Reproduce the failure, "
+                    "inspect the actual test output, "
+                    "fix the root cause, and rerun ALL required suites after your final edit. "
+                    "Do not weaken assertions or requirements. Do not report completion while "
+                    "tests fail. If blocked, state the blocker and ask a specific question.\n"
+                    + json.dumps(integration["repair_feedback"])[:16000]
+                    + "\n"
+                )
             instruction_root = self.contexts.path(run_id)
             instruction_root.mkdir()
             (instruction_root / "roles").mkdir()
@@ -581,14 +600,17 @@ class ExecutionManager:
                 timeout=config.execution.timeout_seconds,
                 instructions=self.contexts.path(run["id"]),
             )
-            for attempt in range(config.execution.max_retries + 1):
+            runtime_retries = (
+                0 if config.execution.integration_validation else config.execution.max_retries
+            )
+            for attempt in range(runtime_retries + 1):
                 run["attempts"] = attempt + 1
                 self.store.put("executions", run["id"], run)
                 async with asyncio.timeout(config.execution.timeout_seconds):
                     result = await runtime.run(context, workspace, emit)
                 if result.success:
                     break
-                if attempt < config.execution.max_retries:
+                if attempt < runtime_retries:
                     emit(EventType.WAITING, "Retrying failed runtime in the same workspace")
             if result.success and config.execution.integration_validation:
                 try:
@@ -752,6 +774,13 @@ class ExecutionManager:
                 run["publication"] = "NOT_PUBLISHED"
             run["ended_at"] = now()
             self.store.put("executions", run["id"], run)
+            response = run.get("changelog") or run.get("detail", "Execution ended")
+            self.conversations.append(
+                config.id,
+                "assistant",
+                str(response) + "\n\nResult: " + run.get("detail", ""),
+                run["id"],
+            )
             self.registry.update(config.id, state=run["status"], task_state=run["task_state"])
             self.claims.pop(config.workspace, None)
             self.running.pop(config.id, None)

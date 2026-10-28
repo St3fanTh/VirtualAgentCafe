@@ -1,5 +1,34 @@
 # Automatische Integration und gemeinsame Requirements-Tests
 
+## Automatische Reparatur und Agenten-Chat
+
+Die Integration führt bis zu `execution.repair_attempts` Versuche pro Zyklus aus
+(Standard **3**, einschließlich des ersten Versuchs; Agenteneinstellungen: 1–5).
+Nach fehlgeschlagener Ausführung oder gemeinsamer Validierung erhält der nächste
+Versuch die Testdiagnosen und arbeitet im selben Worktree weiter. Änderungen und
+Konfliktlösungen bleiben erhalten. Gemeinsame Testdiagnosen enthalten Fehlerklassen,
+Exit-Codes und erkannte pytest-Testnamen, keine rohen Assertions oder Ausgaben.
+
+Währenddessen zeigt das Team `REPAIRING`. Wiederholt sich derselbe Fehler nach einem
+Reparaturversuch, ist das Budget verbraucht oder scheitert Veröffentlichung/Promotion,
+stoppt der Zyklus mit `NEEDS_INPUT`. Doppelte Worker-Benachrichtigungen starten ihn
+nicht erneut. Alle Prüfungen vor der Main-Promotion bleiben verpflichtend. Abbrechen
+des laufenden Integrationsagenten beendet auch den Reparaturzyklus.
+
+Öffne **Management → Agent chat**, wähle den Integrationsagenten und lies seine letzte
+Antwort. Mit **Send & continue** speicherst du eine Klarstellung und startest einen
+neuen Zyklus. Der Chat funktioniert auch für einzelne Worker. Markdown-Aufgaben,
+Rollen und Sicherheitsregeln gelten weiterhin. Nachrichten liegen ausschließlich
+in der privaten Management-Datenbank, nicht im öffentlichen Eventstream. Die letzten
+40 Nachrichten bleiben gespeichert; die letzten 12 fließen in neue Ausführungen ein.
+
+Nachrichten werden an Ausführungsgrenzen übergeben: Während eines laufenden Versuchs
+bedeutet `NEXT_ATTEMPT`, dass die Nachricht für den nächsten Start gespeichert ist.
+Endet der aktuelle Lauf ohne weiteren Versuch, nach seinem Ende mit **Send & continue**
+einen Folgelauf anfordern. Antworten erscheinen nach Ende einer Ausführung. Jeder
+Zyklus kann zusätzliche Modellnutzung verursachen. Fehler bei Mounts, Berechtigungen
+oder Anmeldung können weiterhin eine Korrektur der Umgebung erfordern.
+
 Der Ablauf benötigt keine manuelle Aufgabenannahme in **Executions**:
 
 ```text

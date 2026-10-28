@@ -88,9 +88,12 @@ async def team(
     class Runtime:
         def __init__(self):
             self.repair = repair
+            self.fail_test = fail_test
+            self.integration_contexts = []
 
         async def run(self, context, workspace, emit):
             if workspace.name.endswith("integration"):
+                self.integration_contexts.append(context)
                 data = manager.integrations.inputs[workspace.name]
                 assert "Read .cafe/instructions/requirements.md" in context
                 if conflict:
@@ -126,7 +129,8 @@ async def team(
                 (workspace / "tests").mkdir(exist_ok=True)
                 (workspace / "tests/test_contract.py").write_text(
                     "import backend, frontend\ndef test_contract():\n"
-                    "    assert backend.VALUE == frontend.VALUE" + (" + 1\n" if fail_test else "\n")
+                    "    assert backend.VALUE == frontend.VALUE"
+                    + (" + 1\n" if self.fail_test else "\n")
                 )
                 (workspace / "validation").mkdir(exist_ok=True)
                 (workspace / "validation/requirements.md").write_text(data["text"])
@@ -168,7 +172,8 @@ async def team(
                     (workspace / "docs/decisions.md").write_text("# " + role + " decisions\n")
                     files.append("docs/decisions.md")
             await git.stage(workspace.name, files)
-            await git.commit(workspace.name, "feat: tested component")
+            if (await git.run(workspace, "diff", "--cached", "--name-only")).strip():
+                await git.commit(workspace.name, "feat: tested component")
             return RunResult(True, "Worker process finished")
 
     manager.adapter = Runtime()
@@ -176,7 +181,7 @@ async def team(
 
 
 async def settle(manager):
-    async with asyncio.timeout(30):
+    async with asyncio.timeout(90):
         while manager.running or manager.integrations.running:
             await asyncio.gather(
                 *list(manager.running.values()), *list(manager.integrations.running.values())
@@ -246,7 +251,7 @@ async def test_failed_team_never_changes_main_and_preserves_worktrees(
     )
     await start_workers(manager)
     project = manager.store.get("projects", "project")
-    assert project["integration"]["status"] in {"FAILED", "WAITING_FOR_WORKERS"}
+    assert project["integration"]["status"] in {"NEEDS_INPUT", "WAITING_FOR_WORKERS"}
     assert (await manager.git.run(remote, "rev-parse", "refs/heads/main")).strip() == initial
     assert all(not ref.endswith(":refs/heads/main") for ref in pushed)
     assert manager.workspaces.get("project-frontend").exists()
@@ -286,7 +291,7 @@ async def test_concurrent_remote_main_update_blocks_stale_promotion(tmp_path, mo
     monkeypatch.setattr(manager.git, "promote", concurrent_main)
     await start_workers(manager)
     record = manager.store.get("projects", "project")
-    assert record["integration"]["status"] == "FAILED"
+    assert record["integration"]["status"] == "NEEDS_INPUT"
     run = manager.store.get("executions", record["integration"]["execution"])
     assert run["validation"]["passed"] and run["promotion"] == "FAILED"
     assert "Remote main changed" in run["detail"]
@@ -309,7 +314,7 @@ async def test_changed_task_cannot_be_promoted_using_stale_requirement_tests(tmp
     monkeypatch.setattr(manager.git, "push", changed_requirements)
     await start_workers(manager)
     project = manager.store.get("projects", "project")
-    assert project["integration"]["status"] == "FAILED"
+    assert project["integration"]["status"] == "NEEDS_INPUT"
     run = manager.store.get("executions", project["integration"]["execution"])
     assert run["validation"]["passed"]
     assert run["promotion"] == "FAILED" and "requirements changed" in run["detail"]
@@ -325,7 +330,7 @@ async def test_simultaneous_worker_notifications_do_not_duplicate_failed_integra
     manager.integrations.schedule("project-backend")
     manager.integrations.schedule("project-frontend")
     await settle(manager)
-    assert len(manager.store.list("executions")) == before + 1
+    assert len(manager.store.list("executions")) == before
     assert not manager.integrations.pending
 
 
@@ -347,10 +352,64 @@ async def test_conflicting_worker_docs_are_resolved_by_integration_before_promot
 async def test_retry_hands_preserved_conflict_back_to_integration_agent(tmp_path, monkeypatch):
     manager, remote, initial, _pushed = await team(tmp_path, monkeypatch, conflict=True)
     await start_workers(manager)
-    assert manager.store.get("projects", "project")["integration"]["status"] == "FAILED"
+    assert manager.store.get("projects", "project")["integration"]["status"] == "NEEDS_INPUT"
     assert await manager.git.merge_pending("project-integration")
     assert (await manager.git.run(remote, "rev-parse", "main")).strip() == initial
     manager.adapter.repair = True
-    manager.integrations.schedule("project-backend")
+    manager.integrations.schedule("project-backend", manual=True)
     await settle(manager)
     assert manager.store.get("projects", "project")["integration"]["status"] == "PROMOTED"
+
+
+async def test_automatic_repair_receives_failure_evidence_and_promotes(tmp_path, monkeypatch):
+    manager, remote, initial, pushed = await team(tmp_path, monkeypatch, fail_test=True)
+    original = manager.adapter.run
+
+    async def repair(context, workspace, emit):
+        if "AUTOMATIC REPAIR ATTEMPT 2" in context:
+            assert "shared-tests" in context
+            manager.adapter.fail_test = False
+        return await original(context, workspace, emit)
+
+    manager.adapter.run = repair
+    await start_workers(manager)
+    record = manager.store.get("projects", "project")["integration"]
+    assert record["status"] == "PROMOTED", record
+    assert record["attempt"] == 2
+    assert len(manager.adapter.integration_contexts) == 2
+    assert (await manager.git.run(remote, "rev-parse", "main")).strip() != initial
+
+
+async def test_stalled_integration_can_be_resumed_by_persistent_chat(tmp_path, monkeypatch):
+    manager, remote, initial, pushed = await team(tmp_path, monkeypatch, fail_test=True)
+    await start_workers(manager)
+    record = manager.store.get("projects", "project")["integration"]
+    assert record["status"] == "NEEDS_INPUT", record
+    assert record["attempt"] == 2
+    assert (await manager.git.run(remote, "rev-parse", "main")).strip() == initial
+    manager.adapter.fail_test = False
+    response = await manager.conversations.send(
+        "project-integration", "Keep the shared contract and repair the implementation.", True
+    )
+    assert response["delivery"] == "INTEGRATION_REQUESTED"
+    await settle(manager)
+    assert manager.store.get("projects", "project")["integration"]["status"] == "PROMOTED"
+    assert "Keep the shared contract" in manager.adapter.integration_contexts[-1]
+    messages = manager.conversations.read("project-integration")["messages"]
+    assert messages[-1]["role"] == "assistant"
+    assert any(m["role"] == "user" for m in messages)
+
+
+async def test_integration_attempt_budget_is_enforced(tmp_path, monkeypatch):
+    from virtual_agent_cafe.management.config import AgentConfig
+
+    manager, remote, initial, pushed = await team(tmp_path, monkeypatch, conflict=True)
+    config = AgentConfig.model_validate(manager.registry.get("project-integration")["config"])
+    config.execution.repair_attempts = 1
+    manager.configure(config)
+    await start_workers(manager)
+    record = manager.store.get("projects", "project")["integration"]
+    assert record["status"] == "NEEDS_INPUT"
+    assert record["attempt"] == 1
+    assert len(manager.adapter.integration_contexts) == 1
+    assert (await manager.git.run(remote, "rev-parse", "main")).strip() == initial

@@ -133,9 +133,13 @@ async def test_failure_timeout_and_restart_recovery(tmp_path):
     assert manager.store.get("executions", run["id"])["detail"] == "Execution timed out"
     manager.store.put("executions", "interrupted", {**run, "id": "interrupted"})
     manager.registry.update("backend-agent", state="RUNNING")
+    manager.store.put(
+        "projects", "project", {"id": "project", "integration": {"status": "REPAIRING"}}
+    )
     restarted = ExecutionManager(tmp_path, EventBus(), runtime)
     assert restarted.store.get("executions", "interrupted")["status"] == "FAILED"
     assert restarted.registry.get("backend-agent")["state"] == "FAILED"
+    assert restarted.store.get("projects", "project")["integration"]["status"] == "INTERRUPTED"
 
 
 def test_management_api_editable_assignments_security_and_persistence(tmp_path):
@@ -363,3 +367,60 @@ async def test_git_start_failure_is_visible_and_persisted(tmp_path, monkeypatch)
     assert "not writable" in restarted.bus.agents["backend-agent"].detail
     assert restarted.tasks.load("task.md")["content"].startswith("# Task")
     assert restarted.roles.load("backend.md")["content"].startswith("# Backend")
+
+
+async def test_private_chat_persists_and_is_loaded_on_resume(tmp_path):
+    runtime = ControlledRuntime()
+    manager = configured(tmp_path, runtime)
+    message = "Use the documented contract. " + "x" * 3000
+    saved = await manager.conversations.send("backend-agent", message, False)
+    assert saved["delivery"] == "SAVED"
+    assert saved["messages"][-1]["content"] == message
+    runtime.release.set()
+    response = await manager.conversations.send("backend-agent", "Please continue.", True)
+    assert response["delivery"] == "STARTED"
+    await completed(manager)
+    assert message in runtime.contexts[-1]
+    assert "Please continue." in runtime.contexts[-1]
+    history = manager.conversations.read("backend-agent")
+    assert history["messages"][-1]["role"] == "assistant"
+    assert "Recap" in history["messages"][-1]["content"]
+    restored = ExecutionManager(tmp_path, EventBus(), runtime)
+    assert restored.conversations.read("backend-agent") == history
+    for run in manager.store.list("executions"):
+        assert message not in str(manager.store.logs(run["id"]))
+
+
+async def test_chat_during_runtime_is_saved_for_next_attempt_without_duplicate_start(tmp_path):
+    runtime = ControlledRuntime()
+    manager = configured(tmp_path, runtime)
+    await manager.start("backend-agent")
+    await runtime.started.wait()
+    reply = await manager.conversations.send("backend-agent", "New clarification", True)
+    assert reply["delivery"] == "NEXT_ATTEMPT"
+    assert len(manager.running) == 1
+    assert "New clarification" not in runtime.contexts[0]
+    runtime.release.set()
+    await completed(manager)
+    await manager.start("backend-agent")
+    await completed(manager)
+    assert "New clarification" in runtime.contexts[-1]
+
+
+def test_chat_api_auth_validation_and_private_history(tmp_path):
+    app = create_app("codex", management_root=tmp_path)
+    manager = app.state.management
+    manager.workspaces.create("project")
+    manager.configure(AgentConfig(id="agent", name="Agent", workspace="project"))
+    url = "/management/agents/agent/chat"
+    with TestClient(app) as client:
+        assert client.get(url).status_code == 401
+        client.headers["Authorization"] = "Bearer " + manager.access.token
+        assert client.post(url, json={"content": "   ", "resume": False}).status_code == 422
+        assert client.post(url, json={"content": "x" * 4001}).status_code == 422
+        assert (
+            client.post(url, json={"content": "Private clarification", "resume": False}).status_code
+            == 200
+        )
+        assert client.get(url).json()["messages"][0]["content"] == "Private clarification"
+        assert client.get("/management/agents/missing/chat").status_code == 404

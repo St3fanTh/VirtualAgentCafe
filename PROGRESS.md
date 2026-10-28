@@ -1275,3 +1275,42 @@
   Bestehende Starlette/httpx-Deprecation-Warnung unverändert.
 - Nächster Schritt: Repository aktualisieren und Godot neu starten. Backend-Neubau
   für diese reine Anzeigeänderung nicht erforderlich.
+
+## Automatische Integrationsreparatur und privater Agenten-Chat — 2026-10-28
+
+- Integration erhält einen konfigurierbaren Zyklus mit standardmäßig drei gesamten
+  Versuchen. Fehlgeschlagene Runtime-/Requirements-Tests liefern Diagnosen an den
+  nächsten Versuch im unveränderten Worktree. Identische wiederholte Fehler und
+  ausgeschöpftes Budget führen zu NEEDS_INPUT; Push-/Promotionfehler stoppen sofort.
+  Doppelte Worker-Ereignisse lösen keinen neuen gestoppten Zyklus aus. Abbruch und
+  Controller-Neustart bleiben ausdrücklich als solche erkennbar.
+- Neuer privater, persistierter Agenten-Chat in Godot und der Management-API.
+  Send & continue setzt einen Worker bzw. die Team-Integration fort. Während einer
+  Ausführung eingehende Nachrichten werden erst beim nächsten Start berücksichtigt.
+  Abschließende Agentenantwort und Controller-Ergebnis bleiben im Chat sichtbar.
+- Gemeinsame Validierung erfasst begrenzte, bereinigte Testdiagnosen einschließlich
+  pytest-Testnamen. Die Oberfläche zeigt diese zusätzlich im Ausführungsbericht.
+  Main wird weiterhin ausschließlich nach allen bisherigen Validierungsprüfungen
+  mit dem exakt getesteten Commit aktualisiert.
+- Dateien: backend/virtual_agent_cafe/management/{api,config,execution,integration,
+  validation}.py und neues conversations.py; game/scripts/management.gd;
+  backend/tests/{test_management_execution,test_team_integration}.py;
+  game/tests/test_management.gd; README.md; docs/automatic-integration.md; PROGRESS.md.
+- Gezielte Prüfung: 23 Integrations-/Ausführungstests PASS; 20 Backend-/native
+  Godot-Tests PASS; zusätzliche Neustart-Regression PASS. Szenarien: erfolgreicher
+  automatischer Reparaturversuch, wiederholter Stillstand ohne Main-Änderung,
+  Fortsetzen per Chat, Authentifizierung, persistierte/private Nachrichten,
+  keine parallele Doppelausführung, GUI-Nachricht und erhaltener Entwurf.
+- Commit-ID: git log --grep='add bounded integration repair and agent chat'.
+- Grenze: Kommunikation erfolgt zwischen Ausführungen; kein Live-Interrupt einer
+  Codex-Modellrunde. Chat hält 40 Nachrichten, 12 davon werden als Kontext übergeben.
+  Zusätzliche Versuche verbrauchen Modellnutzung. Infrastruktur-/Zugangsprobleme
+  können weiterhin Nutzereingriff erfordern. Kein echter externer Codex-Aufruf in
+  diesen Tests; Runtime-Fixtures und lokale Git-Remotes sind deterministisch.
+- Nächster Schritt: Backend neu bauen, Godot neu starten und bei NEEDS_INPUT über
+  Management → Agent chat antworten.
+- Vollständige Validierung: scripts/check.sh PASS, 199 pytest PASS einschließlich
+  lokaler Git-/Sandbox-Integration und nativer Godot-GUI-Tests; Ruff/Format,
+  Godot-Import/Zustände/Headless und WebSocket-Smoke PASS. Bestehende
+  Starlette/httpx-Deprecation-Warnung unverändert. Neustart-Regression nach der
+  ergänzten Recovery-Behandlung zusätzlich separat PASS; abschließendes Ruff PASS.

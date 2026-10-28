@@ -151,6 +151,12 @@ Rebuild the backend image for Bubblewrap and the new approved `/workspaces` volu
 
 ### Automatic team integration
 
+Failed integration runs now retry automatically with test diagnostics (default:
+three total attempts). A repeated failure or exhausted budget pauses the team as
+`NEEDS_INPUT`. Open **Management → Agent chat**, select the integration agent,
+and use **Send & continue** to clarify and resume. Messages sent during a run are
+saved for its next attempt; replies appear when execution finishes.
+
 Enable **Integrate + requirements tests + promote green result to main** in Setup.
 After both workers commit and push, an integration/test worker merges their exact
 commits on its feature branch and creates a shared requirements test plan. The

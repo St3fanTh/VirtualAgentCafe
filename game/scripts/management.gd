@@ -19,6 +19,7 @@ var branch: LineEdit
 var agent_remote_name: LineEdit
 var timeout: SpinBox
 var retries: SpinBox
+var repair_attempts: SpinBox
 var remote_flags: Dictionary = {}
 var definition_kind: OptionButton
 var definition_file: LineEdit
@@ -69,7 +70,11 @@ var form_status: Label
 var agent_summary: Label
 var workspace_id: LineEdit
 var remote_name: LineEdit
-var tab_keys := ["Agents", "Markdown", "Workspaces", "Executions", "Setup"]
+var chat_agent: OptionButton
+var chat_history: TextEdit
+var chat_input: TextEdit
+var chat_status: Label
+var tab_keys := ["Agents", "Markdown", "Workspaces", "Executions", "Setup", "Agent chat"]
 var setup_project: OptionButton
 var setup_objective: TextEdit
 var setup_result: TextEdit
@@ -259,6 +264,7 @@ func _ready() -> void:
 	build_git(tabs)
 	build_executions(tabs)
 	build_setup(tabs)
+	build_chat(tabs)
 	bind_form_changes()
 	update_buttons()
 	add_child(poll)
@@ -331,6 +337,12 @@ func build_agents(tabs: TabContainer) -> void:
 	retries = SpinBox.new()
 	retries.max_value = 2
 	settings.add_child(retries)
+	settings.add_child(caption("Integration attempts before requesting help (1–5)"))
+	repair_attempts = SpinBox.new()
+	repair_attempts.min_value = 1
+	repair_attempts.max_value = 5
+	repair_attempts.value = 3
+	settings.add_child(repair_attempts)
 	publish_on_success = CheckBox.new()
 	publish_on_success.text = "Publish committed results after successful execution"
 	settings.add_child(publish_on_success)
@@ -514,10 +526,12 @@ func poll_updates() -> void:
 	if not visible or token.text.strip_edges().is_empty() or not active_request.is_empty() or not request_queue.is_empty():
 		return
 	# Rebuilding popup/list widgets while they hold the mouse interrupts a click.
-	for popup in [workspace, task_file, repository, git_workspace, definition_kind, definition_select]:
+	for popup in [chat_agent, workspace, task_file, repository, git_workspace, definition_kind, definition_select]:
 		if popup.get_popup().visible:
 			return
-	if not selected_execution.is_empty():
+	if tabs.current_tab == 5 and not chosen(chat_agent).is_empty():
+		load_chat()
+	elif not selected_execution.is_empty():
 		call_api("logs", "/executions/" + selected_execution + "/logs?after=" + str(log_sequence), HTTPClient.METHOD_GET, {}, true)
 	else:
 		call_api("overview", "", HTTPClient.METHOD_GET, {}, true)
@@ -574,7 +588,21 @@ func received(_result: int, code: int, _headers: PackedStringArray, body: Packed
 		call_deferred("after_response")
 		return
 	var finished_action: String = completed.get("action", action)
-	if finished_action in ["setup_projects", "setup_restore"]:
+	if finished_action in ["chat", "chat_send"]:
+		if str(data.get("agent", "")) == chosen(chat_agent):
+			var transcript := ""
+			for message in data.get("messages", []):
+				transcript += str(message.get("role", "")).to_upper() + " · " + str(message.get("timestamp", "")) + "\n" + str(message.get("content", "")) + "\n\n"
+			if transcript != chat_history.text:
+				var scroll := chat_history.scroll_vertical
+				chat_history.text = transcript
+				chat_history.scroll_vertical = scroll
+			chat_status.text = str(data.get("state", "")) + " · " + str(data.get("integration", {}).get("status", "")) + "\n" + str(data.get("integration", {}).get("detail", ""))
+			if finished_action == "chat_send":
+				chat_status.text += " · " + str(data.get("delivery", ""))
+				if chat_input.text == str(completed.get("body", {}).get("content", "")):
+					chat_input.text = ""
+	elif finished_action in ["setup_projects", "setup_restore"]:
 		fill_options(setup_project, data.get("projects", []))
 		if not OS.get_environment("VAC_SETUP_PROJECT").is_empty():
 			choose(setup_project, OS.get_environment("VAC_SETUP_PROJECT"))
@@ -754,7 +782,7 @@ func bind_form_changes() -> void:
 		select.item_selected.connect(func(_index): mark_dirty())
 	for checkbox in [git_enabled, git_worktree, publish_on_success] + remote_flags.values():
 		checkbox.toggled.connect(func(_enabled): mark_dirty())
-	for spinner in [timeout, retries]:
+	for spinner in [timeout, retries, repair_attempts]:
 		spinner.value_changed.connect(func(_value): mark_dirty())
 	roles.multi_selected.connect(func(_index, _selected): mark_dirty())
 
@@ -846,7 +874,7 @@ func update_buttons() -> void:
 		if execution.id == selected_execution:
 			for project in cache.get("projects", []):
 				if project.get("auto_integrate", false) and (execution.agent_id in project.get("agents", []) or execution.agent_id == project.get("integrator", "")):
-					can_retry = project.get("integration", {}).get("status", "") not in ["RUNNING", "PREPARING"]
+					can_retry = project.get("integration", {}).get("status", "") not in ["RUNNING", "PREPARING", "REPAIRING"]
 	buttons["Retry team integration"].disabled = busy or not can_retry
 	buttons["Start agent"].tooltip_text = "Save your changes before starting." if dirty else "Run the assigned Markdown task."
 	if automatic:
@@ -905,6 +933,10 @@ func populate() -> void:
 		var config: Dictionary = item.config
 		agent_rows.append({"id": config.id, "text": str(config.name) + " · " + str(item.state).capitalize()})
 	sync_list(agents, agent_rows)
+	var chat_ids: Array = []
+	for row in agent_rows:
+		chat_ids.append(row.id)
+	fill_options(chat_agent, chat_ids)
 	if editing and not active_agent.is_empty():
 		var still_present := false
 		for row in agent_rows:
@@ -978,6 +1010,7 @@ func new_agent() -> void:
 	agent_remote_name.text = "origin"
 	timeout.value = 300
 	retries.value = 0
+	repair_attempts.value = 3
 	roles.deselect_all()
 	publish_on_success.button_pressed = false
 	for flag in remote_flags.values():
@@ -1018,6 +1051,7 @@ func load_agent(index: int) -> void:
 		branch.text = str(config.git.get("branch", "")) if config.git.get("branch") != null else ""
 		timeout.value = config.execution.timeout_seconds
 		retries.value = config.execution.max_retries
+		repair_attempts.value = config.execution.get("repair_attempts", 3)
 		for operation in remote_flags:
 			remote_flags[operation].button_pressed = bool(config.git.get("allow_" + operation, false))
 		agent_summary.text = "ID: " + str(config.id) + "\n" + str(config.get("task", "No task")) + "\nRoles: " + ", ".join(config.roles) + "\nWorkspace: " + str(config.workspace)
@@ -1056,6 +1090,7 @@ func save_agent() -> void:
 			execution = record.config.execution.duplicate(true)
 	execution["timeout_seconds"] = int(timeout.value)
 	execution["max_retries"] = int(retries.value)
+	execution["repair_attempts"] = int(repair_attempts.value)
 	var config := {"id": agent_id.text, "name": agent_name.text, "workspace": chosen(workspace), "task": chosen(task_file) if not chosen(task_file).is_empty() else null, "roles": assigned_roles, "git": git, "execution": execution}
 	call_api("mutation", "/agents/" + agent_id.text if editing else "/agents", HTTPClient.METHOD_PUT if editing else HTTPClient.METHOD_POST, config)
 
@@ -1391,6 +1426,13 @@ func format_execution_report(record: Dictionary) -> String:
 			text += "  " + str(cause) + "\n"
 		for test in run.get("tests", []):
 			text += "  " + str(test) + "\n"
+	text += "\nSHARED REQUIREMENTS CHECKS\n"
+	for check in record.get("validation", {}).get("checks", []):
+		text += str(check.get("id", "")) + " · exit " + str(check.get("exit_code", "")) + "\n"
+		for cause in check.get("diagnostics", {}).get("causes", []):
+			text += "  " + str(cause) + "\n"
+		for test in check.get("diagnostics", {}).get("tests", []):
+			text += "  " + str(test) + "\n"
 	text += "\nCHANGELOG (agent recap)\n" + str(record.get("changelog", "No recap available yet."))
 	if record.has("changelog_path"):
 		text += "\n\nRepository changelog: " + str(record.changelog_path)
@@ -1430,3 +1472,34 @@ func append_live_logs(entries: Array) -> void:
 	# Restore after TextEdit recalculates its scroll range for the new content.
 	logs.set_deferred("scroll_vertical", logs.get_line_count() if follow_end else maxf(0.0, previous_scroll - removed_lines))
 	logs.set_deferred("scroll_horizontal", previous_horizontal)
+
+func build_chat(parent_tabs: TabContainer) -> void:
+	var row := page(parent_tabs, "Agent chat")
+	var panel := card(row, "Talk to your agent", 1100)
+	chat_agent = option(panel, "Agent")
+	chat_agent.item_selected.connect(func(_index):
+		chat_history.text = ""
+		load_chat())
+	chat_status = caption("Messages are private and saved. Running agents read them on their next attempt.")
+	panel.add_child(chat_status)
+	chat_history = TextEdit.new()
+	chat_history.editable = false
+	chat_history.wrap_mode = TextEdit.LINE_WRAPPING_BOUNDARY
+	chat_history.custom_minimum_size = Vector2(900, 380)
+	panel.add_child(chat_history)
+	chat_input = TextEdit.new()
+	chat_input.placeholder_text = "Clarify a requirement or explain how to unblock the agent…"
+	chat_input.wrap_mode = TextEdit.LINE_WRAPPING_BOUNDARY
+	chat_input.custom_minimum_size = Vector2(900, 120)
+	panel.add_child(chat_input)
+	button(panel, "Send & continue", func():
+		if chosen(chat_agent).is_empty() or chat_input.text.strip_edges().is_empty():
+			set_notice("Select an agent and enter a message.", true)
+			return
+		call_api("chat_send", "/agents/" + chosen(chat_agent) + "/chat",
+			HTTPClient.METHOD_POST, {"content": chat_input.text, "resume": true}))
+	button(panel, "Refresh chat", load_chat)
+
+func load_chat() -> void:
+	if not chosen(chat_agent).is_empty():
+		call_api("chat", "/agents/" + chosen(chat_agent) + "/chat", HTTPClient.METHOD_GET, {}, true)

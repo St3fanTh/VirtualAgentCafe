@@ -136,6 +136,25 @@ func _process(_delta: float) -> bool:
 			ui.selected_execution = execution_id
 			ui.show_retry_feedback()
 			assert("Management resource not found" in ui.retry_feedback.text)
+			ui.tabs.current_tab = 5
+			ui.choose(ui.chat_agent, managed_id)
+			ui.chat_input.text = "Please continue with the documented contract."
+			ui.buttons["Send & continue"].pressed.emit()
+			stage = 82
+		82:
+			ui.load_chat()
+			if not "Please continue with the documented contract." in ui.chat_history.text:
+				return false
+			assert(ui.chat_input.text.is_empty(), "Successful send clears only the submitted draft")
+			ui.chat_input.text = "Unsaved draft must survive polling."
+			stage = 83
+		83:
+			if ui.chat_history.text.rfind("ASSISTANT") < ui.chat_history.text.rfind("USER") or not ui.chat_status.text.begins_with("COMPLETED"):
+				ui.load_chat()
+				return false
+			assert(ui.chat_input.text == "Unsaved draft must survive polling.")
+			ui.tabs.current_tab = 3
+			ui.refresh()
 			stage = 9
 		9:
 			ui.selected_execution = ""

@@ -10,6 +10,7 @@ from typing import Literal
 
 from pydantic import Field, ValidationError, model_validator
 
+from ..adapters.diagnostics import test_diagnostic
 from ..models import EventType
 from .config import StrictModel
 from .files import ApprovedFiles
@@ -127,6 +128,7 @@ async def validate(manager, config, run: dict, workspace: Path) -> dict:
             stderr=asyncio.subprocess.STDOUT,
         )
         digest = hashlib.sha256()
+        tail = b""
         try:
             async with asyncio.timeout(min(config.execution.timeout_seconds, 300)):
                 size = 0
@@ -135,6 +137,7 @@ async def validate(manager, config, run: dict, workspace: Path) -> dict:
                     if size > 1024 * 1024:
                         raise ValueError("Shared test output exceeds limit")
                     digest.update(chunk)
+                    tail = (tail + chunk)[-65536:]
                 code = await process.wait()
         finally:
             try:
@@ -148,6 +151,7 @@ async def validate(manager, config, run: dict, workspace: Path) -> dict:
                 "kind": check.kind,
                 "exit_code": code,
                 "output_sha256": digest.hexdigest(),
+                "diagnostics": test_diagnostic(check.kind, code, tail.decode(errors="replace")),
             }
         )
         manager.emit(
