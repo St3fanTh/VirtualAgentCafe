@@ -139,7 +139,10 @@ Projekt-AGENTS.md > Projekt-PLANNING.md > einzelne Aufgabe. Die Dateien verleihe
 keine zusätzlichen Sicherheitsrechte. Speichern ist während zugehöriger laufender
 Agenten gesperrt. Zwischenzeitliche Änderungen auf der Festplatte führen zu einem
 Konflikthinweis statt stillem Überschreiben; lade dann die Dateien erneut.
-Pro Datei sind 64 KiB UTF-8 erlaubt (Laden, Editor, Dateiimport und Speichern). Symlinks und mehrdeutige Groß-/Kleinschreibung
+Pro Datei sind 64 KiB UTF-8 erlaubt (Laden, Editor, Dateiimport und Speichern).
+AGENTS.md und PLANNING.md dürfen mit Fließtext, Listen oder Kommentaren beginnen;
+eine führende `#`-Überschrift ist optional. Der Editor zeigt die UTF-8-Bytezahl.
+Leere Inhalte und zu große Dateien werden mit getrennten Meldungen abgelehnt. Symlinks und mehrdeutige Groß-/Kleinschreibung
 werden abgewiesen. Den nativen Windows-Dialog musst du auf deinem Zielhost prüfen;
 der automatisierte Godot-Test bedient den eingebetteten Dateidialog über Eingaben.
 

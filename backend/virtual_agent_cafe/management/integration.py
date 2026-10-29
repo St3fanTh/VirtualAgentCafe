@@ -8,10 +8,10 @@ from uuid import uuid4
 from .config import AgentConfig, State, TaskState
 from .git import GitOperationError
 from .project_documents import (
-    MAX_DOCUMENT_BYTES,
     ProjectDocumentInput,
     load_documents,
     save_document,
+    validate_document_content,
 )
 
 PLAN_INSTRUCTIONS = """# Task: Integrate the project and build the common requirements test base
@@ -193,19 +193,21 @@ class Integrations:
                 if not content.strip():
                     raise ValueError("Enter the requirements for this iteration")
                 iteration_id = str(uuid4())
-                plan = ProjectDocumentInput(
-                    project=identifier,
-                    name="PLANNING.md",
-                    content=(previous["content"] or "# Project planning")
+                plan_content = (
+                    (previous["content"] or "# Project planning")
                     + f"\n\n## Current iteration {iteration_id}\n"
                     + "Earlier iterations are history. Preserve their working features.\n\n"
                     + content.strip()
-                    + "\n",
+                    + "\n"
+                )
+                # Validate the combined document before model validation or Git mutations.
+                validate_document_content("PLANNING.md", plan_content)
+                plan = ProjectDocumentInput(
+                    project=identifier,
+                    name="PLANNING.md",
+                    content=plan_content,
                     expected_sha256=expected_sha256,
                 )
-                # Validate UTF-8 size before Git mutations or saving instructions.
-                if len(plan.content.encode()) > MAX_DOCUMENT_BYTES:
-                    raise ValueError("Planning exceeds 64 KiB; archive completed milestones first")
                 configs = [
                     AgentConfig.model_validate(manager.registry.get(a)["config"])
                     for a in project["agents"]

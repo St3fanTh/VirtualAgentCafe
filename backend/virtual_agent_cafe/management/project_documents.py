@@ -20,8 +20,20 @@ NAMES = {"AGENTS.md": ("AGENTS.md", "agents.md"), "PLANNING.md": ("PLANNING.md",
 class ProjectDocumentInput(StrictModel):
     project: Identifier
     name: DocumentName
-    content: str = Field(min_length=1, max_length=MAX_DOCUMENT_BYTES)
+    # Parsing ceiling allows a precise storage-limit error for oversized submissions.
+    content: str = Field(min_length=1, max_length=MAX_DOCUMENT_BYTES * 2)
     expected_sha256: str = Field(pattern=r"^([a-f0-9]{64})?$")
+
+
+def validate_document_content(name: str, content: str) -> None:
+    size = len(content.encode("utf-8"))
+    if size > MAX_DOCUMENT_BYTES:
+        raise ValueError(
+            f"{name} is too large: {size} UTF-8 bytes; maximum {MAX_DOCUMENT_BYTES} "
+            "(64 KiB). Archive completed requirements or shorten the document."
+        )
+    if not content.strip("\ufeff \t\r\n"):
+        raise ValueError(f"{name} is empty. Enter project instructions; a heading is optional.")
 
 
 def load_documents(root: Path) -> dict:
@@ -38,8 +50,14 @@ def load_documents(root: Path) -> dict:
         path = present[0] if present else paths[0]
         content = ""
         if present:
-            if not path.is_file() or path.stat().st_size > MAX_DOCUMENT_BYTES:
-                raise ValueError(f"{canonical} must be a Markdown file of at most 64 KiB")
+            if not path.is_file():
+                raise ValueError(f"{canonical} must be a regular Markdown file, not a directory")
+            size = path.stat().st_size
+            if size > MAX_DOCUMENT_BYTES:
+                raise ValueError(
+                    f"{canonical} is too large: {size} UTF-8 bytes; maximum "
+                    f"{MAX_DOCUMENT_BYTES} (64 KiB). Shorten the file in your project folder."
+                )
             content = path.read_text(encoding="utf-8")
         result[canonical] = {
             "file": path.name,
@@ -51,10 +69,7 @@ def load_documents(root: Path) -> dict:
 
 
 def save_document(root: Path, data: ProjectDocumentInput) -> dict:
-    if len(data.content.encode()) > MAX_DOCUMENT_BYTES or not data.content.lstrip(
-        "\ufeff \t\r\n"
-    ).startswith("#"):
-        raise ValueError("Project Markdown needs a heading and at most 64 KiB")
+    validate_document_content(data.name, data.content)
     current = load_documents(root)[data.name]
     if current["sha256"] != data.expected_sha256:
         raise ValueError("Project document changed on disk. Reload before saving your changes.")

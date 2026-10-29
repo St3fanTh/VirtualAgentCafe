@@ -13,6 +13,10 @@ async def test_reviewed_round_syncs_main_runs_both_workers_and_promotes_again(
     try:
         await settle(manager)
         source = manager.workspaces.get("project")
+        # Existing valid Markdown may start with a paragraph or list, not a heading.
+        (source / "PLANNING.md").write_text(
+            "Implement the shared API.\n- Preserve existing features"
+        )
         initial_plan = load_documents(source)["PLANNING.md"]
         initial_round = await manager.integrations.next_iteration(
             "project", "Implement the initial shared API contract", initial_plan["sha256"]

@@ -34,7 +34,7 @@ def test_native_management_ui_to_isolated_runtime(tmp_path, script, saved_connec
         port = reserve.getsockname()[1]
     url = f"http://127.0.0.1:{port}"
     import_file = tmp_path / "instructions.md"
-    import_file.write_text("# Imported project agents\nUse the shared API contract and run tests.")
+    import_file.write_text("Imported project agents\nUse the shared API contract and run tests.")
     env = {
         **os.environ,
         "VAC_MANAGEMENT_TOKEN": "fixture-management-token-32-characters",

@@ -1459,3 +1459,32 @@
   warning); Godot import/state/headless PASS; live WebSocket/selection PASS.
   This supersedes the environment-blocked results above. No validation bypasses.
   The completed milestone is ready for commit and feature-branch publication.
+
+
+## Project Markdown heading/save error
+
+- Report: "Project Markdown needs a heading and at most 64 KiB" remained after
+  the size increase. Confirmed load/save mismatch: existing Markdown beginning
+  with paragraphs/lists loads, then save_document rejects it (also during a new
+  iteration). That generic message cannot distinguish content from size errors.
+- Project AGENTS.md/PLANNING.md now accept non-empty Markdown without a leading
+  hash heading, preserving the text verbatim. Task/role definition rules unchanged.
+  UTF-8 size stays bounded at 65,536 bytes. Separate errors identify empty content,
+  non-file paths, or actual oversized byte counts. API parsing allows the bounded
+  oversize case to reach the specific storage validator; saved limits unchanged.
+- Iteration validates the combined plan before schema construction/Git mutations,
+  avoiding an unrelated verbose schema error when history exceeds the byte limit.
+- Godot import/save accepts headingless project Markdown, shows the byte count,
+  validates empty/oversized edits locally, and preserves editor/saved contents.
+- Regression tests: paragraph/list/comment/BOM roundtrips, exact UTF-8 boundary,
+  API oversize preservation, a complete iteration with headingless planning,
+  native chooser/editor/save/byte-counter/error-preservation GUI interactions.
+- Files: management project_documents/integration; Godot management; tests
+  test_project_documents/test_iterations/test_game_management/test_setup_input;
+  docs/project-setup.md and this progress record.
+- Commit locator: git log --oneline --grep='fix: accept project Markdown without headings'.
+- Verification: focused regression/API/native GUI set 20 PASS; complete
+  scripts/check.sh PASS with 243 pytest, Ruff/format, Godot import/state/headless
+  and live WebSocket/selection smoke. Existing Starlette/httpx warning unchanged.
+  UTF-8 size limits, path confinement, conflict detection and publication checks
+  remain active. A genuinely oversized file still needs shortening/archiving.

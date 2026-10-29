@@ -182,3 +182,69 @@ def test_large_planning_utf8_roundtrip_and_byte_limit(tmp_path):
     with pytest.raises(ValueError, match="64 KiB"):
         save_document(tmp_path, data)
     assert load_documents(tmp_path)["PLANNING.md"]["content"] == content
+
+
+@pytest.mark.parametrize(
+    "content",
+    [
+        "Implement the shared API.",
+        "- Add login\n- Test authentication",
+        "<!-- Project notes -->\n# Planning",
+        "\ufeffPlanning\n========\nRequirements",
+    ],
+)
+def test_project_markdown_without_leading_hash_is_preserved(tmp_path, content):
+    for name in ("AGENTS.md", "PLANNING.md"):
+        saved = save_document(
+            tmp_path,
+            ProjectDocumentInput(
+                project="sample",
+                name=name,
+                content=content,
+                expected_sha256="",
+            ),
+        )
+        assert saved[name]["content"] == content
+        assert (tmp_path / name).read_text() == content
+
+
+def test_project_document_errors_distinguish_empty_size_and_file_type(tmp_path):
+    data = ProjectDocumentInput(
+        project="sample", name="PLANNING.md", content=" \n\ufeff", expected_sha256=""
+    )
+    with pytest.raises(ValueError, match="PLANNING.md is empty"):
+        save_document(tmp_path, data)
+    assert not (tmp_path / "PLANNING.md").exists()
+    data.content = "ä" * 32768
+    saved = save_document(tmp_path, data)
+    data.expected_sha256 = saved["PLANNING.md"]["sha256"]
+    data.content += "ä"
+    with pytest.raises(ValueError, match="PLANNING.md is too large: 65538 UTF-8 bytes"):
+        save_document(tmp_path, data)
+    assert (tmp_path / "PLANNING.md").read_text() == "ä" * 32768
+    (tmp_path / "AGENTS.md").mkdir()
+    with pytest.raises(ValueError, match="regular Markdown file, not a directory"):
+        load_documents(tmp_path)
+
+
+def test_oversized_ascii_api_reports_exact_size_without_overwriting(tmp_path):
+    app = create_app("demo", management_root=tmp_path)
+    manager = app.state.management
+    path = manager.workspaces.files.root / "project"
+    (path / ".git").mkdir(parents=True)
+    (path / "PLANNING.md").write_text("Keep these requirements.")
+    headers = {"Authorization": "Bearer " + manager.access.token}
+    with TestClient(app) as client:
+        result = client.put(
+            "/management/setup/documents",
+            headers=headers,
+            json={
+                "project": "project",
+                "name": "PLANNING.md",
+                "content": "a" * 65537,
+                "expected_sha256": load_documents(path)["PLANNING.md"]["sha256"],
+            },
+        )
+        assert result.status_code == 409
+        assert "PLANNING.md is too large: 65537 UTF-8 bytes" in result.json()["detail"]
+        assert (path / "PLANNING.md").read_text() == "Keep these requirements."

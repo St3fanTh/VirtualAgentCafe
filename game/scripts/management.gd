@@ -39,6 +39,7 @@ var executions: ItemList
 var logs: TextEdit
 var execution_report: TextEdit
 var execution_status: Label
+var project_document_size: Label
 var iteration_requirements: TextEdit
 var integration_status: Label
 var retry_feedback: TextEdit
@@ -1380,6 +1381,10 @@ func build_setup(parent_tabs: TabContainer) -> void:
 	setup_document_editor.wrap_mode = TextEdit.LINE_WRAPPING_BOUNDARY
 	setup_document_editor.custom_minimum_size = Vector2(600, 230)
 	results.add_child(setup_document_editor)
+	project_document_size = caption("")
+	results.add_child(project_document_size)
+	setup_document_editor.text_changed.connect(update_document_size)
+	update_document_size()
 	results.add_child(caption("Load before editing. Saving changes the project file without committing. Next agent runs read a protected snapshot; security rules always take priority."))
 
 
@@ -1392,8 +1397,29 @@ func show_setup_document() -> void:
 		setup_document_editor.text = "# Project agent instructions\n\n## Architecture\nFollow the existing project architecture and conventions.\n\n## Quality\nRun relevant tests and document results.\n\n## Collaboration\nBackend and frontend use separate branches. Agree on the interface contract.\n\n## Restrictions\nDo not push or merge automatically. Never expose credentials.\n"
 	else:
 		setup_document_editor.text = "# Project planning\n\n## Objective\n" + setup_objective.text.strip_edges() + "\n\n## Milestones\n- [ ] Agree on the API contract\n- [ ] Implement backend with tests\n- [ ] Implement frontend with tests\n- [ ] Review both branches and run integration tests\n\n## Acceptance Criteria\n- Tests pass\n- Changes reviewed by the user\n"
+	update_document_size()
+
+
+func update_document_size() -> void:
+	if project_document_size == null:
+		return
+	var size := setup_document_editor.text.to_utf8_buffer().size()
+	project_document_size.text = "%d / 65536 UTF-8 bytes (64 KiB) · Heading optional" % size
+	project_document_size.modulate = Color("f1959e") if size > 65536 else Color.WHITE
+
+func project_document_error(content: String) -> String:
+	var size := content.to_utf8_buffer().size()
+	if size > 65536:
+		return "%s is too large: %d UTF-8 bytes; maximum 65536 (64 KiB). Shorten the document." % [chosen(setup_document), size]
+	if content.trim_prefix("\ufeff").strip_edges().is_empty():
+		return "%s is empty. Enter project instructions; a heading is optional." % chosen(setup_document)
+	return ""
 
 func save_setup_document() -> void:
+	var problem := project_document_error(setup_document_editor.text)
+	if not problem.is_empty():
+		request_error({"action": "setup_docs_save"}, problem)
+		return
 	var name := chosen(setup_document)
 	var document: Dictionary = setup_documents.get(name, {})
 	call_api("setup_docs_save", "/setup/documents", HTTPClient.METHOD_PUT, {"project": chosen(setup_project), "name": name, "content": setup_document_editor.text, "expected_sha256": str(document.get("sha256", ""))})
@@ -1401,14 +1427,19 @@ func save_setup_document() -> void:
 
 func import_setup_document(path: String) -> void:
 	var file := FileAccess.open(path, FileAccess.READ)
-	if file == null or file.get_length() > 65536:
-		set_notice("Choose a readable Markdown file of at most 64 KiB.", true)
+	if file == null:
+		set_notice("Cannot read the selected Markdown file.", true)
 		return
-	var content := file.get_as_text().trim_prefix("\ufeff")
-	if not content.strip_edges().begins_with("#"):
-		set_notice("The Markdown file needs a heading.", true)
+	if file.get_length() > 65536:
+		set_notice("Selected file is too large: %d bytes; maximum 65536 (64 KiB)." % file.get_length(), true)
+		return
+	var content := file.get_as_text()
+	var problem := project_document_error(content)
+	if not problem.is_empty():
+		set_notice(problem, true)
 		return
 	setup_document_editor.text = content
+	update_document_size()
 	set_notice("File imported into editor. Review it, then Save project document to apply.")
 
 
