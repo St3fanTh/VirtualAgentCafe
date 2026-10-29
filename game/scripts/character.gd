@@ -58,7 +58,12 @@ func update_state(state: Dictionary) -> void:
 		bubble_left = 8.0
 	queue_redraw()
 
+func is_integrator() -> bool:
+	return "integration" in role_label.to_lower() or agent_id.ends_with("-integration")
+
 func short_label() -> String:
+	if is_integrator():
+		return "Integration"
 	if "frontend" in role_label.to_lower() or agent_id == "turing":
 		return "Frontend"
 	if "backend" in role_label.to_lower() or agent_id == "ada":
@@ -67,6 +72,8 @@ func short_label() -> String:
 	return title.left(17) + "…" if title.length() > 18 else title
 
 func destination() -> Vector2:
+	if is_integrator():
+		return Vector2(193, 65) if status in ["agent.coding", "agent.thinking", "agent.started", "agent.testing"] or detail.begins_with("CLI:") else Vector2(193, 145)
 	var second := agent_id == "turing" or "frontend" in role_label.to_lower()
 	match status:
 		"agent.coding", "agent.thinking", "agent.started":

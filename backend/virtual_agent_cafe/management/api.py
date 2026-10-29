@@ -18,6 +18,11 @@ class ChatInput(StrictModel):
     resume: bool = True
 
 
+class IterationInput(StrictModel):
+    content: str = Field(min_length=10, max_length=16000)
+    expected_sha256: str = Field(pattern=r"^([a-f0-9]{64})?$")
+
+
 class EmptyInput(StrictModel):
     pass
 
@@ -130,13 +135,15 @@ def management_router(manager: ExecutionManager, validated_body, mode: str) -> A
 
     @router.put("/setup/documents")
     async def edit_project_document(request: Request):
-        data = await validated_body(request, ProjectDocumentInput)
+        data = await validated_body(request, ProjectDocumentInput, max_bytes=524288)
 
         async def save():
             async with manager.control:
                 path = manager.workspaces.files.path(data.project)
                 if not path.is_dir() or not (path / ".git").is_dir():
                     raise ValueError("Select an approved Git project")
+                if data.project in manager.integrations.preparing:
+                    raise ValueError("Wait for iteration preparation before editing instructions")
                 for identifier in manager.running:
                     config = manager.registry.get(identifier)["config"]
                     if data.project in {config["workspace"], config["git"].get("repository")}:
@@ -171,6 +178,17 @@ def management_router(manager: ExecutionManager, validated_body, mode: str) -> A
             return {"deleted": deleted, "count": len(deleted)}
 
         return await guarded(delete_all)
+
+    @router.post("/projects/{identifier}/iterations", status_code=202)
+    async def start_iteration(identifier: str, request: Request):
+        data = await validated_body(request, IterationInput, max_bytes=262144)
+        if mode != "codex":
+            raise HTTPException(409, "Iterations require Codex mode")
+        return await guarded(
+            lambda: manager.integrations.next_iteration(
+                identifier, data.content, data.expected_sha256
+            )
+        )
 
     @router.post("/projects/{identifier}/integrate", status_code=202)
     async def retry_integration(identifier: str, request: Request):

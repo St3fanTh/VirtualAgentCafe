@@ -115,6 +115,13 @@ class ExecutionManager:
                     run["id"], {"timestamp": now(), "type": "agent.error", "detail": run["detail"]}
                 )
         for project in self.store.list("projects"):
+            iteration = project.get("iteration", {})
+            if iteration.get("status") in {"STARTING", "RUNNING"}:
+                iteration["status"] = "FAILED"
+                self.store.put(
+                    "iterations", iteration["id"], {**iteration, "project": project["id"]}
+                )
+                self.store.put("projects", project["id"], project)
             if project.get("integration", {}).get("status") in {
                 "RUNNING",
                 "PREPARING",
@@ -345,7 +352,9 @@ class ExecutionManager:
             agent_id=config.id,
             status=status,
             name=config.name,
-            role=(", ".join(config.roles) or "custom")[:120],
+            role="integration"
+            if config.execution.integration_validation
+            else (", ".join(config.roles) or "custom")[:120],
             detail=record.get("last_error")
             or (previous["detail"] if previous else "Configured; ready for a Markdown task"),
             source="system",
@@ -412,6 +421,8 @@ class ExecutionManager:
                 metadata = self.git.metadata(workspace)
                 if config.git.push_on_success:
                     await self.git.push_target(config)
+            project = self.integrations.project(identifier)
+            iteration = project.get("iteration", {}) if project else {}
             run_id = str(uuid4())
             project_root = (
                 self.workspaces.get(config.git.repository) if config.git.enabled else workspace
@@ -435,6 +446,12 @@ class ExecutionManager:
                 "Precedence: system security > validated configuration > roles > "
                 "project AGENTS.md > project PLANNING.md > task.\n"
             )
+            if iteration:
+                context += (
+                    "\nCURRENT USER-REVIEWED ITERATION (supersedes older task scope):\n"
+                    + iteration["requirements"]
+                    + "\nImplement your role’s part; preserve previously integrated features.\n"
+                )
             context += self.conversations.context(identifier)
             if integration and integration.get("repair_feedback"):
                 context += (
@@ -480,6 +497,7 @@ class ExecutionManager:
             run = {
                 "id": run_id,
                 "agent_id": identifier,
+                "iteration_id": iteration.get("id"),
                 "model": config.model,
                 "workspace": config.workspace,
                 "workspace_path": str(workspace),
@@ -516,7 +534,9 @@ class ExecutionManager:
             self.bus.agents[identifier] = ManagedState(
                 agent_id=identifier,
                 name=config.name,
-                role=(", ".join(config.roles) or "custom")[:120],
+                role="integration"
+                if config.execution.integration_validation
+                else (", ".join(config.roles) or "custom")[:120],
             )
             self.broadcast_snapshot()
             self.running[identifier] = asyncio.create_task(

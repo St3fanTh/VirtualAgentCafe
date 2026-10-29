@@ -188,7 +188,7 @@ async def _validate(manager, config, run, workspace, trace):
     source = files.path("validation/requirements.md")
     await committed(source, "requirements.committed")
     trace.require(
-        source.stat().st_size <= 131072
+        source.stat().st_size <= 262144
         and hashlib.sha256(source.read_bytes()).hexdigest() == run.get("requirements_sha256"),
         "requirements.content",
         "Committed requirements must match the exact shared requirements snapshot",

@@ -1389,3 +1389,73 @@
   execution-error cases were rerun: 2 PASS. Final Ruff/format and diff checks PASS.
   Existing Starlette/httpx warning unchanged. Reproduction logs confirmed the old
   relative-path control passes three checks while equivalent resource URIs fail.
+
+
+## Reviewed next iterations and distinct integration workstation
+
+- Request: remove the unexpectedly small planning limit, let a user review main,
+  submit the next requirements in one place, and separate the integration avatar.
+- Project Markdown now permits 64 KiB UTF-8 end to end. Only document/iteration
+  API request limits are expanded for JSON escaping; other request limits remain.
+  Shared requirements snapshot limit accommodates both larger documents.
+- Setup adds a requirements editor and Start next iteration. The controller uses
+  existing Git/runtime/integration modules, fetches exact remote main, preserves
+  worker changes, saves current requirements and starts both workers. Persistent
+  round IDs prevent stale worker results from triggering integration. Existing
+  publication permissions and controller tests remain mandatory.
+- Integration has an explicit role, separate destination/desk and activity card;
+  workers and integrator no longer occupy the same desk due to role-name matching.
+- Files: management project_documents/api/integration/execution/validation,
+  main request parsing; Godot management/cafe/character/activity_card/world;
+  tests test_iterations/test_project_documents/test_states/test_setup_input;
+  docs/project-setup.md and this log.
+- Evidence so far: 8 document tests pass; real temporary Git two-round workflow
+  passes, including stale planning/dirty worker/duplicate-start rejection and
+  a second tested main promotion. Full checks recorded below when complete.
+- Limitations: preparation conflicts preserve files and require resolution;
+  explicit Start next iteration is required after human review (no file watcher).
+  No rendered screenshot available in this environment; native GUI checks used.
+- Commit locator: `git log --oneline --grep='feat: start reviewed team iterations'`.
+
+- Focused suite: 16 PASS (two-round Git workflow, project-document bounds/API,
+  native Godot management/input tests). Full check: Ruff PASS; pytest 216 PASS,
+  17 FAIL after namespace exhaustion. Direct Sandbox().command(... git init)
+  reproduces `bwrap: Creating new namespace failed ... max_*_namespaces exceeded
+  (ENOSPC)`. More than 31,000 zombie bwrap processes are parented by PID 1 (node).
+  Disk space and inodes are available. This is an environment resource failure;
+  the Git error classifier misleadingly calls ENOSPC insufficient storage.
+- Added Compose init:true for codex/backend so a container init reaps orphaned
+  sandbox processes in newly created containers. Existing zombies require this
+  development container to restart. No namespace/isolation checks were bypassed.
+- Milestone remains UNCOMMITTED / UNPUSHED until the complete check succeeds after
+  restart. Resume with scripts/check.sh, inspect results, then commit and push.
+- Independent post-failure checks: Godot import, state tests, headless startup,
+  and live WebSocket/selection smoke PASS. git diff --check PASS. Docker CLI is
+  unavailable here, so Compose runtime validation remains for a Docker host.
+
+
+### Follow-up: next iteration rejected by transient team status
+
+- Removed the PROMOTED-only start gate. It incorrectly prevented an initial round
+  in an existing repository and a later round after a planning edit changed the
+  team status to WAITING_FOR_WORKERS. Starting a round does not approve old runs.
+- Retained live-run exclusion, current planning hash, clean worker checks, exact
+  remote-main fetch/merge, per-round source matching and all publication tests.
+- Regression now starts the initial round through the iteration entrypoint and
+  reproduces the planning-edit/status transition before starting a second round.
+- Namespace probe succeeds in the current session; rerunning required checks.
+- Follow-up verification: Ruff/format/diff checks PASS; 4 isolated preflight
+  regressions PASS (READY/WAITING_FOR_WORKERS/FAILED/NEEDS_INPUT are not treated
+  as missing human review; stale input remains rejected and history unchanged).
+  Two-round integration test starts and publishes both initial workers but then
+  fails preparing integration. Direct sandbox true/git-remote probes again show
+  namespace ENOSPC. The development container still needs a restart; full check,
+  commit and push remain pending. No failed execution was marked accepted.
+- Restart verification: PID 1 is now docker-init, zombie count is zero during
+  tests, and a real isolated sandbox probe succeeds. Remote feature branch is
+  reachable at parent 21a358a. Full scripts/check.sh rerun is in progress.
+- Final result after container restart: complete scripts/check.sh PASS.
+  Ruff/format PASS; 237 pytest PASS (one existing Starlette/httpx deprecation
+  warning); Godot import/state/headless PASS; live WebSocket/selection PASS.
+  This supersedes the environment-blocked results above. No validation bypasses.
+  The completed milestone is ready for commit and feature-branch publication.

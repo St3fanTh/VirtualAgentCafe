@@ -1,6 +1,7 @@
 extends PanelContainer
 
 const EventState = preload("res://scripts/event_state.gd")
+var compact := false
 var agent_id := "ada"
 var heading: Label
 var status_label: Label
@@ -10,7 +11,7 @@ var history: Array[String] = []
 
 func _ready() -> void:
 	var column := VBoxContainer.new()
-	column.add_theme_constant_override("separation", 8)
+	column.add_theme_constant_override("separation", 4 if compact else 8)
 	add_child(column)
 	heading = Label.new()
 	heading.add_theme_font_size_override("font_size", 22)
@@ -18,7 +19,7 @@ func _ready() -> void:
 	heading.modulate = Color("86ddb8") if agent_id == "ada" else Color("edbd86")
 	column.add_child(heading)
 	status_label = Label.new()
-	status_label.add_theme_font_size_override("font_size", 32)
+	status_label.add_theme_font_size_override("font_size", 26 if compact else 32)
 	status_label.text = "Idle"
 	column.add_child(status_label)
 	detail_label = Label.new()
@@ -37,7 +38,7 @@ func _ready() -> void:
 	history_label = Label.new()
 	history_label.add_theme_font_size_override("font_size", 16)
 	history_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	history_label.max_lines_visible = 6
+	history_label.max_lines_visible = 2 if compact else 6
 	column.add_child(history_label)
 
 func update_state(state: Dictionary, event: Dictionary = {}) -> void:

@@ -77,6 +77,7 @@ func _ready() -> void:
 		shader_panel(Rect2(x + 2, 6, 44, 14), GlassShader, 1)
 	monitors.ada = shader_panel(Rect2(49, 25, 18, 10), MonitorShader, 1)
 	monitors.turing = shader_panel(Rect2(101, 25, 18, 10), MonitorShader, 1)
+	monitors.integration = shader_panel(Rect2(183, 39, 20, 10), MonitorShader, 1)
 	monitors.lab = shader_panel(Rect2(242, 39, 55, 11), MonitorShader, 1)
 	shader_panel(Rect2(286, 77, 16, 29), SteamShader, 3)
 	shader_panel(Rect2(0, 0, 320, 160), AtmosphereShader, 8)
@@ -151,6 +152,9 @@ func _draw() -> void:
 		box(x + 27, 53, 3, 9, "755768")
 	text(Vector2(45, 87), "BACKEND / ADA")
 	text(Vector2(97, 87), "FRONTEND / TURING")
+	# Separate integration desk; never shares a worker destination.
+	box(175, 48, 38, 10, "805d51")
+	text(Vector2(163, 35), "INTEGRATION", Color("b4a1df"))
 	# Test station.
 	box(239, 36, 61, 18, "739494")
 	box(242, 39, 55, 11, "273449")

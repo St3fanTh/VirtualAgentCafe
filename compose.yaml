@@ -1,5 +1,6 @@
 services:
   codex:
+    init: true
     build: .
     image: virtual-agent-cafe-dev:latest
     working_dir: /workspace
@@ -13,6 +14,7 @@ services:
     command: ["codex"]
     profiles: [dev]
   backend:
+    init: true
     build: .
     image: virtual-agent-cafe-dev:latest
     working_dir: /workspace

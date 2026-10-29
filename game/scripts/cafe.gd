@@ -133,11 +133,12 @@ func build_ui() -> void:
 	effects.size = Vector2(235, 60)
 	effects.toggled.connect(world.set_effects)
 	ui.add_child(effects)
-	for id in ["ada", "turing"]:
+	for id in ["ada", "turing", "integration"]:
 		var card = ActivityCard.new()
 		card.agent_id = id
-		card.position = Vector2(1490, 155 if id == "ada" else 514)
-		card.size = Vector2(386, 340)
+		card.position = Vector2(1490, 155 + ["ada", "turing", "integration"].find(id) * 240)
+		card.size = Vector2(386, 230)
+		card.compact = true
 		ui.add_child(card)
 		activity_cards[id] = card
 	var footer := PanelContainer.new()
@@ -236,12 +237,12 @@ func ensure_character(id: String, data: Dictionary) -> void:
 	characters[id] = character
 
 func refresh_activity(event: Dictionary = {}) -> void:
-	var slots := {"ada": "ada", "turing": "turing"}
+	var slots := {"ada": "ada", "turing": "turing", "integration": ""}
 	for id in state.agents:
 		if id in ["ada", "turing"] or mode == "demo":
 			continue
 		var role := str(state.agents[id].get("role", "")).to_lower()
-		var slot := "turing" if "frontend" in role else "ada" if "backend" in role else ""
+		var slot := "integration" if "integration" in role or str(id).ends_with("-integration") else "turing" if "frontend" in role else "ada" if "backend" in role else ""
 		if not slot.is_empty():
 			# Prefer a worker with observed activity over an unstarted configuration.
 			if int(state.agents[id].get("sequence", 0)) >= int(state.agents.get(slots[slot], {}).get("sequence", 0)):
@@ -249,7 +250,12 @@ func refresh_activity(event: Dictionary = {}) -> void:
 	var summaries: Array[String] = []
 	for slot in slots:
 		var id: String = slots[slot]
-		characters[slot].visible = id == slot
+		if characters.has(slot):
+			characters[slot].visible = id == slot
+		if id.is_empty():
+			activity_cards[slot].heading.text = "INTEGRATION"
+			activity_cards[slot].detail_label.text = "Waiting for a configured integration agent"
+			continue
 		var data: Dictionary = state.agents.get(id, {})
 		var card = activity_cards[slot]
 		if card.agent_id != id:

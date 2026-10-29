@@ -55,8 +55,8 @@ def test_missing_document_symlink_and_size_validation(tmp_path):
     with pytest.raises(ValueError, match="Symlinks"):
         load_documents(tmp_path)
     (tmp_path / "agents.md").unlink()
-    (tmp_path / "AGENTS.md").write_text("x" * 12001)
-    with pytest.raises(ValueError, match="12 KiB"):
+    (tmp_path / "AGENTS.md").write_text("x" * 65537)
+    with pytest.raises(ValueError, match="64 KiB"):
         load_documents(tmp_path)
 
 
@@ -144,7 +144,7 @@ def test_document_api_authorization_conflicts_and_fixed_paths(tmp_path):
         body = {
             "project": "project",
             "name": "AGENTS.md",
-            "content": "# Project instructions",
+            "content": "# Project instructions\n" + "äöü\n" * 6000,
             "expected_sha256": "",
         }
         assert (
@@ -168,3 +168,17 @@ def test_document_api_authorization_conflicts_and_fixed_paths(tmp_path):
             client.put("/management/setup/documents", headers=headers, json=body).status_code == 409
         )
         manager.running.clear()
+
+
+def test_large_planning_utf8_roundtrip_and_byte_limit(tmp_path):
+    content = "# Planning\n" + "Anforderung äöü\n" * 2500
+    data = ProjectDocumentInput(
+        project="sample", name="PLANNING.md", content=content, expected_sha256=""
+    )
+    assert len(content.encode()) > 12000
+    assert save_document(tmp_path, data)["PLANNING.md"]["content"] == content
+    data.content = "# Plan\n" + "ä" * 33000
+    data.expected_sha256 = load_documents(tmp_path)["PLANNING.md"]["sha256"]
+    with pytest.raises(ValueError, match="64 KiB"):
+        save_document(tmp_path, data)
+    assert load_documents(tmp_path)["PLANNING.md"]["content"] == content

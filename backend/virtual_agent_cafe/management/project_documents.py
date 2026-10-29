@@ -11,6 +11,8 @@ from pydantic import Field
 from .config import Identifier, StrictModel
 from .files import ApprovedFiles
 
+MAX_DOCUMENT_BYTES = 64 * 1024
+
 DocumentName = Literal["AGENTS.md", "PLANNING.md"]
 NAMES = {"AGENTS.md": ("AGENTS.md", "agents.md"), "PLANNING.md": ("PLANNING.md", "planning.md")}
 
@@ -18,7 +20,7 @@ NAMES = {"AGENTS.md": ("AGENTS.md", "agents.md"), "PLANNING.md": ("PLANNING.md",
 class ProjectDocumentInput(StrictModel):
     project: Identifier
     name: DocumentName
-    content: str = Field(min_length=1, max_length=12000)
+    content: str = Field(min_length=1, max_length=MAX_DOCUMENT_BYTES)
     expected_sha256: str = Field(pattern=r"^([a-f0-9]{64})?$")
 
 
@@ -36,8 +38,8 @@ def load_documents(root: Path) -> dict:
         path = present[0] if present else paths[0]
         content = ""
         if present:
-            if not path.is_file() or path.stat().st_size > 12000:
-                raise ValueError(f"{canonical} must be a Markdown file of at most 12 KiB")
+            if not path.is_file() or path.stat().st_size > MAX_DOCUMENT_BYTES:
+                raise ValueError(f"{canonical} must be a Markdown file of at most 64 KiB")
             content = path.read_text(encoding="utf-8")
         result[canonical] = {
             "file": path.name,
@@ -49,10 +51,10 @@ def load_documents(root: Path) -> dict:
 
 
 def save_document(root: Path, data: ProjectDocumentInput) -> dict:
-    if len(data.content.encode()) > 12000 or not data.content.lstrip("\ufeff \t\r\n").startswith(
-        "#"
-    ):
-        raise ValueError("Project Markdown needs a heading and at most 12 KiB")
+    if len(data.content.encode()) > MAX_DOCUMENT_BYTES or not data.content.lstrip(
+        "\ufeff \t\r\n"
+    ).startswith("#"):
+        raise ValueError("Project Markdown needs a heading and at most 64 KiB")
     current = load_documents(root)[data.name]
     if current["sha256"] != data.expected_sha256:
         raise ValueError("Project document changed on disk. Reload before saving your changes.")

@@ -3,10 +3,16 @@
 import asyncio
 import hashlib
 import json
+from uuid import uuid4
 
 from .config import AgentConfig, State, TaskState
 from .git import GitOperationError
-from .project_documents import load_documents
+from .project_documents import (
+    MAX_DOCUMENT_BYTES,
+    ProjectDocumentInput,
+    load_documents,
+    save_document,
+)
 
 PLAN_INSTRUCTIONS = """# Task: Integrate the project and build the common requirements test base
 
@@ -53,6 +59,7 @@ class Integrations:
         self.running: dict[str, asyncio.Task] = {}
         self.inputs: dict[str, dict] = {}
         self.pending: set[str] = set()
+        self.preparing: set[str] = set()
 
     def project(self, identifier):
         return next(
@@ -68,6 +75,8 @@ class Integrations:
         project = self.project(identifier)
         if not project:
             return
+        if project["id"] in self.preparing and not coordinated:
+            raise ValueError("A new iteration is being prepared; wait for both workers")
         if identifier == project["integrator"] and not coordinated:
             raise ValueError("Integration starts automatically after both worker pushes")
         if (
@@ -112,6 +121,8 @@ class Integrations:
             return None
 
         manager = self.manager
+        if project["id"] in self.preparing:
+            return blocked("Preparing the next iteration")
         documents = load_documents(manager.workspaces.get(project["id"]))
         shas = {name: doc["sha256"] for name, doc in documents.items() if doc["exists"]}
         text = "# Shared requirements (source snapshots)\n"
@@ -126,6 +137,8 @@ class Integrations:
             if not agent.get("last_execution"):
                 return blocked(f"{identifier}: no execution yet; start this worker first")
             run = manager.store.get("executions", agent["last_execution"])
+            if project.get("iteration") and run.get("iteration_id") != project["iteration"]["id"]:
+                return blocked(f"{identifier}: waiting for this iteration’s worker result")
             config = AgentConfig.model_validate(agent["config"])
             task = manager.tasks.load(config.task)
             if run["status"] != State.COMPLETED:
@@ -154,6 +167,105 @@ class Integrations:
             json.dumps([digest, [(r["id"], r["published"]["commit"]) for r in runs]]).encode()
         ).hexdigest()
         return {"text": text, "sha256": digest, "signature": signature, "runs": runs}
+
+    async def next_iteration(self, identifier, content, expected_sha256):
+        """User-reviewed round: preserve history, sync workers, then reuse integration gates."""
+        manager = self.manager
+        if identifier in self.preparing:
+            raise ValueError("An iteration is already being prepared")
+        self.preparing.add(identifier)
+        try:
+            async with manager.control:
+                project = manager.store.get("projects", identifier)
+                if not project.get("auto_integrate"):
+                    raise ValueError("Enable automatic integration in Setup first")
+                members = [*project["agents"], project["integrator"]]
+                if identifier in self.running or any(a in manager.running for a in members):
+                    raise ValueError("Wait for the current team run to finish")
+                # Starting from remote main does not approve any previous execution.
+                # Team status is transient (editing planning invalidates old inputs),
+                # and an existing project need not have a prior controller promotion.
+                # Preserve history; publication still requires fresh controller tests.
+                root = manager.workspaces.get(identifier)
+                previous = load_documents(root)["PLANNING.md"]
+                if previous["sha256"] != expected_sha256:
+                    raise ValueError("Planning changed; Load project documents before starting")
+                if not content.strip():
+                    raise ValueError("Enter the requirements for this iteration")
+                iteration_id = str(uuid4())
+                plan = ProjectDocumentInput(
+                    project=identifier,
+                    name="PLANNING.md",
+                    content=(previous["content"] or "# Project planning")
+                    + f"\n\n## Current iteration {iteration_id}\n"
+                    + "Earlier iterations are history. Preserve their working features.\n\n"
+                    + content.strip()
+                    + "\n",
+                    expected_sha256=expected_sha256,
+                )
+                # Validate UTF-8 size before Git mutations or saving instructions.
+                if len(plan.content.encode()) > MAX_DOCUMENT_BYTES:
+                    raise ValueError("Planning exceeds 64 KiB; archive completed milestones first")
+                configs = [
+                    AgentConfig.model_validate(manager.registry.get(a)["config"])
+                    for a in project["agents"]
+                ]
+                for config in configs:
+                    if config.git.repository != identifier or not config.git.worktree:
+                        raise ValueError("Workers must use separate worktrees of this project")
+                    if not config.task or not config.git.push_on_success:
+                        raise ValueError("Both workers need a task and publication enabled")
+                    manager.tasks.load(config.task)
+                    for role in config.roles:
+                        manager.roles.load(role)
+                    path = await manager.git.repository(config.workspace)
+                    if config.workspace in manager.claims or str(path) in manager.external_claims():
+                        raise ValueError("Worker workspace is in use")
+                    await manager.sandbox.validate(path)
+                    await manager.git.require_clean(path)
+                    if (await manager.git.info(config.workspace))["branch"] != config.git.branch:
+                        raise ValueError(
+                            "Worker branch changed; restore its configured branch first"
+                        )
+                base = await manager.git.fetch_main(configs[0])
+                for config in configs:
+                    await manager.git.merge_commit(config.workspace, base)
+                save_document(root, plan)
+                iteration = {
+                    "id": iteration_id,
+                    "status": "STARTING",
+                    "base": base,
+                    "requirements": content.strip(),
+                    "runs": [],
+                }
+                project["iteration"] = iteration
+                manager.store.put("projects", identifier, project)
+                manager.store.put("iterations", iteration_id, {**iteration, "project": identifier})
+            for agent in project["agents"]:
+                run = await manager.start(agent, coordinated=True)
+                iteration["runs"].append(run["id"])
+            iteration["status"] = "RUNNING"
+            current = manager.store.get("projects", identifier)
+            current["iteration"] = iteration
+            manager.store.put("projects", identifier, current)
+            manager.store.put("iterations", iteration_id, {**iteration, "project": identifier})
+            return {
+                "project": identifier,
+                **iteration,
+                "detail": "Both workers started. Integration and validation follow automatically.",
+            }
+        except (Exception, asyncio.CancelledError):
+            if "iteration" in locals():
+                iteration["status"] = "FAILED"
+                current = manager.store.get("projects", identifier)
+                current["iteration"] = iteration
+                manager.store.put("projects", identifier, current)
+                manager.store.put("iterations", iteration_id, {**iteration, "project": identifier})
+            raise
+        finally:
+            self.preparing.discard(identifier)
+            if "iteration" in locals():
+                self.schedule(project["agents"][0])
 
     async def advance(self, identifier, *, manual=False):
         manager = self.manager
@@ -308,6 +420,15 @@ class Integrations:
             }
             manager.store.put("projects", identifier, record)
         finally:
+            current = manager.store.get("projects", identifier)
+            iteration = current.get("iteration")
+            status = current.get("integration", {}).get("status")
+            if iteration and status in {"PROMOTED", "FAILED", "NEEDS_INPUT", "CANCELLED"}:
+                iteration["status"] = status
+                manager.store.put("projects", identifier, current)
+                manager.store.put(
+                    "iterations", iteration["id"], {**iteration, "project": identifier}
+                )
             self.inputs.pop(record.get("integrator"), None)
 
     async def close(self):

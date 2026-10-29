@@ -43,15 +43,15 @@ class MessageInput(BaseModel):
         return value.strip()
 
 
-async def validated_body(request: Request, model: type[BaseModel]):
+async def validated_body(request: Request, model: type[BaseModel], *, max_bytes: int = 32768):
     if request.headers.get("origin") is not None:
         raise HTTPException(403, "Browser task submission is disabled")
     if request.headers.get("content-type", "").split(";")[0].lower() != "application/json":
         raise HTTPException(415, "Expected application/json")
     chunks = bytearray()
     async for chunk in request.stream():
-        if len(chunks) + len(chunk) > 32768:
-            raise HTTPException(413, "Request exceeds 32 KiB")
+        if len(chunks) + len(chunk) > max_bytes:
+            raise HTTPException(413, f"Request exceeds {max_bytes // 1024} KiB")
         chunks.extend(chunk)
     try:
         return model.model_validate(json.loads(chunks))

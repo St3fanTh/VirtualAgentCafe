@@ -139,7 +139,7 @@ Projekt-AGENTS.md > Projekt-PLANNING.md > einzelne Aufgabe. Die Dateien verleihe
 keine zusätzlichen Sicherheitsrechte. Speichern ist während zugehöriger laufender
 Agenten gesperrt. Zwischenzeitliche Änderungen auf der Festplatte führen zu einem
 Konflikthinweis statt stillem Überschreiben; lade dann die Dateien erneut.
-Pro Datei sind 12 KiB erlaubt. Symlinks und mehrdeutige Groß-/Kleinschreibung
+Pro Datei sind 64 KiB UTF-8 erlaubt (Laden, Editor, Dateiimport und Speichern). Symlinks und mehrdeutige Groß-/Kleinschreibung
 werden abgewiesen. Den nativen Windows-Dialog musst du auf deinem Zielhost prüfen;
 der automatisierte Godot-Test bedient den eingebetteten Dateidialog über Eingaben.
 
@@ -389,3 +389,47 @@ Docker-Desktop-Bind-Mount unter `/mnt/wsl/docker-desktop-bind-mounts/`. Die ID
 muss zur `gitdir:`-Zeile im bestehenden Worker-Worktree passen. Der Starter prüft
 den Sandbox-Mount, bevor Godot startet. Danach `git rev-parse --show-toplevel` im
 Worker-Worktree prüfen, bevor Agenten fortgesetzt werden.
+
+
+## Nächste Runde nach deinem Test auf main
+
+Agenten und Worktrees behalten. Den aktuellen Stand auf Remote-main selbst
+testen. Eine frühere automatische Veröffentlichung ist keine Voraussetzung;
+auch ein bereits bestehendes Projekt kann so gestartet werden. Dann in **Setup**:
+
+1. Das bestehende Projekt auswählen und **Load project documents** klicken.
+2. Im Feld **NEXT ITERATION** die zusätzlichen Anforderungen und Abnahmekriterien
+   eingeben. Alte Tasks müssen dafür nicht manuell umgeschrieben werden.
+3. **Start next iteration** klicken. Dieser Klick autorisiert die neue Runde.
+
+Der Controller lädt den aktuellen Remote-main, übernimmt ihn ohne Reset oder
+Force in beide sauberen Worker-Branches, ergänzt PLANNING.md im Quellordner und
+startet beide Worker. Die bisherigen Aufgaben/Rollen bleiben erhalten; der neue
+Auftrag grenzt die aktuelle Runde ausdrücklich ab. Die Dokumente werden pro Lauf
+unveränderlich gesichert. Jede Runde hat eine eigene ID und gespeicherte Runs;
+Ergebnisse einer alten Runde können die Integration nicht vorzeitig starten.
+Nach beiden erfolgreichen Veröffentlichungen folgen automatisch Integration,
+Controller-Tests und die bereits konfigurierte Veröffentlichung auf main.
+
+Kein Start durch bloßes Tippen oder Speichern: So bleibt Zeit für deinen Test und
+für das Formulieren vollständiger Anforderungen. Vor dem nächsten Klick Dokumente
+neu laden. Änderungen ausschließlich auf GitHub sind erst nach Aktualisierung des
+lokal eingebundenen Quellordners sichtbar. Der Controller überschreibt dessen
+lokalen main nicht; er aktualisiert die Worker aus Remote-main.
+
+Bei ungesicherten Worker-Dateien, Merge-Konflikten, fehlender SSH-/Push-Freigabe
+oder veralteter Planung bleibt ein konkreter Fehler sichtbar. Bestehende Dateien
+werden erhalten, auch wenn die Vorbereitung schon einen Worker aktualisiert hat.
+Ein teilweise gestarteter Lauf wird als fehlgeschlagene Runde gespeichert; laufende
+Worker zuerst beenden lassen und dann Dokumente laden und erneut starten. Bei
+Integrationsfehlern weiter Agent chat / Retry team integration verwenden.
+
+PLANNING.md ist auf 64 KiB UTF-8 begrenzt. Abgeschlossene umfangreiche Planungen
+bei Bedarf in separate Historien-Dateien archivieren und die aktuelle Planung
+kompakt halten; ein einzelnes neues Anforderungsfeld erlaubt 16.000 Zeichen.
+
+
+Die Compose-Dienste verwenden `init: true`, damit verwaiste Sandbox-Prozesse
+aufgeräumt werden. Bestehende Container müssen neu erstellt werden, damit diese
+Einstellung wirksam wird. Bei ausgeschöpften Namespace-Grenzen trotz freiem
+Plattenplatz den betroffenen Container neu starten; Isolation nicht deaktivieren.

@@ -39,6 +39,7 @@ var executions: ItemList
 var logs: TextEdit
 var execution_report: TextEdit
 var execution_status: Label
+var iteration_requirements: TextEdit
 var integration_status: Label
 var retry_feedback: TextEdit
 var retry_messages: Dictionary = {}
@@ -761,6 +762,12 @@ func received(_result: int, code: int, _headers: PackedStringArray, body: Packed
 			definition_file.text = ""
 		set_notice("Markdown task deleted.")
 		pending_refresh = true
+	elif finished_action == "iteration_start":
+		iteration_requirements.text = ""
+		setup_result.text = "ITERATION STARTED\n" + str(data.get("detail", ""))
+		set_notice(setup_result.text)
+		setup_documents.clear()
+		pending_refresh = true
 	elif finished_action == "integration_retry":
 		var reply := str(data.get("status", "")) + "\n" + str(data.get("detail", ""))
 		remember_retry(str(completed.get("execution", "")), reply)
@@ -835,6 +842,8 @@ func update_buttons() -> void:
 			else:
 				setup_feedback("Checks passed. Create your team." + (" Using the next milestone from PLANNING.md." if setup_objective.text.strip_edges().is_empty() else ""))
 		buttons["Create backend + frontend team"].tooltip_text = "Run Check project and resolve all FIX items first." if not setup_ready else "Enter a goal or load PLANNING.md." if setup_goal().length() < 10 else "Create workers and optionally enable shared integration."
+		iteration_requirements.editable = not busy
+		buttons["Start next iteration"].disabled = busy or not managed_ids.has(chosen(setup_project)) or setup_document_project != chosen(setup_project) or setup_documents.is_empty() or iteration_requirements.text.strip_edges().length() < 10
 		buttons["Load project documents"].disabled = busy or chosen(setup_project).is_empty()
 		buttons["Save project document"].disabled = busy or setup_document_project != chosen(setup_project) or setup_documents.is_empty()
 		buttons["Import Markdown file"].disabled = busy or setup_document_project != chosen(setup_project) or setup_documents.is_empty()
@@ -1286,6 +1295,14 @@ func build_setup(parent_tabs: TabContainer) -> void:
 	form.add_child(caption("Find projects searches mounted folders. Removed entries: Restore removed folders. New project folder: run python3 scripts/setup-project.py on your Docker host."))
 	button(form, "Delete selected project", ask_delete_selected_project)
 	button(form, "Delete all managed projects", ask_delete_all_projects)
+	form.add_child(caption("NEXT ITERATION · After reviewing the published main: load project documents, enter new requirements below, then start. Both workers synchronize with remote main; integration and tests follow automatically."))
+	iteration_requirements = TextEdit.new()
+	iteration_requirements.placeholder_text = "New requirements and acceptance criteria for the next round…"
+	iteration_requirements.custom_minimum_size = Vector2(500, 150)
+	iteration_requirements.wrap_mode = TextEdit.LINE_WRAPPING_BOUNDARY
+	iteration_requirements.text_changed.connect(update_buttons)
+	form.add_child(iteration_requirements)
+	button(form, "Start next iteration", start_next_iteration)
 	form.add_child(caption("Optional goal override. A loaded PLANNING.md supplies the next incomplete milestone. Define the shared API contract when possible."))
 	setup_objective = TextEdit.new()
 	setup_objective.placeholder_text = "Build a task tracker. Backend: task API. Frontend: task list and creation form. Shared contract: GET /api/tasks → [{id, title}], POST /api/tasks accepts {title}."
@@ -1384,8 +1401,8 @@ func save_setup_document() -> void:
 
 func import_setup_document(path: String) -> void:
 	var file := FileAccess.open(path, FileAccess.READ)
-	if file == null or file.get_length() > 12000:
-		set_notice("Choose a readable Markdown file of at most 12 KiB.", true)
+	if file == null or file.get_length() > 65536:
+		set_notice("Choose a readable Markdown file of at most 64 KiB.", true)
 		return
 	var content := file.get_as_text().trim_prefix("\ufeff")
 	if not content.strip_edges().begins_with("#"):
@@ -1413,7 +1430,7 @@ func request_error(command: Dictionary, message: String) -> void:
 		pending_refresh = true
 	if command.get("action") == "git":
 		git_result.text = "GIT ACTION FAILED\n\nWorkspace: " + str(command.get("path", "")) + "\n\n" + message
-	if str(command.get("action", "")).begins_with("setup"):
+	if str(command.get("action", "")).begins_with("setup") or command.get("action") == "iteration_start":
 		if command.get("action") == "setup_check":
 			setup_ready = false
 		setup_feedback(message, true)
@@ -1537,3 +1554,12 @@ func fill_model_options(selected_model: String) -> void:
 		choices.append(selected_model)
 	fill_options(agent_model, choices)
 	choose(agent_model, selected_model)
+
+func start_next_iteration() -> void:
+	var project := chosen(setup_project)
+	if setup_document_project != project or setup_documents.is_empty():
+		set_notice("Load project documents first.", true)
+		return
+	call_api("iteration_start", "/projects/" + project + "/iterations", HTTPClient.METHOD_POST, {
+		"content": iteration_requirements.text.strip_edges(),
+		"expected_sha256": setup_documents.get("PLANNING.md", {}).get("sha256", "")})
