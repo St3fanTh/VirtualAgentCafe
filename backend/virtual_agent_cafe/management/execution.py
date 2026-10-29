@@ -702,7 +702,11 @@ class ExecutionManager:
             if result.success and config.git.push_on_success:
                 emit(EventType.WAITING, "Git: publishing committed results to the agent branch")
                 try:
-                    published = await self.git.push(config)
+                    published = (
+                        await self.git.push(config, expected_commit=run["validation"]["commit"])
+                        if config.execution.integration_validation
+                        else await self.git.push(config)
+                    )
                 except ValueError as error:
                     run.update(
                         status=State.FAILED,

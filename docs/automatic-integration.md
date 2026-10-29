@@ -202,3 +202,45 @@ menschliche Klärung erfordern.
 Einzeln gelöschte Worker werden beim erneuten Team-Setup wieder angelegt. Vorhandene
 passende Worktrees, Branches und Markdown-Dateien werden weiterverwendet; die
 Neueinrichtung verwirft keine lokale Arbeit und bedeutet keinen leeren Neustart.
+
+## Godot validation paths and diagnostics
+
+Each Godot check declares a project directory relative to the integration worktree.
+Its script is relative to that project directory. These forms are equivalent:
+
+```json
+{"id": "godot-contract", "kind": "godot", "directory": "frontend", "script": "tests/test_contract.gd"}
+{"id": "godot-contract", "kind": "godot", "directory": "frontend", "script": "res://tests/test_contract.gd"}
+```
+
+Do not repeat `frontend/` inside `script` when `directory` already selects it.
+Absolute paths, parent traversal and symlinks remain forbidden. Scripts must still
+be regular committed `.gd` files with filenames starting with `test`. A committed
+`smoke.gd` is a **naming-rule violation**, not a missing Git file; rename it and
+update/commit the declaration to comply. The controller does not waive this rule.
+
+The old error `Godot validation requires a committed test script` combined file
+existence, filename, suffix and Git tracking checks. In commit `e38dd63`, its exact
+source was `management/validation.py:100`. A `res://` declaration was incorrectly
+joined as a filesystem path (`frontend/res:/tests/...`) before also receiving a
+second resource prefix in the execution command. The regression fixture confirms
+that the old code passed relative paths on an integration-only branch but failed
+the equivalent resource URIs; the absence of these files on main was not the cause.
+
+Validation now freezes the integration worktree's HEAD SHA, inspects its tree and
+blob objects, and compares declared files using Git's content normalization rules
+(including CRLF checkout attributes). `git ls-files` is no longer treated as proof
+of commitment: staged-only additions do not count. The plan's requirements hash,
+branch, containment, clean-tree and post-execution HEAD checks remain enforced.
+Reports start with `passed: false` on every invocation and are marked successful
+only after all postconditions. Publication uses the validated SHA and rejects a
+HEAD change; it does not push an untested replacement HEAD. Godot error output is
+also a failure even if a script exits with code zero.
+
+Inspect **Executions → Changelog & tests → VALIDATION SNAPSHOT** for the selected
+ref, branch, commit, repository and failed rule. **Live logs** additionally contain
+private `validation.diagnostic` JSON records with declared directory/script,
+resolved path, repository-relative Git path, blob existence/OID and exact rule.
+`blob_exists: null` means lookup was not completed (for example, a Git error),
+not that Git proved absence. Full test output, credentials and private prompts
+are not included. These diagnostics also enter the next automatic repair context.

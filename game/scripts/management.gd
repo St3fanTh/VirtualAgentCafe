@@ -1444,6 +1444,11 @@ func format_execution_report(record: Dictionary) -> String:
 			text += "  " + str(cause) + "\n"
 		for test in run.get("tests", []):
 			text += "  " + str(test) + "\n"
+	var validation: Dictionary = record.get("validation", {})
+	if not validation.is_empty():
+		text += "\nVALIDATION SNAPSHOT\nRef: " + str(validation.get("selected_ref", "")) + " · Branch: " + str(validation.get("branch", ""))
+		text += "\nCommit: " + str(validation.get("commit", "")) + "\nRepository: " + str(validation.get("repository_root", ""))
+		text += "\nFailed rule: " + str(validation.get("failed_rule", "none")) + "\nDetailed path/blob diagnostics are in Live logs.\n"
 	text += "\nSHARED REQUIREMENTS CHECKS\n"
 	for check in record.get("validation", {}).get("checks", []):
 		text += str(check.get("id", "")) + " · exit " + str(check.get("exit_code", "")) + "\n"

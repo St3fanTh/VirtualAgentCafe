@@ -1348,3 +1348,44 @@
   212 pytest PASS, Ruff/Format, Godot-Import/Zustände/Headless und live WebSocket-
   Smoke PASS. Einzige Warnung: bestehende Starlette/httpx-Deprecation.
   SSH-Authentifizierung und Feature-Branch-Remote erneut erfolgreich geprüft.
+
+## Godot controller validation diagnosis — 2026-10-29
+
+- Exact original error: management/validation.py:100 at e38dd63. One guard conflated
+  existence, test filename prefix, .gd suffix and membership in git ls-files.
+- Confirmed reproduction against the original implementation: main has no scripts;
+  integration worktree contains three committed Godot tests. Project-relative
+  declarations pass all three; equivalent res:// declarations fail with the exact
+  reported error. Pathlib treated the resource URI as frontend/res:/tests/..., and
+  the Godot argument would prefix res:// again. No main-selection bug reproduced.
+  The user's failing manifest was not available locally; its checks were requested
+  to distinguish URI misuse from the independently misleading filename error.
+- Fixed canonical project-relative/resource-URI resolution without relaxing the
+  existing test filename, suffix, containment, symlink or commitment rules.
+- Validation pins HEAD SHA and branch, checks the commit tree and actual blobs,
+  compares workspace contents with Git-normalized blobs (CRLF supported), rejects
+  staged-only tests and stale requirements, and checks cleanliness/HEAD afterward.
+  It clears old reports first and only sets passed after all postconditions.
+- Git publication accepts the validated expected SHA, rejects changed HEAD and
+  pushes that exact SHA. Existing promotion/remote-main guards remain intact.
+- Private diagnostics include selected ref, branch, SHA, repository root, declared
+  directory/script, resolved path, Git blob status/OID and distinct failed rule.
+  GUI report displays snapshot/rule; full metadata goes to authenticated logs and
+  repair context, not public events. Godot error output cannot pass merely because
+  the process exits zero. No test requirement was bypassed.
+- Files: management/{validation,git,execution,integration}.py;
+  game/scripts/management.gd; new backend/tests/test_godot_validation.py;
+  backend/tests/test_team_integration.py; docs/automatic-integration.md; PROGRESS.md.
+- Focused integration/publication/validation run: 35 PASS. Additional CRLF regression
+  PASS after refreshing the fixture's index stat data (no staged content changes).
+  Final focused and complete check results recorded below on completion.
+- Commit-ID: git log --grep='validate Godot scripts against the integration commit'.
+- Next step: rebuild backend and restart Godot; retry integration. For remaining
+  failures inspect validation.diagnostic rather than inferring missing files from
+  a generic message. No real external model calls or remote-hosted fixtures used.
+- Final evidence: focused test_godot_validation.py 19 PASS; full scripts/check.sh
+  PASS with 231 pytest, Godot import/state/headless and WebSocket smoke PASS.
+  After naming the combined exit/output rule check.result, the two affected Godot
+  execution-error cases were rerun: 2 PASS. Final Ruff/format and diff checks PASS.
+  Existing Starlette/httpx warning unchanged. Reproduction logs confirmed the old
+  relative-path control passes three checks while equivalent resource URIs fail.

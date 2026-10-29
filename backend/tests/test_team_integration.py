@@ -303,8 +303,8 @@ async def test_changed_task_cannot_be_promoted_using_stale_requirement_tests(tmp
     manager, remote, initial, _pushed = await team(tmp_path, monkeypatch)
     original = manager.git.push
 
-    async def changed_requirements(config):
-        result = await original(config)
+    async def changed_requirements(config, **kwargs):
+        result = await original(config, **kwargs)
         if config.execution.integration_validation:
             manager.tasks.save(
                 "project-backend.md", "# Changed requirements\nImplement a new API contract."

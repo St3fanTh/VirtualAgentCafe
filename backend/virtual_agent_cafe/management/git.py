@@ -380,7 +380,7 @@ class GitService:
             raise ValueError("Publishing requires one SSH or credential-free HTTPS push URL")
         return path, branch
 
-    async def push(self, config) -> dict:
+    async def push(self, config, *, expected_commit: str | None = None) -> dict:
         path, branch = await self.push_target(config)
         # Runtime helper/instruction files are not project results. Everything else
         # must have been deliberately committed by the worker before publication.
@@ -392,6 +392,8 @@ class GitService:
                 "Results are not fully committed. Review and commit project files before publishing"
             )
         commit = (await self.run(path, "rev-parse", "HEAD")).strip()
+        if expected_commit is not None and commit != expected_commit:
+            raise ValueError("Integration commit changed after validation; rerun tests before push")
         await self.run(
             path,
             "-c",
@@ -405,7 +407,7 @@ class GitService:
             "--set-upstream",
             "--",
             config.git.remote_name,
-            f"HEAD:refs/heads/{branch}",
+            f"{expected_commit or 'HEAD'}:refs/heads/{branch}",
         )
         return {"branch": branch, "commit": commit, "remote": config.git.remote_name}
 

@@ -227,6 +227,7 @@ class Integrations:
                     break
                 evidence = {
                     "detail": result.get("detail"),
+                    "validation_rule": result.get("validation", {}).get("failed_rule"),
                     "tests": result.get("test_runs", []),
                     "checks": [
                         {key: value for key, value in check.items() if key != "output_sha256"}
@@ -237,7 +238,12 @@ class Integrations:
                 signature = hashlib.sha256(
                     json.dumps(evidence, sort_keys=True).encode()
                 ).hexdigest()
-                self.inputs[config.id]["repair_feedback"] = evidence
+                self.inputs[config.id]["repair_feedback"] = {
+                    **evidence,
+                    "validation_diagnostics": result.get("validation", {}).get("diagnostics", [])[
+                        -3:
+                    ],
+                }
                 self.inputs[config.id]["repair_attempt"] = attempt + 2
                 if (
                     signature == previous_failure
