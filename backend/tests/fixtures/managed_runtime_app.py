@@ -5,6 +5,7 @@ import os
 from pathlib import Path
 
 from virtual_agent_cafe.main import create_app
+from virtual_agent_cafe.management.model_catalog import ModelCatalog
 from virtual_agent_cafe.management.sandbox import IsolatedCodexAdapter, Sandbox
 
 PROGRAM = """
@@ -97,3 +98,15 @@ if os.getenv("VAC_SANDBOX_BLOCKED") == "1":
         return Sandbox.failure("bwrap: Creating new namespace failed: Operation not permitted", 1)
 
     Sandbox.probe = blocked_probe
+
+
+async def fixture_model_catalog(bundled=False):
+    return {
+        "models": [
+            {"slug": "fixture-model", "visibility": "list"},
+            {"slug": "fixture-model-other", "visibility": "list"},
+        ]
+    }
+
+
+ModelCatalog.query = staticmethod(fixture_model_catalog)

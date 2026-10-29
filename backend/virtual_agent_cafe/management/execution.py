@@ -480,6 +480,7 @@ class ExecutionManager:
             run = {
                 "id": run_id,
                 "agent_id": identifier,
+                "model": config.model,
                 "workspace": config.workspace,
                 "workspace_path": str(workspace),
                 "task": config.task,
@@ -598,6 +599,7 @@ class ExecutionManager:
                 self.sandbox,
                 metadata=metadata,
                 timeout=config.execution.timeout_seconds,
+                model=config.model,
                 instructions=self.contexts.path(run["id"]),
             )
             runtime_retries = (

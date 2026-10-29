@@ -171,14 +171,18 @@ class CodexObserver:
 
 
 class CodexAdapter:
-    def __init__(self, executable: str | None = None, timeout: float = 300):
+    def __init__(
+        self, executable: str | None = None, timeout: float = 300, *, model: str | None = None
+    ):
         self.executable = executable or shutil.which("codex") or "codex"
         self.timeout = timeout
+        self.model = model
 
     def arguments(self, workspace: Path) -> list[str]:
         return [
             self.executable,
             "exec",
+            *(["--model", self.model] if self.model else []),
             "--json",
             "--ephemeral",
             "--ignore-user-config",

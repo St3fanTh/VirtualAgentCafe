@@ -3,6 +3,8 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from .model_catalog import MODEL_ID
+
 Identifier = Annotated[str, Field(pattern=r"^[a-z][a-z0-9_-]{0,63}$")]
 MarkdownRef = Annotated[str, Field(pattern=r"^[a-z][a-z0-9_-]{0,63}\.md$")]
 
@@ -62,6 +64,7 @@ class AgentConfig(StrictModel):
     id: Identifier
     name: str = Field(min_length=1, max_length=80)
     provider: Literal["codex"] = "codex"
+    model: str | None = Field(default=None, pattern=MODEL_ID)
     workspace: Identifier
     task: MarkdownRef | None = None
     roles: list[MarkdownRef] = Field(default_factory=list, max_length=16)

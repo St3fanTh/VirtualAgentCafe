@@ -8,6 +8,10 @@ var cache: Dictionary = {}
 var agents: ItemList
 var agent_id: LineEdit
 var agent_name: LineEdit
+var agent_model: OptionButton
+var model_status: Label
+var available_models: Array = []
+const DEFAULT_MODEL := "Codex default (automatic)"
 var workspace: OptionButton
 var workspace_info: Label
 var task_file: OptionButton
@@ -328,6 +332,11 @@ func build_agents(tabs: TabContainer) -> void:
 	branch = line(settings, "Branch (blank = agent/ID/task)")
 	agent_remote_name = line(settings, "Git remote name")
 	agent_remote_name.text = "origin"
+	agent_model = option(settings, "Model (next execution)")
+	agent_model.add_item(DEFAULT_MODEL)
+	model_status = caption("Loading Codex model catalog…")
+	settings.add_child(model_status)
+	button(settings, "Refresh models", func(): call_api("models", "/models?refresh=true"))
 	settings.add_child(caption("Timeout in seconds / retries"))
 	timeout = SpinBox.new()
 	timeout.min_value = 1
@@ -521,12 +530,13 @@ func refresh() -> void:
 	if not saved.is_empty() and not token.visible:
 		token.text = saved
 	call_api("overview", "")
+	call_api("models", "/models")
 
 func poll_updates() -> void:
 	if not visible or token.text.strip_edges().is_empty() or not active_request.is_empty() or not request_queue.is_empty():
 		return
 	# Rebuilding popup/list widgets while they hold the mouse interrupts a click.
-	for popup in [chat_agent, workspace, task_file, repository, git_workspace, definition_kind, definition_select]:
+	for popup in [agent_model, chat_agent, workspace, task_file, repository, git_workspace, definition_kind, definition_select]:
 		if popup.get_popup().visible:
 			return
 	if tabs.current_tab == 5 and not chosen(chat_agent).is_empty():
@@ -588,7 +598,11 @@ func received(_result: int, code: int, _headers: PackedStringArray, body: Packed
 		call_deferred("after_response")
 		return
 	var finished_action: String = completed.get("action", action)
-	if finished_action in ["chat", "chat_send"]:
+	if finished_action == "models":
+		available_models = data.get("models", [])
+		fill_model_options(chosen(agent_model))
+		model_status.text = str(data.get("detail", ""))
+	elif finished_action in ["chat", "chat_send"]:
 		if str(data.get("agent", "")) == chosen(chat_agent):
 			var transcript := ""
 			for message in data.get("messages", []):
@@ -778,7 +792,7 @@ func after_response() -> void:
 func bind_form_changes() -> void:
 	for edit in [agent_id, agent_name, branch, agent_remote_name]:
 		edit.text_changed.connect(func(_value): mark_dirty())
-	for select in [workspace, task_file, repository]:
+	for select in [agent_model, workspace, task_file, repository]:
 		select.item_selected.connect(func(_index): mark_dirty())
 	for checkbox in [git_enabled, git_worktree, publish_on_success] + remote_flags.values():
 		checkbox.toggled.connect(func(_enabled): mark_dirty())
@@ -931,7 +945,7 @@ func populate() -> void:
 	var agent_rows: Array = []
 	for item in cache.get("agents", []):
 		var config: Dictionary = item.config
-		agent_rows.append({"id": config.id, "text": str(config.name) + " · " + str(item.state).capitalize()})
+		agent_rows.append({"id": config.id, "text": str(config.name) + " · " + str(item.state).capitalize() + " · " + (str(config.model) if config.get("model") != null else "Codex default")})
 	sync_list(agents, agent_rows)
 	var chat_ids: Array = []
 	for row in agent_rows:
@@ -1004,6 +1018,7 @@ func new_agent() -> void:
 	agent_id.editable = true
 	agent_id.text = ""
 	agent_name.text = ""
+	fill_model_options(DEFAULT_MODEL)
 	branch.text = ""
 	git_enabled.button_pressed = false
 	git_worktree.button_pressed = true
@@ -1035,6 +1050,7 @@ func load_agent(index: int) -> void:
 		agent_id.editable = false
 		agent_id.text = config.id
 		agent_name.text = config.name
+		fill_model_options(str(config.model) if config.get("model") != null else DEFAULT_MODEL)
 		choose(workspace, config.workspace)
 		choose(git_workspace, config.workspace)
 		update_workspace_info()
@@ -1054,7 +1070,7 @@ func load_agent(index: int) -> void:
 		repair_attempts.value = config.execution.get("repair_attempts", 3)
 		for operation in remote_flags:
 			remote_flags[operation].button_pressed = bool(config.git.get("allow_" + operation, false))
-		agent_summary.text = "ID: " + str(config.id) + "\n" + str(config.get("task", "No task")) + "\nRoles: " + ", ".join(config.roles) + "\nWorkspace: " + str(config.workspace)
+		agent_summary.text = "ID: " + str(config.id) + "\n" + str(config.get("task", "No task")) + "\nRoles: " + ", ".join(config.roles) + "\nWorkspace: " + str(config.workspace) + "\nModel: " + chosen(agent_model)
 		notice.text = "Workspace: " + config.workspace + " · " + str(record.state) + " · Task: " + str(record.get("task_state", ""))
 
 	loading_form = false
@@ -1092,6 +1108,7 @@ func save_agent() -> void:
 	execution["max_retries"] = int(retries.value)
 	execution["repair_attempts"] = int(repair_attempts.value)
 	var config := {"id": agent_id.text, "name": agent_name.text, "workspace": chosen(workspace), "task": chosen(task_file) if not chosen(task_file).is_empty() else null, "roles": assigned_roles, "git": git, "execution": execution}
+	config["model"] = chosen(agent_model) if chosen(agent_model) != DEFAULT_MODEL else null
 	call_api("mutation", "/agents/" + agent_id.text if editing else "/agents", HTTPClient.METHOD_PUT if editing else HTTPClient.METHOD_POST, config)
 
 func ask_delete_agent() -> void:
@@ -1412,6 +1429,7 @@ func check_setup_project() -> void:
 
 func format_execution_report(record: Dictionary) -> String:
 	var text := "RESULT\n" + str(record.get("detail", "Execution in progress"))
+	text += "\nRequested model: " + (str(record.model) if record.get("model") != null else DEFAULT_MODEL)
 	text += "\n\nPUBLICATION (verified by controller)\n" + str(record.get("publication", "NOT_REQUESTED"))
 	var published: Dictionary = record.get("published", {})
 	if not published.is_empty():
@@ -1503,3 +1521,14 @@ func build_chat(parent_tabs: TabContainer) -> void:
 func load_chat() -> void:
 	if not chosen(chat_agent).is_empty():
 		call_api("chat", "/agents/" + chosen(chat_agent) + "/chat", HTTPClient.METHOD_GET, {}, true)
+
+func fill_model_options(selected_model: String) -> void:
+	if selected_model.is_empty():
+		selected_model = DEFAULT_MODEL
+	var choices: Array = [DEFAULT_MODEL]
+	choices.append_array(available_models)
+	# Keep saved or unsaved selections even when the catalog is unavailable or changes.
+	if not selected_model in choices:
+		choices.append(selected_model)
+	fill_options(agent_model, choices)
+	choose(agent_model, selected_model)

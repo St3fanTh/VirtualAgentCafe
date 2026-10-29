@@ -8,6 +8,7 @@ from pydantic import Field
 from .config import AgentConfig, MarkdownInput, ReviewInput, StrictModel, WorkspaceInput
 from .execution import ExecutionManager
 from .git import GitOperationError
+from .model_catalog import ModelCatalog
 from .project_documents import ProjectDocumentInput, load_documents, save_document
 from .setup import ProjectSetup, SetupCheck, SetupInput
 
@@ -75,6 +76,11 @@ def management_router(manager: ExecutionManager, validated_body, mode: str) -> A
             raise HTTPException(409, detail) from None
 
     setup = ProjectSetup(manager, mode)
+    models = ModelCatalog()
+
+    @router.get("/models")
+    async def model_catalog(refresh: bool = False):
+        return await models.get(refresh=refresh)
 
     @router.get("/agents/{identifier}/chat")
     async def agent_chat(identifier: str):

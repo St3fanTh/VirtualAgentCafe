@@ -1314,3 +1314,37 @@
   Godot-Import/Zustände/Headless und WebSocket-Smoke PASS. Bestehende
   Starlette/httpx-Deprecation-Warnung unverändert. Neustart-Regression nach der
   ergänzten Recovery-Behandlung zusätzlich separat PASS; abschließendes Ruff PASS.
+
+## Modellauswahl je Agent — 2026-10-28
+
+- Neues optionales AgentConfig.model: persistierte Modellauswahl mit begrenzter,
+  validierter ID. Bestehende Agenten behalten den automatischen Codex-Standard.
+  Die isolierte Runtime übergibt explizite Auswahlen als separates --model-Argument;
+  Ausführungen speichern die Auswahl unveränderlich für ihre Verlaufsanzeige.
+- Neues ModelCatalog-Modul und authentifiziertes GET /management/models: begrenzter
+  Codex-Katalogexport, Timeout/Prozessgruppen-Cleanup, gekennzeichneter gebündelter
+  Fallback, Cache und explizite Aktualisierung. Keine festgeschriebene Modellliste,
+  keine Weitergabe roher Diagnoseausgaben oder Modellinstruktionen an die GUI.
+- Godot: Dropdown in Agents, Refresh models, Auswahl in Agentenliste/Details und
+  Requested model im Ausführungsbericht. Gespeicherte und ungespeicherte Auswahlen
+  bleiben bei geänderten/fehlenden Katalogen erhalten. Save configuration gilt für
+  den nächsten Lauf, einschließlich Chat und Integration.
+- Dateien: backend/virtual_agent_cafe/management/{api,config,execution,sandbox}.py;
+  neues management/model_catalog.py; adapters/codex.py;
+  neues backend/tests/test_agent_models.py; tests/fixtures/managed_runtime_app.py;
+  game/scripts/management.gd; game/tests/test_management.gd; README.md;
+  docs/agent-management.md; PROGRESS.md.
+- Gezielte Tests: 19 Backend-/native Godot-Tests PASS (Modellvalidierung, CLI-Argumente,
+  Runtime-Übergabe, Persistenz, Snapshot, API-Authentifizierung, Katalogfilter/Fallback,
+  GUI-Auswahl/Speichern/Laden/Bericht). Echte reine Katalogabfrage im Container PASS:
+  Quelle codex, 8 sichtbare Modelle. Kein echter kostenpflichtiger Modelllauf getestet.
+- Commit-ID: git log --grep='add per-agent Codex model selection'.
+- Grenzen: Katalogeintrag garantiert keine Kontoberechtigung. Codex prüft den Zugriff
+  beim Ausführen. Ohne explizite Auswahl wird kein bestimmter Modellname behauptet;
+  die Anzeige benennt den automatischen Codex-Standard. Kein Host-config.toml-Mount.
+- Nächster Schritt: Backend neu bauen und Godot neu starten; Agent auswählen,
+  Modell auswählen, Save configuration, anschließend starten.
+- Abschlussprüfung am 2026-10-29 nach Umgebungsneustart: scripts/check.sh PASS;
+  212 pytest PASS, Ruff/Format, Godot-Import/Zustände/Headless und live WebSocket-
+  Smoke PASS. Einzige Warnung: bestehende Starlette/httpx-Deprecation.
+  SSH-Authentifizierung und Feature-Branch-Remote erneut erfolgreich geprüft.

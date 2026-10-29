@@ -414,3 +414,37 @@ für die betroffenen Workspaces. Andere Worktree-Registrierungen und Agentenbran
 bleiben erhalten; es findet kein pauschales Prune mit unvollständiger Mount-Sicht
 statt. Das Entfernen eines Ordners nur aus der Setup-Auswahl löscht weiterhin
 keine Arbeitsdateien.
+
+## Modell pro Agent auswählen
+
+Unter **Management → Agents** einen Agenten auswählen, im Dropdown **Model (next
+execution)** das Modell wählen und **Save configuration** drücken. Die Auswahl
+wird je Agent gespeichert und gilt ab dem nächsten Start, auch für Chat-Folgeläufe
+und Integrationsreparaturen. Laufende Ausführungen behalten ihren bisherigen Start-
+Snapshot. Agentenliste und Detailansicht zeigen die konfigurierte Auswahl;
+**Executions → Changelog & tests → Requested model** zeigt die Auswahl dieses Laufs.
+
+**Codex default (automatic)** entspricht `model: null`: Es wird kein Modellflag
+übergeben. Das erhält das bisherige Verhalten; es behauptet keinen konkreten
+aufgelösten Modellnamen. Die isolierte Runtime übernimmt weiterhin keine privaten
+Codex-Konfigurationsdateien vom Host. Eine konkrete Auswahl setzt `--model <ID>`.
+
+Die authentifizierte API `GET /management/models` liest den Modellkatalog über
+`codex debug models`. Bei Fehler/Timeout wird der mit der CLI ausgelieferte Katalog
+(`--bundled`) versucht und als solcher gekennzeichnet. **Refresh models** erzwingt
+über `?refresh=true` eine neue Abfrage; normale Aufrufe werden 60 Sekunden gecacht.
+Es werden keine Agenten gestartet. Zugang zu einem Katalogmodell ist nicht für
+jedes Konto garantiert. Bei fehlendem Katalog bleiben gespeicherte Auswahlen
+sichtbar; sie werden nicht stillschweigend ersetzt. Nicht unterstützte Modell-IDs
+führen zu einem Codex-Fehler statt zu einem automatischen Modellwechsel.
+
+Konfigurationsausschnitt (Modell-ID aus dem Dropdown übernehmen):
+
+```json
+{"provider": "codex", "model": "gpt-6.1-sol"}
+```
+
+Die Umsetzung verwendet die dokumentierten Flags für
+[Codex-Modellauswahl und Modellkatalog](https://learn.chatgpt.com/docs/cli/reference).
+Der Katalogexport wird begrenzt gelesen; nur validierte, sichtbare Modell-IDs werden
+an die GUI weitergegeben, keine Modellinstruktionen oder privaten Diagnoseausgaben.

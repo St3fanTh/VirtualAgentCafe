@@ -62,6 +62,9 @@ func _process(_delta: float) -> bool:
 			ui.new_agent()
 			ui.agent_id.text = managed_id
 			ui.agent_name.text = "Backend Engineer"
+			if not "fixture-model" in ui.available_models:
+				return false
+			ui.choose(ui.agent_model, "fixture-model")
 			ui.choose(ui.workspace, "project")
 			ui.choose(ui.task_file, "task.md")
 			ui.roles.select(0)
@@ -71,6 +74,9 @@ func _process(_delta: float) -> bool:
 			if ui.agents.item_count != 1:
 				return false
 			ui.load_agent(0)
+			assert(ui.chosen(ui.agent_model) == "fixture-model")
+			assert(ui.cache.agents[0].config.model == "fixture-model")
+			assert("fixture-model" in ui.agent_summary.text)
 			ui.control("start")
 			stage = 6
 		6:
@@ -106,6 +112,14 @@ func _process(_delta: float) -> bool:
 		8:
 			if not "CODING" in ui.logs.text or not "TESTING" in ui.logs.text:
 				return false
+			assert("Requested model: fixture-model" in ui.execution_report.text)
+			# A changed or temporarily missing catalog must preserve an unsaved selection.
+			ui.choose(ui.agent_model, "fixture-model-other")
+			ui.available_models = []
+			ui.fill_model_options(ui.chosen(ui.agent_model))
+			assert(ui.chosen(ui.agent_model) == "fixture-model-other")
+			ui.load_agent(0)
+			assert(ui.chosen(ui.agent_model) == "fixture-model")
 			assert("CHANGELOG (agent recap)" in ui.execution_report.text)
 			assert("OBSERVED TEST RUNS" in ui.execution_report.text)
 			assert(ui.execution_report.get_parent() is TabContainer)

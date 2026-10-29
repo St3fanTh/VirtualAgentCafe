@@ -149,6 +149,11 @@ Bubblewrap and working Linux namespaces. A private management token protects the
 See the [complete setup, configuration example and workflow](docs/agent-management.md).
 Rebuild the backend image for Bubblewrap and the new approved `/workspaces` volume.
 
+Choose each worker's or integrator's model under **Management → Agents → Model**,
+then **Save configuration**. Choices come from the installed Codex catalog; the
+selection applies on the next execution and is recorded in its report. See
+[model selection and availability](docs/agent-management.md#modell-pro-agent-auswählen).
+
 ### Automatic team integration
 
 Failed integration runs now retry automatically with test diagnostics (default:
