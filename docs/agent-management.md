@@ -448,3 +448,34 @@ Die Umsetzung verwendet die dokumentierten Flags für
 [Codex-Modellauswahl und Modellkatalog](https://learn.chatgpt.com/docs/cli/reference).
 Der Katalogexport wird begrenzt gelesen; nur validierte, sichtbare Modell-IDs werden
 an die GUI weitergegeben, keine Modellinstruktionen oder privaten Diagnoseausgaben.
+
+
+## Questions versus work instructions
+
+**Agent chat** provides two separate inputs:
+
+- **Ask question**: ask where a script lives, what changed, or why a run failed.
+  The configured Codex model reads the selected workspace through a read-only
+  `/project` mount and returns a private answer. The last work summary is reference
+  context. The runtime uses disposable scratch space; work Git metadata and the
+  work execution's Git-helper socket/token are hidden. No development execution,
+  recap commit, push or integration notification is created. Agent/task status and
+  the last execution remain unchanged. Answers are limited to 6,000 characters.
+- **Send instruction & continue**: give a concrete development instruction or
+  unblock a failed task. This retains the existing work/resume workflow, including
+  automatic publication/integration when configured. Instructions sent during an
+  active run are saved for the next attempt rather than interrupting its prompt.
+
+Questions and answers are marked QUESTION in private history and excluded from
+future development prompts. Work instructions are marked INSTRUCTION. Existing
+unmarked history is treated as instructions for compatibility. Each agent can have
+one answer in progress, independently of development; files may change while a
+worker is active, so an answer describes what the reader observed. Answer failure
+or timeout appears in the chat status and does not mark development failed.
+
+The authenticated `POST /management/agents/{id}/chat` API accepts
+`{"content":"Where is the script?", "mode":"question"}` or
+`{"content":"Fix the contract test", "mode":"instruction"}`. Omitting both mode
+and the legacy resume field defaults to a question. Explicit legacy `resume:true`
+continues work and `resume:false` saves an instruction for later. Answers use the
+same Codex login and selected per-agent model; their timeout is capped at 300s.

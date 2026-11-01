@@ -15,7 +15,8 @@ from .setup import ProjectSetup, SetupCheck, SetupInput
 
 class ChatInput(StrictModel):
     content: str = Field(min_length=1, max_length=4000)
-    resume: bool = True
+    resume: bool | None = None
+    mode: Literal["question", "instruction"] | None = None
 
 
 class IterationInput(StrictModel):
@@ -96,11 +97,13 @@ def management_router(manager: ExecutionManager, validated_body, mode: str) -> A
         data = await validated_body(request, ChatInput)
         if not data.content.strip():
             raise HTTPException(422, "Message must not be blank")
-        if data.resume and mode != "codex":
-            raise HTTPException(409, "Continuing an agent requires Codex mode")
-        return await guarded(
-            lambda: manager.conversations.send(identifier, data.content, data.resume)
-        )
+        intent = data.mode or ("instruction" if data.resume is not None else "question")
+        resume = data.resume if data.resume is not None else True
+        if (intent == "question" or resume) and mode != "codex":
+            raise HTTPException(409, "Agent chat runtime requires Codex mode")
+        if intent == "question":
+            return await guarded(lambda: manager.conversations.ask(identifier, data.content))
+        return await guarded(lambda: manager.conversations.send(identifier, data.content, resume))
 
     @router.get("/setup")
     async def setup_projects():

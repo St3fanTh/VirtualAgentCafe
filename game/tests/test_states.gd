@@ -17,7 +17,7 @@ func _init() -> void:
 	check(integrator.short_label() == "Integration", "Integration takes precedence over worker role names")
 	check(integrator.destination() == Vector2(193, 65), "Integrator has a separate workstation")
 	integrator.status = "agent.waiting"
-	check(integrator.destination() == Vector2(193, 145), "Integrator has a separate idle position")
+	check(integrator.destination() == Vector2(193, 85), "Integrator has a separate idle position")
 	integrator.free()
 	var state = EventState.new()
 	check(state.apply({"kind": "snapshot", "version": 1, "sequence": 0, "agents": [

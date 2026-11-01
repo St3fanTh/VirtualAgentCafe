@@ -79,6 +79,7 @@ var remote_name: LineEdit
 var chat_agent: OptionButton
 var chat_history: TextEdit
 var chat_input: TextEdit
+var instruction_input: TextEdit
 var chat_status: Label
 var tab_keys := ["Agents", "Markdown", "Workspaces", "Executions", "Setup", "Agent chat"]
 var setup_project: OptionButton
@@ -608,16 +609,18 @@ func received(_result: int, code: int, _headers: PackedStringArray, body: Packed
 		if str(data.get("agent", "")) == chosen(chat_agent):
 			var transcript := ""
 			for message in data.get("messages", []):
-				transcript += str(message.get("role", "")).to_upper() + " · " + str(message.get("timestamp", "")) + "\n" + str(message.get("content", "")) + "\n\n"
+				transcript += str(message.get("role", "")).to_upper() + " · " + str(message.get("mode", "instruction")).to_upper() + " · " + str(message.get("timestamp", "")) + "\n" + str(message.get("content", "")) + "\n\n"
 			if transcript != chat_history.text:
 				var scroll := chat_history.scroll_vertical
 				chat_history.text = transcript
 				chat_history.scroll_vertical = scroll
 			chat_status.text = str(data.get("state", "")) + " · " + str(data.get("integration", {}).get("status", "")) + "\n" + str(data.get("integration", {}).get("detail", ""))
+			chat_status.text += "\nQuestion: " + str(data.get("question", {}).get("status", "IDLE")) + " · " + str(data.get("question", {}).get("detail", ""))
 			if finished_action == "chat_send":
 				chat_status.text += " · " + str(data.get("delivery", ""))
-				if chat_input.text == str(completed.get("body", {}).get("content", "")):
-					chat_input.text = ""
+				var submitted_input: TextEdit = instruction_input if completed.get("body", {}).get("mode") == "instruction" else chat_input
+				if submitted_input.text == str(completed.get("body", {}).get("content", "")):
+					submitted_input.text = ""
 	elif finished_action in ["setup_projects", "setup_restore"]:
 		fill_options(setup_project, data.get("projects", []))
 		if not OS.get_environment("VAC_SETUP_PROJECT").is_empty():
@@ -1551,25 +1554,38 @@ func build_chat(parent_tabs: TabContainer) -> void:
 	chat_agent.item_selected.connect(func(_index):
 		chat_history.text = ""
 		load_chat())
-	chat_status = caption("Messages are private and saved. Running agents read them on their next attempt.")
+	chat_status = caption("Private conversation. Questions and work instructions are kept separate.")
 	panel.add_child(chat_status)
 	chat_history = TextEdit.new()
 	chat_history.editable = false
 	chat_history.wrap_mode = TextEdit.LINE_WRAPPING_BOUNDARY
 	chat_history.custom_minimum_size = Vector2(900, 380)
 	panel.add_child(chat_history)
+	var actions := card(row, "Question or work instruction", 600)
+	actions.add_child(caption("ASK A QUESTION · Read-only answer. No development run, commits, pushes or integration."))
 	chat_input = TextEdit.new()
-	chat_input.placeholder_text = "Clarify a requirement or explain how to unblock the agent…"
+	chat_input.placeholder_text = "Where is the script? How does this function work?"
 	chat_input.wrap_mode = TextEdit.LINE_WRAPPING_BOUNDARY
-	chat_input.custom_minimum_size = Vector2(900, 120)
-	panel.add_child(chat_input)
-	button(panel, "Send & continue", func():
-		if chosen(chat_agent).is_empty() or chat_input.text.strip_edges().is_empty():
-			set_notice("Select an agent and enter a message.", true)
-			return
-		call_api("chat_send", "/agents/" + chosen(chat_agent) + "/chat",
-			HTTPClient.METHOD_POST, {"content": chat_input.text, "resume": true}))
+	chat_input.custom_minimum_size = Vector2(500, 150)
+	actions.add_child(chat_input)
+	button(actions, "Ask question", func(): send_chat("question"))
+	actions.add_child(HSeparator.new())
+	actions.add_child(caption("GIVE AN INSTRUCTION · Continue development or unblock the agent. Successful worker results may trigger integration."))
+	instruction_input = TextEdit.new()
+	instruction_input.placeholder_text = "Fix the failing test using this requirement…"
+	instruction_input.wrap_mode = TextEdit.LINE_WRAPPING_BOUNDARY
+	instruction_input.custom_minimum_size = Vector2(500, 150)
+	actions.add_child(instruction_input)
+	button(actions, "Send instruction & continue", func(): send_chat("instruction"))
 	button(panel, "Refresh chat", load_chat)
+
+func send_chat(intent: String) -> void:
+	var editor: TextEdit = chat_input if intent == "question" else instruction_input
+	if chosen(chat_agent).is_empty() or editor.text.strip_edges().is_empty():
+		set_notice("Select an agent and enter a message in the selected field.", true)
+		return
+	call_api("chat_send", "/agents/" + chosen(chat_agent) + "/chat",
+		HTTPClient.METHOD_POST, {"content": editor.text, "mode": intent})
 
 func load_chat() -> void:
 	if not chosen(chat_agent).is_empty():

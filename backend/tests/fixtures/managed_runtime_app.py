@@ -5,7 +5,9 @@ import os
 from pathlib import Path
 
 from virtual_agent_cafe.main import create_app
+from virtual_agent_cafe.management import conversations
 from virtual_agent_cafe.management.model_catalog import ModelCatalog
+from virtual_agent_cafe.management.questions import QuestionAdapter, question_command
 from virtual_agent_cafe.management.sandbox import IsolatedCodexAdapter, Sandbox
 
 PROGRAM = """
@@ -34,6 +36,30 @@ class FixtureRuntime(IsolatedCodexAdapter):
         return self.sandbox.command(
             workspace, ["/usr/bin/python3", "-c", PROGRAM, str(workspace)], writable_git=False
         )
+
+
+class FixtureQuestion(QuestionAdapter):
+    def arguments(self, workspace):
+        program = """
+import sys, json
+from pathlib import Path
+prompt = sys.stdin.read()
+assert "Answer the user's question only" in prompt
+assert Path('/project/managed-result.txt').is_file()
+assert not Path('/project/.cafe/last-response.md').exists()
+Path(sys.argv[1]).write_text('The script is managed-result.txt.')
+print(json.dumps({'type': 'turn.started'}))
+print(json.dumps({'type': 'turn.completed'}))
+"""
+        return question_command(
+            self.sandbox,
+            workspace,
+            self.project,
+            ["/usr/bin/python3", "-c", program, str(workspace / ".cafe/last-response.md")],
+        )
+
+
+conversations.QuestionAdapter = FixtureQuestion
 
 
 app = create_app(

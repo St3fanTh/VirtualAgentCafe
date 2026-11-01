@@ -160,6 +160,8 @@ class ExecutionManager:
             if identifier in {"ada", "turing"}:
                 raise ValueError("Built-in cafe agents cannot be deleted")
             record = self.registry.get(identifier)
+            if identifier in self.conversations.running:
+                raise ValueError("Wait for the current chat answer before deleting this agent")
             if identifier in self.running or record["state"] == State.RUNNING:
                 raise ValueError("Stop the agent before deleting it")
             projects = []
@@ -206,10 +208,11 @@ class ExecutionManager:
             members = list(dict.fromkeys([*project.get("agents", []), project.get("integrator")]))
             members = [member for member in members if member]
             if identifier in self.integrations.running or any(
-                member in self.running for member in members
+                member in self.running or member in self.conversations.running for member in members
             ):
                 raise ValueError(
-                    "Stop all project agents and integration before deleting the project"
+                    "Stop all project agents/integration and wait for chat answers "
+                    "before deleting the project"
                 )
             active = {record["config"]["id"]: record for record in self.store.list("agents")}
             archived = {}
@@ -865,6 +868,7 @@ class ExecutionManager:
 
     async def close(self):
         self.closing = True
+        await self.conversations.close()
         await self.integrations.close()
         for identifier in list(self.running):
             await self.stop(identifier)

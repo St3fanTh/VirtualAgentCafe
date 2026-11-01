@@ -1488,3 +1488,35 @@
   and live WebSocket/selection smoke. Existing Starlette/httpx warning unchanged.
   UTF-8 size limits, path confinement, conflict detection and publication checks
   remain active. A genuinely oversized file still needs shortening/archiving.
+
+
+## Separate read-only questions from development instructions
+
+- Request: asking "where is the script?" must answer without restarting development
+  or triggering integration. Integrator idle position overlapped PEER EXCHANGE.
+- Added separate question/instruction fields and actions to Agent chat. Messages
+  carry a mode; questions never enter subsequent work instructions. The safe API
+  default is question; explicit legacy resume behavior remains compatible.
+- Added questions.py using the existing Codex adapter/model/auth with disposable
+  scratch space and a read-only project mount. Hide .cafe Git RPC and .git data;
+  no normal execution, Git watcher, recap/publication, bus status mutation or
+  integration scheduler. Private question state/history persist; close cancels
+  tasks and interrupted responses are marked on restart. Original work status and
+  latest execution remain intact. One question per agent; work may run concurrently.
+- Integrator idle destination moved from (193,145) to (193,85), above the exchange
+  label. Native state regression checks the distinct position.
+- Tests cover real namespace read/write prevention and hidden Git helper data,
+  answer/instruction separation, unchanged worker/integration/publication history,
+  safe API default, failures/cancellation, and actual GUI clicks/draft preservation.
+- Changed: management conversations/questions/api/execution; Godot management/
+  character; question tests, GUI fixture/input/management/state tests; management
+  documentation and this progress log.
+- Commit locator: git log --oneline --grep='feat: separate agent questions from work instructions'.
+- Verification: focused question/native GUI tests 11 PASS. Full scripts/check.sh
+  PASS: 247 pytest, Ruff/format, Godot import/state/headless, live WebSocket and
+  selection smoke. Existing Starlette/httpx deprecation warning unchanged.
+  Preserved the existing project-deletion error prefix required by regression
+  tests while adding the active-answer guard. Tests use isolated fixture runtimes;
+  no paid model calls or rendered visual inspection were performed.
+- Next: update the feature branch deployment, rebuild backend and reopen Godot;
+  verify real-model answers using the existing Codex login.

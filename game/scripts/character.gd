@@ -73,7 +73,7 @@ func short_label() -> String:
 
 func destination() -> Vector2:
 	if is_integrator():
-		return Vector2(193, 65) if status in ["agent.coding", "agent.thinking", "agent.started", "agent.testing"] or detail.begins_with("CLI:") else Vector2(193, 145)
+		return Vector2(193, 65) if status in ["agent.coding", "agent.thinking", "agent.started", "agent.testing"] or detail.begins_with("CLI:") else Vector2(193, 85)
 	var second := agent_id == "turing" or "frontend" in role_label.to_lower()
 	match status:
 		"agent.coding", "agent.thinking", "agent.started":
