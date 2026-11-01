@@ -32,30 +32,8 @@ jobs:
         run: bash scripts/ci-sandbox.sh
       - name: Ruff lint and formatting
         run: scripts/check.sh lint
-      - name: Backend API tests
-        run: scripts/check.sh pytest-backend
-      - name: Codex runtime tests
-        run: scripts/check.sh pytest-codex
-      - name: WebSocket reconnect tests
-        run: scripts/check.sh pytest-reconnect
-      - name: Role and messaging tests
-        run: scripts/check.sh pytest-roles
-      - name: Sandbox diagnostics tests
-        run: scripts/check.sh pytest-sandbox
-      - name: Agent deletion tests
-        run: scripts/check.sh pytest-agent-deletion
-      - name: Management definition tests
-        run: scripts/check.sh pytest-management-definitions
-      - name: Project deletion tests
-        run: scripts/check.sh pytest-project-deletion
-      - name: Project document tests
-        run: scripts/check.sh pytest-project-documents
-      - name: Project setup tests
-        run: scripts/check.sh pytest-project-setup
-      - name: Execution, Git and team integration tests
-        run: scripts/check.sh pytest-execution
-      - name: Godot UI API and interaction tests
-        run: scripts/check.sh pytest-gui
+      - name: Complete backend, controller and GUI regression suite
+        run: scripts/check.sh pytest
       - name: Godot project import
         run: scripts/check.sh godot-import
       - name: Godot state tests

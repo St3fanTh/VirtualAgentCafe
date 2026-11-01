@@ -1520,3 +1520,25 @@
   no paid model calls or rendered visual inspection were performed.
 - Next: update the feature branch deployment, rebuild backend and reopen Godot;
   verify real-model answers using the existing Codex login.
+
+## Main release and streamlined getting started
+
+- User explicitly requested publishing the tested feature work to main and a README
+  centered on prerequisites, the Python starter, Godot and the day-to-day workflow.
+- Rewrote README in German: host/container prerequisites, existing Git folder,
+  AGENTS.md/PLANNING.md, native chooser, SSH/login, setup options, exact GUI actions,
+  worker publication, integration/controller checks, changelogs, question/instruction
+  separation and next iterations. Local backend setup is now developer-only.
+- Replaced CI's fixed test-file subsets with the complete pytest suite so model,
+  Godot validation, iteration, retry and question regressions cannot be omitted.
+  Rendered UI, Compose validation and container smoke checks remain required.
+- Remote main is an ancestor of this feature branch; planned publication is a
+  normal fast-forward preserving all history. No force-push or credential changes.
+- Files: README.md, .github/workflows/ci.yml, PROGRESS.md.
+- README local links and starter --help verified. Prior feature CI 745bc15 passed
+  on GitHub (run 41350169955). Final local/release results follow below.
+- Commit locator: git log --oneline --grep='docs: streamline setup and publish complete CI coverage'.
+- Final local verification: scripts/check.sh PASS, 247 pytest in 287.33s, Ruff and
+  formatting, Godot import/state/headless and live WebSocket/selection smoke PASS.
+  One pre-existing Starlette/httpx warning. Hosted rendered UI/Compose/container
+  verification will run on the published commit; no local Docker daemon available.
