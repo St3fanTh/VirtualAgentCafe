@@ -13,6 +13,7 @@ class RunResult:
     success: bool
     reason: str
     test_runs: tuple[dict, ...] = ()
+    implementation_complete: bool = False
 
 
 class AgentAdapter(Protocol):

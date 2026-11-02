@@ -409,7 +409,16 @@ class GitService:
             config.git.remote_name,
             f"{expected_commit or 'HEAD'}:refs/heads/{branch}",
         )
+        await self.verify_remote_commit(path, config.git.remote_name, branch, commit)
         return {"branch": branch, "commit": commit, "remote": config.git.remote_name}
+
+    async def verify_remote_commit(self, path, remote, branch, commit):
+        result = await self.run(path, "ls-remote", "--", remote, "refs/heads/" + branch)
+        if not result.split() or result.split()[0] != commit:
+            raise ValueError(
+                "Remote branch does not match the published commit; "
+                "verify remote state before retrying"
+            )
 
     async def require_clean(self, path: Path):
         dirty = await self.run(
@@ -451,12 +460,24 @@ class GitService:
         except GitOperationError:
             return False
 
+    async def require_commit(self, workspace: str, commit: str):
+        if not re.fullmatch(r"[a-f0-9]{40,64}", commit):
+            raise ValueError("Integration requires exact published commits")
+        path = await self.repository(workspace)
+        try:
+            await self.run(path, "cat-file", "-e", commit + "^{commit}")
+        except GitOperationError:
+            raise ValueError(
+                "Required commit is unavailable in the integration repository: " + commit
+            ) from None
+
     async def verify_integration(self, workspace: str, commits: list[str]):
         path = await self.repository(workspace)
         await self.require_clean(path)
         if await self.merge_pending(workspace):
             raise ValueError("Integration merge is unfinished; resolve, stage and commit it")
         for commit in commits:
+            await self.require_commit(workspace, commit)
             if not re.fullmatch(r"[a-f0-9]{40,64}", commit):
                 raise ValueError("Integration requires exact published commits")
             try:
@@ -493,6 +514,7 @@ class GitService:
             config.git.remote_name,
             f"{commit}:refs/heads/main",
         )
+        await self.verify_remote_commit(path, config.git.remote_name, "main", commit)
         return {
             "branch": "main",
             "commit": commit,

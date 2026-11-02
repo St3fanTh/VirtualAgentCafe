@@ -43,11 +43,13 @@ async def publication_project(tmp_path, monkeypatch):
     commands = []
 
     async def local_transport(path, *arguments, **kwargs):
-        if "push" in arguments:
-            commands.append(arguments)
+        operation = git.operation(arguments)
+        if operation in {"push", "ls-remote"}:
+            if operation == "push":
+                commands.append(arguments)
             # Only the transport is replaced: run real Git push inside the same
             # namespace against an explicitly mounted temporary bare repository.
-            offset = arguments.index("push")
+            offset = arguments.index(operation)
             arguments = (
                 *arguments[:offset],
                 "-c",

@@ -1,6 +1,8 @@
 import asyncio
+import hashlib
 import json
 import os
+import re
 import shlex
 import shutil
 import signal
@@ -61,6 +63,46 @@ def is_test_command(command: str, depth: int = 0) -> bool:
     return bool(test_command_label(command, depth))
 
 
+def test_scope_tokens(command: str, depth: int = 0):
+    """Normalize presentation flags, but retain cwd, interpreter, selectors and config."""
+    if depth > 3:
+        return command
+    try:
+        lexer = shlex.shlex(command, posix=True, punctuation_chars=";&|")
+        lexer.whitespace_split = True
+        tokens = list(lexer)
+    except ValueError:
+        return command
+    groups = [[]]
+    for token in tokens:
+        if token and all(char in ";&|" for char in token):
+            groups.extend([[token], []])
+        else:
+            groups[-1].append(token)
+    for group in groups:
+        index = 0
+        while index < len(group) and ("=" in group[index] or group[index] == "env"):
+            index += 1
+        if index == len(group):
+            continue
+        executable = Path(group[index]).name
+        if executable in {"bash", "sh", "zsh"}:
+            for offset in range(index + 1, len(group) - 1):
+                if group[offset].startswith("-") and "c" in group[offset]:
+                    group[offset + 1] = test_scope_tokens(group[offset + 1], depth + 1)
+                    break
+        elif executable in {"pytest", "py.test"} or (
+            executable.startswith("python") and group[index + 1 : index + 3] == ["-m", "pytest"]
+        ):
+            group[index + 1 :] = [
+                value
+                for value in group[index + 1 :]
+                if value not in {"--quiet", "--verbose", "--no-header", "--no-summary"}
+                and not re.fullmatch(r"-(?:q+|v+)", value)
+            ]
+    return groups
+
+
 MAX_LINE = 1024 * 1024
 
 
@@ -113,7 +155,16 @@ class CodexObserver:
                         f"CLI: {test_label} · RUNNING" if testing else "CLI: running shell command",
                     )
                 elif kind == "item.completed":
-                    failed = item.get("exit_code") != 0 or item.get("status") == "failed"
+                    godot_error = bool(
+                        test_label
+                        and test_label.startswith("Godot")
+                        and re.search(
+                            r"(?m)^(?:SCRIPT ERROR:|ERROR:)", str(item.get("aggregated_output", ""))
+                        )
+                    )
+                    failed = (
+                        item.get("exit_code") != 0 or item.get("status") == "failed" or godot_error
+                    )
                     if failed:
                         self.command_warnings += 1
                     if testing:
@@ -123,9 +174,20 @@ class CodexObserver:
                             str(item.get("aggregated_output", "")),
                         )
                         diagnostic["passed"] = not failed
+                        if godot_error:
+                            diagnostic["category"] = "TEST_FAILURE"
+                            diagnostic["causes"].append("Godot reported a script or runtime error")
                         self.test_runs.append(diagnostic)
                         self.test_runs = self.test_runs[-100:]
-                        framework = test_label.removeprefix("python -m ")
+                        # A passing subset must not clear a failure in a different cwd/suite.
+                        scope = json.dumps(
+                            [test_scope_tokens(str(item.get("command", ""))), item.get("cwd")]
+                        )
+                        framework = hashlib.sha256(scope.encode()).hexdigest()
+                        diagnostic["scope_sha256"] = framework
+                        for prior in self.test_runs[:-1]:
+                            if prior.get("scope_sha256") == framework:
+                                prior["superseded"] = True
                         if failed:
                             self.failed_frameworks.add(framework)
                             cause = "; ".join(diagnostic["causes"]) or "Test command failed"
@@ -172,11 +234,17 @@ class CodexObserver:
 
 class CodexAdapter:
     def __init__(
-        self, executable: str | None = None, timeout: float = 300, *, model: str | None = None
+        self,
+        executable: str | None = None,
+        timeout: float = 300,
+        *,
+        model: str | None = None,
+        evidence_sink=None,
     ):
         self.executable = executable or shutil.which("codex") or "codex"
         self.timeout = timeout
         self.model = model
+        self.evidence_sink = evidence_sink
 
     def arguments(self, workspace: Path) -> list[str]:
         return [
@@ -291,6 +359,13 @@ class CodexAdapter:
                         raise ValueError("Invalid Codex event")
                     observer.consume(data)
                     item = data.get("item", {})
+                    if (
+                        self.evidence_sink
+                        and data.get("type") == "item.completed"
+                        and item.get("type") == "command_execution"
+                        and is_test_command(str(item.get("command", "")))
+                    ):
+                        await self.evidence_sink(item, workspace)
                     if data.get("type") == "item.completed" and item.get("type") in {
                         "command_execution",
                         "file_change",
@@ -322,6 +397,9 @@ class CodexAdapter:
                         False,
                         "Unresolved tests: " + "; ".join(observer.failed_diagnostics.values()),
                         tuple(observer.test_runs),
+                        implementation_complete=observer.turn_complete
+                        and not observer.fatal
+                        and not observer.failed_patch,
                     )
                 if observer.failed_patch:
                     return RunResult(

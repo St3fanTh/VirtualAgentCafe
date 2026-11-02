@@ -1542,3 +1542,58 @@
   formatting, Godot import/state/headless and live WebSocket/selection smoke PASS.
   One pre-existing Starlette/httpx warning. Hosted rendered UI/Compose/container
   verification will run on the published commit; no local Docker daemon available.
+
+## Reliable controller validation and workflow evidence
+
+- Requested: investigate mismatched backend/frontend test reports, preserve exact
+  validation evidence, distinguish infrastructure from defects, bound retries,
+  recognize commits/integration/acceptance and reuse unchanged successful checks.
+- Incident limit: 7f10fb7 and 063bd3f are not available locally; no project mounts
+  containing them were present. Their 71-test/Godot claims and desktop acceptance
+  remain unverified, not attributed to a controller bug without their evidence.
+- Reproduced against the prior observer: backend pytest exit 2 followed by frontend
+  pytest exit 0 incorrectly reported success (baseline true, fixed false). Failure
+  bookkeeping keyed only by framework; now command/cwd scopes and superseded
+  attempts are explicit. Godot script errors also fail zero-exit CLI invocations.
+- Controller previously used sys.executable (potentially host-only), discarded all
+  but a merged output tail, reported all shared failures alike, and sent environment
+  errors into speculative repair. Added sandbox-runtime/explicit project-venv
+  selection, declared pytest paths, separate bounded private stdout/stderr/context,
+  exact submitted SHA checks, evidence-based categories and infrastructure stops.
+- Passing check cache includes commit/plan/requirements/scope/environment; ignored
+  dependencies disable reuse. Commit/dirty/environment checks still apply on hits.
+  No arbitrary affected-test skipping or worker-claim-as-validation shortcut.
+- Commit existence and ancestry remain required. Push/promotion now read back the
+  remote tip. Additive workflow dimensions preserve existing API states and track
+  implementation, validation, integration and manual product acceptance separately.
+  Manual post-publication product review does not globally block independent work.
+- Files: adapters base/codex/diagnostics; management validation/execution/integration/
+  git/sandbox/api; Godot execution report; test_validation_reliability and local
+  publication fixtures; docs/controller-validation.md, PROGRESS.md.
+- Initial focused run: 75 passed; two publication fixtures lacked local ls-remote
+  transport after adding remote verification. Updated those fixtures (actual Git
+  verification retained). First new regression/publication set: 20 passed.
+  Container restart interrupted the subsequent run; final verification follows.
+- Commit locator: git log --oneline --grep='fix: preserve controller validation evidence and workflow states'.
+- Focused controller/runtime/Godot/team/publication suite: 99 PASS. Final new
+  reliability suite after timeout/controller-error diagnostics: 24 PASS. The full
+  check run started before the last two added diagnostic cases, so those have
+  separate focused evidence rather than an inflated full-suite count.
+- Remaining limits: no access to the two incident commits; provider CLI streams
+  are combined and may already be truncated by Codex. Controller streams retain
+  up to 1 MiB each and fail explicitly on overflow. Full-commit integration checks
+  are conservative; ignored dependency/build trees disable cache reuse. Manual
+  product acceptance is recorded/reviewed via the existing authenticated API;
+  automatic main promotion remains opt-in and is not a desktop-acceptance claim.
+- Full regression initially found one old observer test assuming pytest executable
+  entrypoints imply the same interpreter. Strengthened it: another interpreter
+  cannot clear the failure; a successful same-scope rerun can. Presentation-only
+  pytest verbosity flags normalize to the same scope, selectors/config do not.
+  Observer + reliability suite 65 PASS; final roles + reliability suite 33 PASS.
+- Additional files: test_roles_messaging (stronger interpreter/scope assertion),
+  README documentation link. Final full check rerun is recorded below.
+- Final scripts/check.sh PASS on the completed code: 272 pytest passed in 349.09s;
+  Ruff/format, Godot import/state/headless and live WebSocket/selection smoke PASS.
+  Existing Starlette/httpx deprecation warning only. Documentation links and
+  git diff --check PASS. No external model calls or incident-project acceptance
+  were asserted. Publishing this milestone to the feature branch, not main.

@@ -154,6 +154,14 @@ def test_other_test_framework_cannot_hide_failing_suite():
             "item": {"type": "command_execution", "command": "python3 -m pytest", "exit_code": 0},
         }
     )
+    # Different executable entrypoints can select different Python environments.
+    assert not observer.successful
+    observer.consume(
+        {
+            "type": "item.completed",
+            "item": {"type": "command_execution", "command": "pytest -q", "exit_code": 0},
+        }
+    )
     assert observer.successful
 
 

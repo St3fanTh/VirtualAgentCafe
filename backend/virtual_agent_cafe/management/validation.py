@@ -2,9 +2,11 @@
 
 import asyncio
 import hashlib
+import importlib.metadata
 import json
 import os
 import re
+import shutil
 import signal
 import sys
 from datetime import UTC, datetime
@@ -25,6 +27,18 @@ class Check(StrictModel):
     kind: Literal["pytest", "godot", "npm"]
     directory: str = Field(default=".", max_length=256)
     script: str | None = Field(default=None, max_length=256)
+    targets: list[str] = Field(default_factory=list, max_length=50)
+    python: Literal["runtime", "project-venv"] = "runtime"
+
+    @model_validator(mode="after")
+    def supported_scope(self):
+        if self.script is not None and self.kind != "godot":
+            raise ValueError("script is only supported for Godot; use targets for pytest")
+        if self.python != "runtime" and self.kind != "pytest":
+            raise ValueError("python selection is only supported for pytest")
+        if self.targets and self.kind != "pytest":
+            raise ValueError("targets are only supported for pytest")
+        return self
 
 
 class Requirement(StrictModel):
@@ -34,6 +48,7 @@ class Requirement(StrictModel):
 
 
 class TestPlan(StrictModel):
+    manual_acceptance: list[str] = Field(default_factory=list, max_length=30)
     source_sha256: str = Field(pattern=r"^[a-f0-9]{64}$")
     requirements: list[Requirement] = Field(min_length=1, max_length=100)
     checks: list[Check] = Field(min_length=1, max_length=20)
@@ -83,8 +98,15 @@ class ValidationTrace:
         )
         self.save()
 
-    def reject(self, rule, message):
-        self.report.update(passed=False, failed_rule=rule)
+    def reject(self, rule, message, *, infrastructure=None):
+        if infrastructure is None:
+            infrastructure = (
+                rule.startswith("git.")
+                or rule.endswith(".blob_lookup")
+                or rule == "pytest.interpreter"
+            )
+        category = "VALIDATION_INFRA_ERROR" if infrastructure else "VALIDATION_FAILED"
+        self.report.update(passed=False, failed_rule=rule, state=category)
         self.record(rule, outcome="failed")
         raise ValidationRuleError(f"{rule}: {message}")
 
@@ -101,11 +123,24 @@ async def validate(manager, config, run: dict, workspace: Path) -> dict:
     except ValidationRuleError:
         raise
     except ValueError as error:
-        trace.reject(trace.rule, str(error))
-    except OSError:
-        trace.reject(trace.rule, "Validation filesystem or executable access failed")
+        trace.reject(
+            trace.rule,
+            str(error),
+            infrastructure=trace.rule.startswith("git.")
+            or trace.rule.endswith(".blob_lookup")
+            or trace.rule == "pytest.interpreter",
+        )
     except TimeoutError:
-        trace.reject(trace.rule, "Validation timed out")
+        trace.reject(trace.rule, "Validation timed out", infrastructure=True)
+    except OSError:
+        trace.reject(
+            trace.rule, "Validation filesystem or executable access failed", infrastructure=True
+        )
+    except Exception as error:
+        trace.record("controller.exception", exception_type=type(error).__name__)
+        trace.reject(
+            "controller.exception", "Controller validation failed unexpectedly", infrastructure=True
+        )
 
 
 async def _validate(manager, config, run, workspace, trace):
@@ -126,6 +161,11 @@ async def _validate(manager, config, run, workspace, trace):
         not expected or ref == expected,
         "git.branch",
         "Checked-out branch differs from the submitted integration branch",
+    )
+    trace.require(
+        not run.get("submitted_commit") or head == run["submitted_commit"],
+        "git.submitted_commit",
+        "Workspace HEAD differs from the submitted commit",
     )
     # Read the frozen commit tree, not the index (ls-files also includes staged additions).
     trace.rule = "git.commit_tree"
@@ -197,8 +237,13 @@ async def _validate(manager, config, run, workspace, trace):
         source_sha256=plan.source_sha256,
         plan_sha256=hashlib.sha256(path.read_bytes()).hexdigest(),
         requirements=[r.model_dump() for r in plan.requirements],
+        manual_acceptance=plan.manual_acceptance,
     )
+    trace.rule = "environment.inspect"
+    environment = await asyncio.to_thread(environment_identity)
+    trace.report["environment"] = environment
     results = trace.report["checks"]
+    pending_cache = []
     for check in plan.checks:
         trace.context = {
             "selected_ref": "HEAD",
@@ -227,7 +272,31 @@ async def _validate(manager, config, run, workspace, trace):
                 "pytest.committed_tests",
                 "Pytest validation requires committed test files",
             )
-            command = [sys.executable, "-m", "pytest", "-q", "-p", "no:cacheprovider"]
+            interpreter = runtime_python()
+            if check.python == "project-venv":
+                trace.rule = "pytest.interpreter"
+                # Venv interpreters commonly symlink to the approved runtime.
+                interpreter = str(ApprovedFiles(directory).path(".venv/bin") / "python")
+                resolved = await asyncio.to_thread(Path(interpreter).resolve)
+                trace.require(
+                    any(
+                        resolved.is_relative_to(root)
+                        for root in (workspace, Path("/usr"), Path("/bin"), Path("/opt/venv"))
+                    ),
+                    trace.rule,
+                    "Project interpreter resolves outside approved runtime mounts",
+                )
+                trace.require(
+                    await asyncio.to_thread(Path(interpreter).is_file),
+                    trace.rule,
+                    "Project Python interpreter is missing",
+                )
+            command = [interpreter, "-m", "pytest", "-q", "-p", "no:cacheprovider"]
+            for target in check.targets:
+                trace.rule = "pytest.target"
+                target_path = ApprovedFiles(directory).path(target)
+                trace.require(target_path.exists(), trace.rule, "Pytest target is absent")
+                command.append("./" + target_path.relative_to(directory).as_posix())
         elif check.kind == "godot":
             declared = check.script if check.script is not None else "tests/test_states.gd"
             script = declared.removeprefix("res://")
@@ -277,51 +346,89 @@ async def _validate(manager, config, run, workspace, trace):
             writable_git=False,
             network=False,
         )
+        # Tests must not read run-specific RPC/instruction artifacts or credentials.
+        if (workspace / ".cafe").exists():
+            offset = sandbox.index("--chdir")
+            sandbox[offset:offset] = ["--tmpfs", str(workspace / ".cafe")]
         # Sandbox root remains the entire integration workspace; chdir is explicit.
         sandbox[sandbox.index("--chdir") + 1] = str(directory)
-        process = await asyncio.create_subprocess_exec(
-            *sandbox,
-            start_new_session=True,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.STDOUT,
+        context = {
+            "commit": head,
+            "repository_root": root,
+            "cwd": str(directory),
+            "command": command,
+            "check": check.model_dump(),
+            "environment_sha256": environment["sha256"],
+            "network": False,
+            "timeout_seconds": min(config.execution.timeout_seconds, 300),
+        }
+        # Ignored dependencies/build products can change outside Git. Fail closed:
+        # do not reuse results when such inputs exist (except controller-only .cafe).
+        ignored = await manager.git.run(
+            workspace,
+            "ls-files",
+            "--others",
+            "--ignored",
+            "--exclude-standard",
+            "-z",
+            "--",
+            ".",
+            ":(exclude).cafe",
         )
-        digest = hashlib.sha256()
-        tail = b""
-        try:
-            async with asyncio.timeout(min(config.execution.timeout_seconds, 300)):
-                size = 0
-                while chunk := await process.stdout.read(65536):
-                    size += len(chunk)
-                    if size > 1024 * 1024:
-                        raise ValueError("Shared test output exceeds limit")
-                    digest.update(chunk)
-                    tail = (tail + chunk)[-65536:]
-                code = await process.wait()
-        finally:
+        cache_key = hashlib.sha256(
+            json.dumps(
+                ["validation-v2", context, trace.report["plan_sha256"], plan.source_sha256],
+                sort_keys=True,
+            ).encode()
+        ).hexdigest()
+        cached = None
+        if not ignored:
             try:
-                os.killpg(process.pid, signal.SIGKILL)
-            except ProcessLookupError:
+                cached = manager.store.get("validation_cache", cache_key)
+            except KeyError:
                 pass
-            await process.wait()
-        output = tail.decode(errors="replace")
-        godot_error = check.kind == "godot" and bool(
-            re.search(r"(?m)^(?:SCRIPT ERROR:|ERROR:)", output)
-        )
-        passed = code == 0 and not godot_error
-        diagnostics = test_diagnostic(check.kind, code, output)
-        diagnostics["passed"] = passed
-        if godot_error:
-            diagnostics["causes"].append("Godot reported a script or runtime error")
-        results.append(
-            {
+        if cached:
+            result = {**cached["result"], "cached": True}
+        else:
+            capture = await capture_check(sandbox, context["timeout_seconds"])
+            output = capture["stdout"] + "\n" + capture["stderr"]
+            code = capture["exit_code"]
+            diagnostics = test_diagnostic(check.kind, code, output)
+            godot_error = check.kind == "godot" and bool(
+                re.search(r"(?m)^(?:SCRIPT ERROR:|ERROR:)", output)
+            )
+            passed = code == 0 and not godot_error and not capture["error"]
+            diagnostics["passed"] = passed
+            if capture["error"]:
+                diagnostics.update(category="ENVIRONMENT_ERROR", causes=[capture["error"]])
+            elif godot_error:
+                diagnostics["category"] = "TEST_FAILURE"
+                diagnostics["causes"].append("Godot reported a script or runtime error")
+            result = {
                 "id": check.id,
                 "kind": check.kind,
                 "exit_code": code,
                 "passed": passed,
-                "output_sha256": digest.hexdigest(),
+                "output_sha256": hashlib.sha256(output.encode()).hexdigest(),
                 "diagnostics": diagnostics,
+                "context": context,
+                "cached": False,
             }
-        )
+            if passed and not ignored:
+                pending_cache.append((cache_key, result, capture))
+            # Raw output stays in a separate authenticated, private endpoint.
+            manager.store.put(
+                "validation_outputs", run["id"] + ":" + check.id, {**capture, "context": context}
+            )
+        if cached:
+            manager.store.put(
+                "validation_outputs",
+                run["id"] + ":" + check.id,
+                {**cached["capture"], "context": context, "cached": True},
+            )
+        results.append(result)
+        passed, code = result["passed"], result["exit_code"]
+        trace.save()
         manager.emit(
             run,
             EventType.TESTING if passed else EventType.ERROR,
@@ -335,11 +442,111 @@ async def _validate(manager, config, run, workspace, trace):
     )
     trace.rule = "workspace.clean_after_tests"
     await manager.git.require_clean(workspace)
-    trace.require(
-        all(check["passed"] for check in results),
-        "check.result",
-        "Shared requirements tests failed; main was not changed",
-    )
-    trace.report["passed"] = True
+    if environment != await asyncio.to_thread(environment_identity):
+        trace.reject(
+            "environment.changed",
+            "Runtime dependencies changed during validation",
+            infrastructure=True,
+        )
+    for key, result, capture in pending_cache:
+        manager.store.put("validation_cache", key, {"result": result, "capture": capture})
+    if not all(check["passed"] for check in results):
+        failures = [check for check in results if not check["passed"]]
+        infrastructure = any(c["diagnostics"]["category"] != "TEST_FAILURE" for c in failures)
+        detail = "; ".join(
+            f"{c['id']}: {c['diagnostics']['category']} (exit {c['exit_code']})" for c in failures
+        )
+        trace.reject(
+            "check.result", detail + "; main was not changed", infrastructure=infrastructure
+        )
+    trace.report.update(passed=True, state="VALIDATION_PASSED")
     trace.record("validation.complete", outcome="passed")
     return trace.report
+
+
+def runtime_python():
+    # Match Sandbox.command's fixed PATH, never a host-only controller virtualenv.
+    for location in ("/opt/venv/bin/python3", "/usr/local/bin/python3", "/usr/bin/python3"):
+        if Path(location).is_file():
+            return location
+    raise OSError("Approved Python runtime unavailable")
+
+
+def environment_identity():
+    """Conservative local runtime identity, including installed package file metadata."""
+    packages = sorted(
+        (d.metadata.get("Name", ""), d.version) for d in importlib.metadata.distributions()
+    )
+    files = []
+    for directory in {Path(sys.prefix), Path("/opt/venv"), Path("/usr/local/lib/node_modules")}:
+        if directory.exists() and directory != Path("/usr"):
+            for path in sorted(directory.rglob("*")):
+                if path.is_file() and "__pycache__" not in path.parts:
+                    stat = path.stat()
+                    files.append((str(path), stat.st_size, stat.st_mtime_ns, stat.st_ctime_ns))
+    tools = {}
+    for name in (runtime_python(), "godot", "node", "npm", "bwrap"):
+        path = shutil.which(name, path="/opt/venv/bin:/usr/local/bin:/usr/bin:/bin")
+        tools[name] = hashlib.sha256(Path(path).read_bytes()).hexdigest() if path else None
+    for file in ("/etc/os-release", "/var/lib/dpkg/status"):
+        if Path(file).is_file():
+            tools[file] = hashlib.sha256(Path(file).read_bytes()).hexdigest()
+    identity = {
+        "python": runtime_python(),
+        "version": sys.version,
+        "packages": packages,
+        "tools": tools,
+        "platform": tuple(os.uname()),
+    }
+    digest = hashlib.sha256(json.dumps([identity, files], sort_keys=True).encode()).hexdigest()
+    return {"runtime_python": runtime_python(), "controller_version": sys.version, "sha256": digest}
+
+
+async def capture_check(command, seconds):
+    """Drain both pipes, retain private output, and make bounds/timeouts explicit."""
+    chunks = {"stdout": bytearray(), "stderr": bytearray()}
+    result = {"exit_code": None, "error": None, "truncated": False}
+    process = None
+
+    async def read(stream, name):
+        while data := await stream.read(65536):
+            remaining = 1024 * 1024 - len(chunks[name])
+            chunks[name].extend(data[:remaining])
+            if len(data) > remaining:
+                result["truncated"] = True
+                raise ValueError("Validation output exceeds 1 MiB per stream; output truncated")
+
+    readers = []
+    try:
+        process = await asyncio.create_subprocess_exec(
+            *command,
+            start_new_session=True,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        readers = [
+            asyncio.create_task(read(process.stdout, "stdout")),
+            asyncio.create_task(read(process.stderr, "stderr")),
+        ]
+        async with asyncio.timeout(seconds):
+            await asyncio.gather(*readers)
+            result["exit_code"] = await process.wait()
+    except TimeoutError:
+        result["error"] = "Validation timed out"
+    except OSError:
+        result["error"] = "Validation executable or sandbox could not be started"
+    except ValueError as error:
+        result["error"] = str(error)
+    finally:
+        if process:
+            try:
+                os.killpg(process.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+            await process.wait()
+            result["exit_code"] = process.returncode
+        for reader in readers:
+            if not reader.done():
+                reader.cancel()
+        await asyncio.gather(*readers, return_exceptions=True)
+    return {**result, **{name: value.decode(errors="replace") for name, value in chunks.items()}}

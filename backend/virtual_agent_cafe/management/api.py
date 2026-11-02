@@ -337,6 +337,20 @@ def management_router(manager: ExecutionManager, validated_body, mode: str) -> A
     async def execution(execution: str):
         return await guarded(lambda: asyncio.to_thread(manager.store.get, "executions", execution))
 
+    @router.get("/executions/{execution}/runtime-test-output")
+    async def runtime_test_output(execution: str):
+        return await guarded(
+            lambda: asyncio.to_thread(manager.store.get, "runtime_test_outputs", execution)
+        )
+
+    @router.get("/executions/{execution}/validation-output/{check}")
+    async def validation_output(execution: str, check: str):
+        return await guarded(
+            lambda: asyncio.to_thread(
+                manager.store.get, "validation_outputs", execution + ":" + check
+            )
+        )
+
     @router.get("/executions/{execution}/logs")
     async def logs(execution: str, after: int = 0):
         async def read():

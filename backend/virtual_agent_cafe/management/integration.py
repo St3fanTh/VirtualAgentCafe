@@ -5,7 +5,7 @@ import hashlib
 import json
 from uuid import uuid4
 
-from .config import AgentConfig, State, TaskState
+from .config import AgentConfig, State
 from .git import GitOperationError
 from .project_documents import (
     ProjectDocumentInput,
@@ -44,6 +44,12 @@ Create and commit validation/plan.json with this schema:
 Kinds: pytest (python -m pytest), npm (npm test with CI=1), godot (headless test
 script; add "script": "tests/test_states.gd"). Directories are workspace relative.
 Declare every applicable suite, including frontend/backend/integration suites.
+For pytest, optional "targets": ["tests"] declares the exact paths relative to directory.
+The default interpreter follows the sandbox runtime PATH. Optional "python": "project-venv"
+selects <directory>/.venv/bin/python explicitly. Dependencies must exist before validation;
+network is disabled. Do not rely on shell activation or a different working directory.
+Optional "manual_acceptance": ["Desktop acceptance by the user"] tracks product review
+AFTER the explicitly authorized automated main publication; it does not waive tests.
 All requirements must map to checks. Commit tests and plan with the existing
 python3 .cafe/git.py helper. Run all suites after the final code change.
 The controller reruns every declared suite without model/SSH credentials or network.
@@ -305,6 +311,10 @@ class Integrations:
                 base = await manager.git.fetch_main(config)
                 commits = [base, *(r["published"]["commit"] for r in data["runs"])]
                 workspace = manager.workspaces.get(config.workspace)
+                for commit in commits:
+                    await manager.git.require_commit(config.workspace, commit)
+                record["integration"]["required_commits"] = commits
+                manager.store.put("projects", identifier, record)
                 recovery = await manager.git.merge_pending(config.workspace)
                 try:
                     await manager.git.require_clean(workspace)
@@ -323,6 +333,7 @@ class Integrations:
                     "status": "RUNNING",
                     "signature": data["signature"],
                     "worker_runs": [r["id"] for r in data["runs"]],
+                    "required_commits": commits,
                     "base": base,
                     "detail": "Integration agent resolving preserved edits or merge conflicts"
                     if recovery
@@ -339,12 +350,18 @@ class Integrations:
                 attempts.append(run["id"])
                 if result.get("promotion") == "PROMOTED" or result["status"] == State.CANCELLED:
                     break
+                if result.get("workflow", {}).get("validation") == "VALIDATION_INFRA_ERROR":
+                    # No evidence of a code defect: do not spend repair attempts changing code.
+                    break
                 evidence = {
                     "detail": result.get("detail"),
                     "validation_rule": result.get("validation", {}).get("failed_rule"),
                     "tests": result.get("test_runs", []),
                     "checks": [
-                        {key: value for key, value in check.items() if key != "output_sha256"}
+                        {
+                            key: check.get(key)
+                            for key in ("id", "kind", "exit_code", "passed", "diagnostics")
+                        }
                         for check in result.get("validation", {}).get("checks", [])
                     ],
                 }
@@ -383,23 +400,48 @@ class Integrations:
             )
             detail = result["detail"]
             if final_status == "NEEDS_INPUT":
-                detail = "Repair attempts stopped. Use Agent chat to clarify or unblock: " + detail
+                if result.get("workflow", {}).get("validation") == "VALIDATION_INFRA_ERROR":
+                    detail = (
+                        "Validation infrastructure or unclassified blocker; inspect private output "
+                        "and runtime configuration before retrying: " + detail
+                    )
+                else:
+                    detail = (
+                        "Repair attempts stopped. Use Agent chat to clarify or unblock: " + detail
+                    )
             record["integration"].update(
                 status=final_status,
+                integration_state="INTEGRATED"
+                if final_status == "PROMOTED"
+                else "INTEGRATION_FAILED",
                 execution=run["id"],
                 detail=detail[:512],
+                validation_state=result.get("workflow", {}).get("validation", "PENDING"),
+                acceptance=result.get("workflow", {}).get("acceptance", "UNVERIFIED"),
                 attempts=attempts,
                 attempt=len(attempts),
             )
+            for worker in data["runs"]:
+                worker.setdefault("workflow", {})["integration"] = record["integration"][
+                    "integration_state"
+                ]
+                worker["last_integration_execution"] = run["id"]
+                manager.store.put("executions", worker["id"], worker)
             if result.get("promotion") == "PROMOTED":
                 for worker in data["runs"]:
                     worker.update(
-                        acceptance="AUTO_VALIDATED",
-                        task_state=TaskState.COMPLETED,
+                        acceptance=result["acceptance"],
+                        task_state=result["task_state"],
                         integration_execution=run["id"],
                     )
+                    worker.setdefault("workflow", {}).update(
+                        integration="INTEGRATED",
+                        validation="VALIDATION_PASSED",
+                        acceptance=result.get("workflow", {}).get("acceptance", "ACCEPTED"),
+                    )
+                    worker["integrated_commit"] = result["promoted"]["commit"]
                     manager.store.put("executions", worker["id"], worker)
-                    manager.registry.update(worker["agent_id"], task_state=TaskState.COMPLETED)
+                    manager.registry.update(worker["agent_id"], task_state=result["task_state"])
             manager.store.put("projects", identifier, record)
         except asyncio.CancelledError:
             record = manager.store.get("projects", identifier)
@@ -416,6 +458,7 @@ class Integrations:
             record["integration"] = {
                 **record.get("integration", {}),
                 "status": "FAILED",
+                "integration_state": "INTEGRATION_FAILED",
                 "detail": str(error)[:256]
                 if isinstance(error, ValueError)
                 else "Integration preparation failed; check main access and workspace permissions",

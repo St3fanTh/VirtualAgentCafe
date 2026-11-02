@@ -3,9 +3,43 @@
 import re
 
 
+def failure_category(label: str, code: object, output: str) -> str:
+    """Evidence-based categories; exit status alone is never proof of a code defect."""
+    if code == 0:
+        return "PASSED"
+    if any(
+        term in output
+        for term in (
+            "ModuleNotFoundError",
+            "ImportError",
+            "PermissionError",
+            "FileNotFoundError",
+            "ConnectionRefusedError",
+            "bwrap:",
+            "No module named",
+            "command not found",
+        )
+    ):
+        return "ENVIRONMENT_ERROR"
+    if "pytest" in label:
+        if code == 2:
+            return (
+                "COLLECTION_ERROR"
+                if re.search(r"collect|ImportError|SyntaxError", output, re.I)
+                else "INTERRUPTED"
+            )
+        if code == 3:
+            return "TOOL_ERROR"
+        if code in (4, 5):
+            return "CONFIGURATION_ERROR"
+    if re.search(r"AssertionError|(?m:^FAILED )|SCRIPT ERROR:|(?m:^ERROR:)", output):
+        return "TEST_FAILURE"
+    return "PASSED" if code == 0 else "UNCLASSIFIED_ERROR"
+
+
 def test_diagnostic(label: str, code: object, output: str) -> dict:
     code = code if type(code) is int else None
-    text = re.sub(r"\x1b\[[0-9;]*[A-Za-z]", "", output[-65536:])
+    text = re.sub(r"\x1b\[[0-9;]*[A-Za-z]", "", output)
     causes = []
     for kind, hint in (
         ("ModuleNotFoundError", "Missing Python dependency or incorrect import path"),
@@ -20,7 +54,7 @@ def test_diagnostic(label: str, code: object, output: str) -> dict:
             causes.append(f"{kind}: {hint}")
     if "pytest" in label and code != 0:
         meanings = {
-            1: "Tests failed",
+            1: "Pytest command returned exit 1",
             2: "Test run interrupted (often a collection/import error)",
             3: "Pytest internal error",
             4: "Invalid pytest invocation or configuration",
@@ -38,6 +72,7 @@ def test_diagnostic(label: str, code: object, output: str) -> dict:
     )
     return {
         "tool": label,
+        "category": failure_category(label, code, text),
         "exit_code": code,
         "passed": code == 0,
         "causes": causes[:5],

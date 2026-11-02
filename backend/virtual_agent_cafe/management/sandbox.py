@@ -251,8 +251,9 @@ class IsolatedCodexAdapter(CodexAdapter):
         timeout: float = 300,
         instructions: Path | None = None,
         model: str | None = None,
+        evidence_sink=None,
     ):
-        super().__init__(timeout=timeout, model=model)
+        super().__init__(timeout=timeout, model=model, evidence_sink=evidence_sink)
         self.sandbox = sandbox
         self.metadata = metadata
         self.instructions = instructions

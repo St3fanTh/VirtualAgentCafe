@@ -1480,6 +1480,8 @@ func check_setup_project() -> void:
 
 func format_execution_report(record: Dictionary) -> String:
 	var text := "RESULT\n" + str(record.get("detail", "Execution in progress"))
+	text += "\nWorkflow: " + JSON.stringify(record.get("workflow", {}))
+	text += "\nAgent commit: " + str(record.get("agent_commit", "not recorded"))
 	text += "\nRequested model: " + (str(record.model) if record.get("model") != null else DEFAULT_MODEL)
 	text += "\n\nPUBLICATION (verified by controller)\n" + str(record.get("publication", "NOT_REQUESTED"))
 	var published: Dictionary = record.get("published", {})
@@ -1502,11 +1504,14 @@ func format_execution_report(record: Dictionary) -> String:
 		text += "\nFailed rule: " + str(validation.get("failed_rule", "none")) + "\nDetailed path/blob diagnostics are in Live logs.\n"
 	text += "\nSHARED REQUIREMENTS CHECKS\n"
 	for check in record.get("validation", {}).get("checks", []):
-		text += str(check.get("id", "")) + " · exit " + str(check.get("exit_code", "")) + "\n"
+		text += str(check.get("id", "")) + " · exit " + str(check.get("exit_code", "")) + " · " + str(check.get("diagnostics", {}).get("category", "unknown")) + (" · cached" if check.get("cached", false) else "") + "\n"
+		text += "  Context: " + JSON.stringify(check.get("context", {})) + "\n"
 		for cause in check.get("diagnostics", {}).get("causes", []):
 			text += "  " + str(cause) + "\n"
 		for test in check.get("diagnostics", {}).get("tests", []):
 			text += "  " + str(test) + "\n"
+	text += "\nManual acceptance: " + JSON.stringify(validation.get("manual_acceptance", [])) + "\n"
+	text += "Private complete validation output: /management/executions/" + str(record.get("id", "")) + "/validation-output/<check-id>\n"
 	text += "\nCHANGELOG (agent recap)\n" + str(record.get("changelog", "No recap available yet."))
 	if record.has("changelog_path"):
 		text += "\n\nRepository changelog: " + str(record.changelog_path)

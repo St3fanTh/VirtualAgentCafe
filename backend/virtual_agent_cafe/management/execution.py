@@ -514,6 +514,12 @@ class ExecutionManager:
                 "status": State.RUNNING,
                 "task_state": TaskState.RUNNING,
                 "acceptance": "UNVERIFIED",
+                "workflow": {
+                    "implementation": "RUNNING",
+                    "validation": "PENDING",
+                    "integration": "INTEGRATION_PENDING",
+                    "acceptance": "UNVERIFIED",
+                },
                 "runtime_success": None,
                 "publication": "PENDING" if config.git.push_on_success else "NOT_REQUESTED",
                 "started_at": now(),
@@ -613,6 +619,35 @@ class ExecutionManager:
         def emit(kind: EventType, detail: str):
             self.emit(run, kind, detail)
 
+        async def evidence(item, path):
+            try:
+                commit = (
+                    (await self.git.run(path, "rev-parse", "--verify", "HEAD^{commit}")).strip()
+                    if config.git.enabled
+                    else None
+                )
+            except ValueError:
+                commit = None
+            try:
+                record = self.store.get("runtime_test_outputs", run["id"])
+            except KeyError:
+                record = {"checks": []}
+            if len(record["checks"]) < 100:
+                record["checks"].append(
+                    {
+                        "command": str(item.get("command", "")),
+                        "reported_cwd": item.get("cwd"),
+                        "workspace": str(path),
+                        "observed_commit": commit,
+                        "exit_code": item.get("exit_code"),
+                        "aggregated_output": str(item.get("aggregated_output", "")),
+                        "stream_format": "Codex combined output; "
+                        "provider truncation/separate streams unknown",
+                    }
+                )
+                self.store.put("runtime_test_outputs", run["id"], record)
+            run["runtime_test_output_count"] = len(record["checks"])
+
         watcher = None
         try:
             await asyncio.to_thread(git_helper.prepare, workspace, run["id"])
@@ -624,6 +659,7 @@ class ExecutionManager:
                 timeout=config.execution.timeout_seconds,
                 model=config.model,
                 instructions=self.contexts.path(run["id"]),
+                evidence_sink=evidence,
             )
             runtime_retries = (
                 0 if config.execution.integration_validation else config.execution.max_retries
@@ -633,10 +669,37 @@ class ExecutionManager:
                 self.store.put("executions", run["id"], run)
                 async with asyncio.timeout(config.execution.timeout_seconds):
                     result = await runtime.run(context, workspace, emit)
-                if result.success:
+                if result.success or any(
+                    not t.get("passed")
+                    and not t.get("superseded")
+                    and t.get("category") not in {None, "TEST_FAILURE"}
+                    for t in result.test_runs
+                ):
                     break
                 if attempt < runtime_retries:
                     emit(EventType.WAITING, "Retrying failed runtime in the same workspace")
+            run["workflow"]["implementation"] = (
+                "IMPLEMENTATION_COMPLETE"
+                if result.success or result.implementation_complete
+                else "FAILED"
+            )
+            if config.git.enabled:
+                try:
+                    run["agent_commit"] = (
+                        await self.git.run(workspace, "rev-parse", "--verify", "HEAD^{commit}")
+                    ).strip()
+                except ValueError as error:
+                    run["agent_commit"] = None
+                    run["commit_verification_error"] = str(error)[:256]
+            unresolved = [
+                t for t in result.test_runs if not t.get("passed") and not t.get("superseded")
+            ]
+            if unresolved:
+                run["workflow"]["validation"] = (
+                    "VALIDATION_FAILED"
+                    if all(t.get("category") == "TEST_FAILURE" for t in unresolved)
+                    else "VALIDATION_INFRA_ERROR"
+                )
             if result.success and config.execution.integration_validation:
                 try:
                     self.integrations.assert_current(config.id)
@@ -644,7 +707,10 @@ class ExecutionManager:
                         config.workspace, self.integrations.inputs[config.id]["commits"]
                     )
                 except ValueError as error:
-                    result = RunResult(False, str(error), result.test_runs)
+                    run["workflow"]["integration"] = "INTEGRATION_FAILED"
+                    result = RunResult(
+                        False, str(error), result.test_runs, result.implementation_complete
+                    )
             response_file = workspace / ".cafe" / "last-response.md"
             changelog = ""
             try:
@@ -712,14 +778,26 @@ class ExecutionManager:
                 watcher = None
                 try:
                     async with asyncio.timeout(config.execution.timeout_seconds):
+                        run["submitted_commit"] = (
+                            await self.git.run(workspace, "rev-parse", "--verify", "HEAD^{commit}")
+                        ).strip()
                         await validation.validate(self, config, run, workspace)
-                except ValueError as error:
+                        run["workflow"]["validation"] = "VALIDATION_PASSED"
+                except (ValueError, TimeoutError) as error:
+                    if isinstance(error, TimeoutError):
+                        run.setdefault("validation", {}).update(
+                            passed=False,
+                            state="VALIDATION_INFRA_ERROR",
+                            failed_rule="controller.timeout",
+                        )
+                        error = ValueError("Controller validation time budget exhausted")
                     run.update(
                         status=State.FAILED,
                         task_state=TaskState.FAILED,
-                        acceptance="VALIDATION_FAILED",
+                        acceptance=run.get("validation", {}).get("state", "VALIDATION_INFRA_ERROR"),
                         detail=str(error)[:256],
                     )
+                    run["workflow"]["validation"] = run["acceptance"]
                     emit(EventType.ERROR, "Shared validation failed: " + str(error)[:220])
                     return
             if result.success and config.git.push_on_success:
@@ -755,6 +833,7 @@ class ExecutionManager:
                             promotion="FAILED",
                             detail=str(error)[:256],
                         )
+                        run["workflow"]["integration"] = "INTEGRATION_FAILED"
                         emit(EventType.ERROR, str(error)[:256])
                         return
                     run.update(
@@ -763,6 +842,15 @@ class ExecutionManager:
                         acceptance="AUTO_VALIDATED",
                         task_state=TaskState.COMPLETED,
                     )
+                    run["workflow"]["integration"] = "INTEGRATED"
+                    run["workflow"]["acceptance"] = (
+                        "MANUAL_ACCEPTANCE_REQUIRED"
+                        if run["validation"].get("manual_acceptance")
+                        else "ACCEPTED"
+                    )
+                    if run["validation"].get("manual_acceptance"):
+                        run["acceptance"] = "MANUAL_ACCEPTANCE_REQUIRED"
+                        run["task_state"] = TaskState.ASSIGNED
                     emit(EventType.CODING, "Git: tested integration promoted to main")
             emit(
                 EventType.FINISHED if result.success else EventType.ERROR,
@@ -801,6 +889,10 @@ class ExecutionManager:
                 await asyncio.gather(watcher, return_exceptions=True)
             if run.get("publication") == "PENDING":
                 run["publication"] = "NOT_PUBLISHED"
+            if run.get("workflow", {}).get("implementation") == "RUNNING":
+                run["workflow"]["implementation"] = (
+                    "CANCELLED" if run["status"] == State.CANCELLED else "FAILED"
+                )
             run["ended_at"] = now()
             self.store.put("executions", run["id"], run)
             response = run.get("changelog") or run.get("detail", "Execution ended")
@@ -848,7 +940,36 @@ class ExecutionManager:
             reviewed_at=now(),
             task_state=TaskState.COMPLETED if accepted else TaskState.FAILED,
         )
+        run.setdefault("workflow", {})["acceptance"] = (
+            "ACCEPTED" if accepted else "MANUAL_ACCEPTANCE_REQUIRED"
+        )
         self.store.put("executions", execution, run)
+        for project in self.store.list("projects"):
+            if project.get("integration", {}).get("execution") == execution:
+                project["integration"]["acceptance"] = run["workflow"]["acceptance"]
+                self.store.put("projects", project["id"], project)
+                for worker in self.store.list("executions"):
+                    if worker.get("integration_execution") == execution:
+                        worker["acceptance"] = run["acceptance"]
+                        worker.setdefault("workflow", {})["acceptance"] = run["workflow"][
+                            "acceptance"
+                        ]
+                        worker["task_state"] = run["task_state"]
+                        self.store.put("executions", worker["id"], worker)
+                        try:
+                            current = self.registry.get(worker["agent_id"])
+                            if (
+                                current.get("last_execution") == worker["id"]
+                                and current["state"] != State.RUNNING
+                                and current["config"].get("task") == worker["task"]
+                                and self.tasks.load(worker["task"])["sha256"]
+                                == worker["task_sha256"]
+                            ):
+                                self.registry.update(
+                                    worker["agent_id"], task_state=run["task_state"]
+                                )
+                        except (KeyError, ValueError, OSError):
+                            pass  # Archived or changed task: keep its current state.
         agent = self.registry.get(run["agent_id"])
         current_task = agent["config"].get("task")
         try:

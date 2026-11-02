@@ -232,6 +232,7 @@ als simuliert markierte Demo ohne Codex-Zugang.
 - [Ausführlicher Setup-Assistent](docs/project-setup.md)
 - [Agentenverwaltung, Modelle und Chat](docs/agent-management.md)
 - [Automatische Integration und Requirements-Tests](docs/automatic-integration.md)
+- [Controller-Prüfungen, Fehlerdiagnose und Abnahmestatus](docs/controller-validation.md)
 - [Container-Sandbox](docs/container-sandbox.md)
 - [Architektur](docs/architecture.md) und [Event-Protokoll](docs/event-schema.md)
 - [Grafik und 4K-Darstellung](docs/graphics.md)
