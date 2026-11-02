@@ -297,7 +297,7 @@ Only that agent's `agent/<id>/…` namespace is allowed. A dirty project tree bl
 publication (`.cafe` runtime files are excluded). The configured push destination
 must be one credential-free HTTPS or SSH URL. No force, tags, mirror or merge.
 Publication status and the pushed commit are persisted separately from runtime
-success and task acceptance. See [setup instructions](project-setup.md#ergebnisse-automatisch-auf-github-hochladen).
+success and task acceptance. See [setup instructions](project-setup.md#publish-results-to-github-automatically).
 
 Automatic shared integration and main promotion are an additional explicit team opt-in;
 see [workflow, requirements manifest and safeguards](automatic-integration.md).
@@ -350,105 +350,92 @@ folder from an older setup. **View diff** shows tracked changes against HEAD;
 committed results appear in **Inspect repository** history instead. Errors replace
 stale results in the Git panel and identify the requested workspace.
 
-### Testfehler und Abschlussbericht lesen
+### Read test failures and completion reports
 
-Unter **Executions** den gewünschten Lauf auswählen und **Changelog & tests** öffnen.
-Der Bericht zeigt das Laufzeitergebnis, vom Controller bestätigte Veröffentlichung
-(Branch und Commit), beobachtete Testläufe und den Abschlussbericht des Agenten.
-Der scrollbare Bericht ersetzt die früher auf 1.400 Zeichen gekürzte Statusanzeige.
-Der Agentenbericht ist auf 6.000 Zeichen begrenzt und bleibt mit der Ausführung
-in der Datenbank gespeichert, auch ohne aktivierten Push. Bei Veröffentlichung
-bleibt zusätzlich `agent-changelogs/<agent-id>.md` im Repository verfügbar.
+In **Executions**, select a run and open **Changelog & tests**. The report shows
+runtime results, controller-confirmed publication (branch and commit), observed
+test runs and the agent's final response. The scrollable report replaces the old
+1,400-character status truncation. Agent summaries are limited to 6,000 characters
+and persist with executions even when publishing is disabled. Published runs also
+include `agent-changelogs/<agent-id>.md` in the repository.
 
-Neue Codex-Läufe speichern bis zu 100 Testaufrufe des letzten Laufzeitversuchs:
-Werkzeug, Exit-Code, erkannte Fehlerklassen und bis zu 20 pytest-Testbezeichner.
-Beispiel: `pytest (exit 2)` bedeutet einen unterbrochenen Testlauf, häufig durch
-Sammlungs-/Importfehler; ein zusätzlich erkanntes `ModuleNotFoundError` weist auf
-eine fehlende Abhängigkeit oder einen fehlerhaften Importpfad hin. Exit 5 bedeutet,
-dass keine Tests gefunden wurden. Frühere fehlgeschlagene Aufrufe bleiben auch nach
-erfolgreicher Wiederholung im Bericht sichtbar.
+New Codex runs record up to 100 test invocations from the last runtime attempt:
+tool, exit code, recognized failure categories and up to 20 pytest test names.
+For example, `pytest (exit 2)` indicates interruption, often during collection or
+imports; a detected `ModuleNotFoundError` points to a dependency or import-path
+problem. Exit 5 means no tests were collected. Failed invocations remain visible
+after successful reruns. See [controller validation](controller-validation.md) for
+scope-aware failure tracking and the distinction between infrastructure, collection
+and implementation failures.
 
-Kommandoargumente, Parameterwerte, Assertionsinhalte und vollständige Tool-Ausgaben
-werden nicht veröffentlicht. Unbekannte Fehler erfordern weiterhin einen Blick in
-die Testausgabe im Workspace; ältere Ausführungen erhalten keine rückwirkend
-erfundenen Testdetails. Der Changelog ist der Bericht des Modells, kein Nachweis
-für einen Push oder erfüllte Anforderungen: dafür gelten die separat angezeigten
-Controller-Ergebnisse und die gemeinsame Requirements-Validierung.
+Command arguments, parameter values, assertion contents and full tool output are
+not published to the public event stream. Unknown failures still require inspecting
+test output. Older runs do not receive invented historical details. The changelog
+is the model's report, not proof of publication or fulfilled requirements; use the
+separately displayed controller evidence and shared validation results for that.
 
-### Falschen Projektordner aus dem Setup entfernen
+### Remove an incorrect project folder from setup
 
-Unter **Setup** den falschen Eintrag in **Approved Git project** auswählen und
-**Remove folder from setup** bestätigen. Das funktioniert auch vor einem
- erfolgreichen **Check project**, ohne angelegtes Team. Die Workspace-Registrierung
-wird entfernt und der Ordner dauerhaft aus der Setup-Suche ausgeblendet; Dateien,
-Git-Daten und Docker-Mounts bleiben unverändert. **Find projects** und Backend-
-Neustarts blenden ihn nicht wieder ein. **Restore removed folders** stellt die
-entfernten Ordner in der Suche wieder her.
+In **Setup**, select the incorrect **Approved Git project** and confirm **Remove
+folder from setup**. This works before a successful **Check project** and without
+a team. It unregisters the workspace and persistently hides the folder from setup
+search. Files, Git data and Docker mounts remain unchanged. **Find projects** and
+backend restarts do not restore it; **Restore removed folders** does.
 
-Ein zugeordnetes Team zuerst mit **Delete selected project** entfernen; bei einzeln
-zugeordneten Agenten deren Workspace ändern oder die Agenten löschen. Laufende
-Arbeit bleibt geschützt. Einen anderen Host-Ordner weiterhin über
-`scripts/setup-project.py` auswählen und mounten.
+First remove an associated team with **Delete selected project**. Reassign or
+delete individually assigned agents. Active work remains protected. Use
+`scripts/setup-project.py` to select and mount another host folder.
 
-### Team nach dem Löschen erneut anlegen
+### Recreate a deleted team
 
-Das Setup verwendet vorhandene Markdown-Aufgaben und Rollen für dieselben
-Agenten-IDs erneut, auch für Integration & Tests. Nicht mehr zugeordnete Dateien können nach dem
-Löschen eines Teams erhalten bleiben. Die frühere Meldung „Team Markdown already
-exists“ blockiert die Wiederanlage nicht mehr. Vorhandene Inhalte werden validiert
-und niemals durch die Vorlagen oder ein neues Setup-Ziel überschrieben. Vor dem
-Start unter Agents/Markdown prüfen, ob die Aufgaben noch zum aktuellen Ziel passen.
-Ungültige Markdown-Dateien müssen dort korrigiert werden. Nichtleere fremde
-Arbeitsverzeichnisse und bereits belegte Agenten-IDs bleiben geschützt.
+Setup reuses existing Markdown tasks and roles for the same agent IDs, including
+Integration & Tests. Unassigned files may survive team deletion. The former
+“Team Markdown already exists” error no longer blocks recreation. Existing content
+is validated and never overwritten by templates or a new setup objective. Review
+tasks under Agents/Markdown before starting, and correct invalid Markdown there.
+Nonempty unrelated directories and occupied agent IDs remain protected.
 
-### Vorhandene Worktrees bei erneuter Einrichtung
+### Reuse existing worktrees during setup
 
-Setup kann vorhandene Backend-, Frontend- und Integrations-Worktrees wiederverwenden,
-wenn sie zum ausgewählten Repository und zum erwarteten Agentenbranch gehören.
-Uncommittete Dateien bleiben erhalten. Fremde Repositories, andere Branches und
-Ordner ohne gültige Worktree-Verknüpfung werden weiterhin abgelehnt.
+Setup can reuse backend, frontend and integration worktrees belonging to the
+selected repository and expected agent branch. Uncommitted files are preserved.
+Unrelated repositories, different branches and invalid worktree links remain rejected.
 
-Beim Löschen eines verwalteten Projekts werden auch fehlende Worker-Verzeichnisse
-behandelt. Die Bereinigung entfernt nur veraltete, ungesperrte Git-Registrierungen
-für die betroffenen Workspaces. Andere Worktree-Registrierungen und Agentenbranches
-bleiben erhalten; es findet kein pauschales Prune mit unvollständiger Mount-Sicht
-statt. Das Entfernen eines Ordners nur aus der Setup-Auswahl löscht weiterhin
-keine Arbeitsdateien.
+Deleting a managed project also handles missing worker directories. Cleanup removes
+only stale, unlocked Git registrations for those workspaces. Other registrations
+and agent branches remain; there is no blanket prune based on incomplete mount
+visibility. Removing a folder from the setup list does not delete working files.
 
-## Modell pro Agent auswählen
+## Select a model per agent
 
-Unter **Management → Agents** einen Agenten auswählen, im Dropdown **Model (next
-execution)** das Modell wählen und **Save configuration** drücken. Die Auswahl
-wird je Agent gespeichert und gilt ab dem nächsten Start, auch für Chat-Folgeläufe
-und Integrationsreparaturen. Laufende Ausführungen behalten ihren bisherigen Start-
-Snapshot. Agentenliste und Detailansicht zeigen die konfigurierte Auswahl;
-**Executions → Changelog & tests → Requested model** zeigt die Auswahl dieses Laufs.
+Under **Management → Agents**, select an agent, choose **Model (next execution)**
+and click **Save configuration**. The selection persists per agent and applies to
+the next start, including chat follow-ups and integration repairs. Active runs
+retain their original configuration snapshot. The agent list/details show the
+configured choice; **Executions → Changelog & tests → Requested model** shows
+that run's choice.
 
-**Codex default (automatic)** entspricht `model: null`: Es wird kein Modellflag
-übergeben. Das erhält das bisherige Verhalten; es behauptet keinen konkreten
-aufgelösten Modellnamen. Die isolierte Runtime übernimmt weiterhin keine privaten
-Codex-Konfigurationsdateien vom Host. Eine konkrete Auswahl setzt `--model <ID>`.
+**Codex default (automatic)** means `model: null`: no model flag is passed. This
+preserves the previous behavior without claiming a specific resolved model name.
+The isolated runtime does not import private host Codex configuration files.
+An explicit selection passes `--model <ID>`.
 
-Die authentifizierte API `GET /management/models` liest den Modellkatalog über
-`codex debug models`. Bei Fehler/Timeout wird der mit der CLI ausgelieferte Katalog
-(`--bundled`) versucht und als solcher gekennzeichnet. **Refresh models** erzwingt
-über `?refresh=true` eine neue Abfrage; normale Aufrufe werden 60 Sekunden gecacht.
-Es werden keine Agenten gestartet. Zugang zu einem Katalogmodell ist nicht für
-jedes Konto garantiert. Bei fehlendem Katalog bleiben gespeicherte Auswahlen
-sichtbar; sie werden nicht stillschweigend ersetzt. Nicht unterstützte Modell-IDs
-führen zu einem Codex-Fehler statt zu einem automatischen Modellwechsel.
+Authenticated `GET /management/models` reads the catalog through `codex debug
+models`. On error/timeout it tries the CLI's bundled catalog (`--bundled`) and
+labels that source. **Refresh models**, using `?refresh=true`, forces a new query;
+normal calls are cached for 60 seconds. No agent is started. Catalog membership
+does not guarantee account access. Saved choices remain visible when the catalog
+is unavailable; unsupported IDs produce a Codex error rather than a silent model change.
 
-Konfigurationsausschnitt (Modell-ID aus dem Dropdown übernehmen):
+Configuration excerpt (use an ID from the dropdown):
 
 ```json
 {"provider": "codex", "model": "gpt-6.1-sol"}
 ```
 
-Die Umsetzung verwendet die dokumentierten Flags für
-[Codex-Modellauswahl und Modellkatalog](https://learn.chatgpt.com/docs/cli/reference).
-Der Katalogexport wird begrenzt gelesen; nur validierte, sichtbare Modell-IDs werden
-an die GUI weitergegeben, keine Modellinstruktionen oder privaten Diagnoseausgaben.
-
+The implementation uses documented [Codex model selection and catalog
+flags](https://learn.chatgpt.com/docs/cli/reference). Catalog output is bounded;
+only validated visible model IDs reach the GUI, not model instructions or private diagnostics.
 
 ## Questions versus work instructions
 

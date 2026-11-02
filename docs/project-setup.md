@@ -1,438 +1,365 @@
-# Einrichtungsassistent für eigene Projekte
+# Setup wizard for your projects
 
-Der lokale Starter wählt einen bestehenden Git-Projektordner aus, startet das
-Compose-Backend und öffnet Godot direkt im Assistenten. Dort werden Codex-Anmeldung,
-Namespace-Sandbox und Git geprüft. Aus deiner Zielbeschreibung entstehen zwei
-Agenten mit Markdown-Aufgaben/Rollen, eigenen Git-Worktrees und eigenen Branches.
-Die bestehende Architektur und Verwaltung bleiben erhalten.
+The local starter selects an existing Git project folder, starts the Compose
+backend and opens Godot in the wizard. It checks Codex login, namespace isolation
+and Git. Your objective becomes two agents with Markdown tasks/roles, separate
+Git worktrees and branches, using the existing management architecture.
 
-![Einrichtungsassistent mit Beispieldaten](images/setup-preview.png)
+![Setup wizard with sample data](images/setup-preview.png)
 
-## Start auf dem Linux-/WSL-Docker-Host
+## Start on the Linux/WSL Docker host
 
-Voraussetzungen: Python 3.10+, Docker Compose mit `up --wait`, Godot 4.4.1 und ein
-bestehendes lokales Hauptrepository mit mindestens einem Commit. Führe den Starter
-im VirtualAgentCafe-Checkout auf dem Host aus, nicht im Backend-Container:
+Requirements: Python 3.10+, Docker Compose supporting `up --wait`, Godot 4.4.1
+and a local main repository with at least one commit. Run from the VirtualAgentCafe
+checkout on the host, not inside the backend container:
 
 ```bash
 python3 scripts/setup-project.py
 ```
 
-Unter WSL öffnet sich über Windows PowerShell die native Windows-Ordnerauswahl.
-Unter Linux verwendet der Starter Python-Tk, sofern eine grafische Sitzung verfügbar
-ist. Ohne grafischen Dialog fragt er den Projektpfad im Terminal ab. Du kannst ihn
-auch direkt angeben:
+WSL opens the native Windows folder chooser through PowerShell. Linux uses Python
+Tk when a graphical session is available; otherwise enter the path in the terminal.
+You can also pass it explicitly:
 
 ```bash
-python3 scripts/setup-project.py --project /home/du/projekte/meine-app
+python3 scripts/setup-project.py --project /home/you/projects/my-app
 ```
 
-Für die bisher verwendete lokale Entwicklungsumgebung, die den Privileged-Override
-benötigt:
+For local environments requiring the privileged namespace override:
 
 ```bash
 python3 scripts/setup-project.py --privileged
 ```
 
-Der Starter startet das Backend im Codex-Modus und wartet auf den Healthcheck.
-Fehlt die Codex-Anmeldung, öffnet er `codex login` im Container und setzt danach fort.
-Mit `--login` kannst du den Anmeldevorgang ausdrücklich erneut öffnen. Die Anmeldung
-bleibt im vorhandenen `codex_home`-Volume. Beide Agenten verwenden diesen Zugang;
-getrennte Accounts pro Agent sind noch nicht vorgesehen.
+The starter runs the backend in Codex mode and waits for health. It opens `codex
+login` inside the container when needed, then continues. Use `--login` to reopen
+login explicitly. Credentials persist in the `codex_home` volume. Agents share
+this login; separate accounts per agent are not currently supported.
 
-Godot wird über `godot`/`godot4` im PATH erkannt oder explizit gewählt:
+Godot is discovered as `godot`/`godot4` on PATH or selected explicitly:
 
 ```bash
 python3 scripts/setup-project.py --privileged \
   --godot '/mnt/c/Tools/Godot/Godot_v4.4.1-stable_win64.exe'
 ```
 
-Bei Windows-Godot aus WSL übersetzt der Starter den Spielpfad mit `wslpath` und
-übergibt Verbindungseinstellungen über `WSLENV`. Er startet direkt das Spiel;
-F5 ist dabei nicht nötig. Der Starter speichert die Verbindung zusätzlich lokal in
-`.runtime/setup/godot-connection.json` mit Dateirechten `0600`. Diese Datei enthält
-den Managementtoken, ist von Git und Docker-Builds ausgeschlossen und darf nicht
-weitergegeben werden.
+For Windows Godot from WSL, the starter translates the game path with `wslpath`
+and forwards connection settings through `WSLENV`. It starts the game directly,
+without F5. It also saves `.runtime/setup/godot-connection.json` locally with mode
+`0600`. This contains the management token, is excluded from Git/Docker builds,
+and must remain private.
 
-Auch mit `--no-godot` wird diese Verbindung eingerichtet. Danach kannst du Godot
-manuell öffnen und F5 drücken: **Manage agents** verbindet sich ohne Token-Eingabe.
-Das gilt auch nach einem Godot-Neustart. Bei erneuter Einrichtung aktualisiert der
-Starter die Datei; **Connect / Refresh** lädt sie erneut. **Connection settings**
-blendet bei Bedarf die manuelle Eingabe ein. Ein explizites `VAC_MANAGEMENT_TOKEN`
-im Godot-Prozess hat Vorrang. Exportierte Clients können den Dateipfad mit
-`VAC_CONNECTION_FILE` angeben. Gespeicherte Tokens gelten nur für die zugehörige
-Backend-Adresse.
+Connection setup also runs with `--no-godot`. You can then open Godot manually
+and press F5; **Manage agents** connects without token entry, including after
+Godot restarts. Rerunning setup updates the file; **Connect / Refresh** reloads it.
+**Connection settings** exposes manual entry when needed. An explicit
+`VAC_MANAGEMENT_TOKEN` in Godot's environment takes precedence. Exported clients
+can specify `VAC_CONNECTION_FILE`. Stored tokens apply only to their saved backend address.
 
-## Im Assistenten
+## In the wizard
 
-1. **Setup project** öffnet die Seite. Beim Start über den Starter ist das gewählte
-   Projekt bereits ausgewählt. Angezeigt werden nur freigegebene Hauptrepositories.
-2. Beschreibe das Ziel, die Aufteilung und möglichst den gemeinsamen API-Vertrag.
-   Alternativ lade deine vorhandene PLANNING.md über **Load project documents**;
-   bei leerer Zielbeschreibung wird ihr nächster offener Meilenstein verwendet.
-3. **Check project** prüft Sandbox, gespeicherte Codex-Anmeldung, Codex-Modus und
-   initialen Commit. Fehler erscheinen mit Handlungshinweisen. Die Prüfung führt
-   keinen Modellauftrag aus und bestätigt keine serverseitige Modellverfügbarkeit.
-   Der Prüfstatus bleibt über dem scrollbaren Bericht sichtbar. Ein Klick zeigt
-   sofort „Checking…“; Fehler inklusive Verbindungs- und Zeitüberschreitungen stehen
-   direkt im Bericht. Die Gesamtprüfung ist auf 30 Sekunden begrenzt. „FIX“ muss
-   behoben werden, bevor das Team erstellt werden kann. Nach erfolgreicher Prüfung
-   erklärt der Status auch, ob noch ein Ziel oder eine geladene PLANNING.md fehlt.
-4. **Create backend + frontend team** erstellt beide Worktrees und Konfigurationen.
-   Agenten heißen `PROJEKT-backend` und `PROJEKT-frontend`; ihre Branches liegen
-   unter `agent/AGENT/implementation`. Aufgaben und Rollen sind weiterhin Markdown.
-5. Im Setup über **Load project documents** gemeinsame Projektdateien laden.
-   `AGENTS.md` und `PLANNING.md` auswählen, bearbeiten oder mit **Import Markdown file**
-   eine lokale Datei über den nativen Windows-Dateidialog auswählen. Erst
-   **Save project document** schreibt ins Projekt. Fehlende Dateien erhalten
-   Vorlagen; vorhandene `agents.md`/`planning.md` werden ebenfalls erkannt und
-   unter ihrem bisherigen Dateinamen gespeichert. Danach unter **Markdown** die Aufgaben prüfen/anpassen. Unter **Agents** jeden Agenten
-   auswählen und **Start agent** klicken. Die Einrichtung allein startet keine
-   kostenpflichtigen Modellaufgaben.
-6. Ergebnisse, Tests und Diffs prüfen. Bei aktiviertem Publish-Schalter pusht der
-   Controller erfolgreiche Läufe auf den jeweiligen Agenten-Branch. Der
-   Integrationsagent kann anschließend beide Worker-Branches auf seinem eigenen
-   Branch zusammenführen, gemeinsame Tests erstellen und nach grüner Prüfung den
-   freigegebenen Stand nach `main` promoten (siehe
-   [automatische Integration](automatic-integration.md)).
+1. Open **Setup project**. Launching through the starter preselects your folder.
+   Only approved main repositories are listed.
+2. Describe the objective, division of work and preferably the shared API contract.
+   Alternatively use **Load project documents** to load PLANNING.md. An empty
+   objective uses its next open milestone.
+3. **Check project** checks sandbox, stored Codex login, Codex mode and initial
+   commit. It does not run a model task or verify server-side model access. Status
+   remains above the scrollable report; clicks immediately show “Checking…” and
+   connection/timeout errors appear in the report. The overall timeout is 30 seconds.
+   Resolve **FIX** items before creating a team. After a successful check, status
+   also explains whether an objective or loaded PLANNING.md is still missing.
+4. **Create backend + frontend team** creates worktrees and configurations.
+   Agent IDs are `PROJECT-backend` and `PROJECT-frontend`, with branches under
+   `agent/AGENT/implementation`. Tasks and roles remain Markdown.
+5. Use **Load project documents** to load `AGENTS.md`/`PLANNING.md`, edit them,
+   or use **Import Markdown file** to choose a local file. Only **Save project
+   document** writes to the project. Missing files get templates; existing lowercase
+   names are recognized and preserved. Review tasks under **Markdown**, then select
+   each worker under **Agents** and click **Start agent**. Setup itself starts no
+   paid model tasks.
+6. Review results, tests and diffs. When publication is enabled, successful runs
+   are pushed to each worker's own branch. The integration agent can combine those
+   branches, create shared tests and promote the authorized result to `main` after
+   controller validation. See [automatic integration](automatic-integration.md).
 
-Uncommittete Änderungen bleiben im Quellrepository. Die Agentenworktrees beginnen
-bei dessen HEAD; der Assistent zeigt diesen Unterschied an und erstellt selbst
-keinen initialen Commit. Für einen neuen Ausgangsstand zuerst deine gewünschten
-Änderungen selbst prüfen und committen.
+Uncommitted source changes remain in the source repository. Agent worktrees start
+at its HEAD; the wizard explains this and does not create an initial commit.
+Review and commit your desired baseline yourself before creating worktrees.
 
-## Codex-Anmeldung prüfen
+## Check Codex login
 
-Wenn Sandbox und Git PASS melden, aber Codex weiterhin FIX, den gespeicherten
-Anmeldestatus direkt im Backend prüfen:
+If sandbox and Git pass but Codex reports FIX, inspect stored login in the backend:
 
 ```bash
 docker compose exec backend codex login status
 ```
 
-Nur wenn dort keine Anmeldung vorhanden ist, `docker compose exec backend codex login`
-ausführen. Der Assistent verwendet denselben Statusbefehl innerhalb des isolierten
-Workspaces. `--ignore-user-config` ist eine Option von `codex exec`, nicht von
-`codex login status`; sie gehört nicht in die Anmeldeprüfung. Benutzerkonfiguration
-wird in dieser Sandbox ohnehin nicht eingebunden, nur die schreibgeschützte
-Authentifizierungsdatei. Die Prüfung bestätigt gespeicherte Anmeldedaten und ruft
-kein Modell auf. Ein Regressionstest verwendet die echte gepinnte CLI mit einem
-Test-Auth-File und abgeschaltetem Netzwerk, sowohl mit als auch ohne Anmeldung.
+If no login exists, run `docker compose exec backend codex login`. The wizard uses
+the same status command inside the isolated workspace. `--ignore-user-config`
+belongs to `codex exec`, not `codex login status`. User configuration is not mounted
+in this sandbox; only the read-only authentication file is exposed. This confirms
+stored credentials without a model call. A regression test uses the pinned CLI,
+a test auth file and disabled networking, both with and without login.
 
-## Gemeinsame Projektdateien
+## Shared project documents
 
-`AGENTS.md` enthält die Projektkonventionen und gemeinsamen Agentenregeln.
-`PLANNING.md` enthält Plan, Meilensteine und Abnahmekriterien. Die Auswahl im
-Dateidialog überträgt nur den Inhalt in den Editor. Vor dem Speichern kannst du
-alles prüfen. Der Backend-Server erhält keinen frei wählbaren lokalen Dateipfad.
+`AGENTS.md` defines conventions and shared agent rules. `PLANNING.md` defines the
+plan, milestones and acceptance criteria. File import loads content into the editor
+for review; the backend never receives an arbitrary local file path.
 
-Gespeicherte Dateien bleiben normale Projektdateien und werden nicht automatisch
-committed. Beide Agenten erhalten vor jedem Lauf den aktuellen Stand aus dem
-Quellprojekt als schreibgeschützten Snapshot unter
-`.cafe/instructions/project/AGENTS.md` beziehungsweise `PLANNING.md` — auch wenn
-die Quelldateien noch nicht committed wurden oder die Worktrees ältere Versionen
-enthalten. Ausführungsaufzeichnungen enthalten die SHA-256-Hashes dieser Stände.
-Ein laufender Auftrag behält seinen Snapshot; Änderungen gelten für folgende Läufe.
+Saved files remain ordinary uncommitted project files. Before each run, both agents
+receive the current source documents as read-only snapshots at
+`.cafe/instructions/project/AGENTS.md` and `PLANNING.md`, even if the source is
+uncommitted or the worktree has older versions. Execution records store SHA-256
+hashes. Active runs keep their snapshots; edits apply to later runs.
 
-Die Rangfolge lautet: System-Sicherheit > validierte Konfiguration > Rollen >
-Projekt-AGENTS.md > Projekt-PLANNING.md > einzelne Aufgabe. Die Dateien verleihen
-keine zusätzlichen Sicherheitsrechte. Speichern ist während zugehöriger laufender
-Agenten gesperrt. Zwischenzeitliche Änderungen auf der Festplatte führen zu einem
-Konflikthinweis statt stillem Überschreiben; lade dann die Dateien erneut.
-Pro Datei sind 64 KiB UTF-8 erlaubt (Laden, Editor, Dateiimport und Speichern).
-AGENTS.md und PLANNING.md dürfen mit Fließtext, Listen oder Kommentaren beginnen;
-eine führende `#`-Überschrift ist optional. Der Editor zeigt die UTF-8-Bytezahl.
-Leere Inhalte und zu große Dateien werden mit getrennten Meldungen abgelehnt. Symlinks und mehrdeutige Groß-/Kleinschreibung
-werden abgewiesen. Den nativen Windows-Dialog musst du auf deinem Zielhost prüfen;
-der automatisierte Godot-Test bedient den eingebetteten Dateidialog über Eingaben.
+Precedence: system security > validated configuration > roles > project AGENTS.md
+> project PLANNING.md > individual task. Documents cannot grant security permissions.
+Saving is blocked while associated agents run. Concurrent disk changes produce a
+conflict instead of silent overwrite; reload documents before retrying.
 
-## SSH und Remote-Prüfung
+Each file is limited to 64 KiB UTF-8 across loading, editing, import and saving.
+Prose, lists and comments are allowed; a leading `#` heading is optional. The editor
+shows UTF-8 byte count. Empty and oversized content have distinct errors. Symlinks
+and ambiguous filename case are rejected. Native Windows dialogs still need host
+verification; automated Godot tests interact with the embedded chooser.
 
-Ist auf dem Host `SSH_AUTH_SOCK` ein erreichbarer Socket und existiert
-`~/.ssh/known_hosts`, bindet der Starter beides gezielt für den Git-Dienst ein.
-Private Schlüssel werden nicht kopiert oder eingebunden. Codex-Worker erhalten den
-SSH-Socket nicht. Bekannte Server müssen bereits mit überprüften Host-Schlüsseln
-in `known_hosts` stehen; die Prüfung wird nie abgeschaltet.
+## SSH and remote checks
 
-Eine Remote-Prüfung ist optional. Aktiviere sie beim Start und anschließend über
-das Kontrollkästchen im Assistenten:
+If host `SSH_AUTH_SOCK` points to a reachable socket and `~/.ssh/known_hosts` exists,
+the starter mounts them for the Git service. Private keys are never copied/mounted;
+Codex workers do not receive the SSH socket. Verified server host keys must already
+be in `known_hosts`; verification is never disabled.
+
+Remote inspection is optional. Enable it in the starter and then the wizard checkbox:
 
 ```bash
 python3 scripts/setup-project.py --privileged --remote-checks
 ```
 
-Diese Prüfung verwendet ausschließlich `git ls-remote` gegen ein unterstütztes,
-zugangsdatenfreies `origin` und prüft lesenden Zugriff. Sie erzeugt keinen
-Testbranch und bestätigt keine Push-Berechtigung. Fehler weisen auf SSH-Agent,
-Host-Schlüssel oder Repository-Berechtigungen hin. Die neuen Agenten erhalten
-weiterhin keine Push-/Pull-/Fetch-Freigaben.
+The check only runs `git ls-remote` against a supported, credential-free `origin`.
+It verifies read access, creates no test branch and does not establish push permission.
+Errors identify SSH-agent, host-key or repository-access problems. This check alone
+does not grant new agents push/pull/fetch access.
 
-Git vertraut bei eingebundenen Host-Repositories ausschließlich dem explizit
-freigegebenen Workspace-Pfad über eine pro Prozess gesetzte `safe.directory`.
-Es wird weder eine globale Git-Einstellung verändert noch ein Wildcard-Vertrauen
-aktiviert. Hooks und externe Git-Helfer bleiben deaktiviert.
+For host mounts, Git trusts only the approved workspace path through per-process
+`safe.directory`; it does not change global configuration or trust wildcards.
+Hooks and external Git helpers remain disabled.
 
-## Dateien, Persistenz und Grenzen
+## Files, persistence and limits
 
-- Der generierte Compose-Override liegt ignoriert unter
-  `.runtime/setup/project.compose.json`. Nur der gewählte externe Projektordner
-  wird zusätzlich eingebunden; kein beliebiger Hostpfad ist über die API wählbar.
-- Projekt-IDs verwenden bei gültiger `origin`-Adresse eine Repository-Kennung,
-  sodass dasselbe Repo über andere Docker-/WSL-Pfade wiederverwendet wird. Ohne
-  Remote wird ein Pfad-Hash verwendet. Lokal wird nur Hash→Workspace-ID gespeichert,
-  keine Remote-URL. Der Starter unterstützt ein ausgewähltes
-  externes Quellprojekt pro Backend-Start. Starte ihn zum Wiederöffnen erneut mit
-  demselben Ordner; beim Projektwechsel bleiben alte Arbeitsstände erhalten.
-- Compose erstellt das Backend bei geänderter Konfiguration/Image neu. Beende
-  laufende Aufgaben vor einem Projektwechsel oder einem solchen Neustart.
-- Agentenworktrees liegen im persistenten `agent_workspaces`-Volume. Die Git-
-  Verwaltungsdaten liegen auch im `.git` des freigegebenen Quellprojekts. Diese
-  Worktrees gehören zur Containerumgebung; Ergebnisse sind dort über Verwaltung,
-  Git-Diffs und bei Bedarf `docker compose cp` erreichbar.
-- Ein erneuter Teamerstellungsversuch erhält vorhandene Aufgaben/Konfigurationen.
-  Unterbrochene Einrichtungen werden mit der ursprünglichen Zielbeschreibung
-  fortgesetzt. Bestehende fremde Dateien werden nicht überschrieben.
+- The generated ignored override is `.runtime/setup/project.compose.json`. Only
+  the selected external source folder is mounted; API clients cannot select arbitrary host paths.
+- A valid `origin` supplies repository identity so the same repository can be reused
+  across Docker/WSL paths. Without a remote, a path hash is used. Only a hash-to-ID
+  mapping is saved locally, not the remote URL. One external source project is mounted
+  per backend start. Rerun the starter with the same folder to reopen it; switching
+  projects preserves old working data.
+- Compose recreates the backend when configuration/image changes. Stop active work
+  before changing projects or restarting this way.
+- Worktrees persist in `agent_workspaces`; Git administration also lives in the source
+  project's `.git`. These worktrees belong to the container environment. Inspect results
+  through management/Git diffs or use `docker compose cp`.
+- Repeated team creation preserves tasks/configuration. Interrupted setup resumes
+  with the original objective; unrelated existing files are not overwritten.
 
-### Projekte aufräumen und Ergebnisse nachvollziehen
+### Clean up projects and inspect results
 
-Im Setup-Tab kannst du **Delete selected project** oder **Delete all managed
-projects** wählen. Beide Aktionen verlangen eine Bestätigung. Entfernt werden nur
-die VirtualAgentCafe-Projektzuordnungen und sauberen verwalteten Worker-Worktrees;
-das ausgewählte Quellverzeichnis, seine Git-Branches und die Ausführungshistorie
-bleiben erhalten. Projekte mit laufenden Agenten oder uncommitteten Änderungen
-werden nicht gelöscht. Worktrees werden erst alle entfernt, danach bereinigt Git
-einmalig die gemeinsamen Verwaltungsmetadaten.
+In Setup, **Delete selected project** and **Delete all managed projects** require
+confirmation. They remove managed project assignments and clean worker worktrees,
+while retaining the source folder, branches and execution history. Active agents
+and uncommitted work block deletion. Cleanup removes only the relevant stale,
+unlocked worktree registrations; it does not prune unrelated entries.
 
-Nach einem erfolgreichen Worker-Lauf zeigt **Executions** einen kurzen Recap,
-geänderte Dateien, Tests und den Branch-/Commit-Nachweis. Bei aktiviertem Push wird
-`agent-changelogs/<agent-id>.md` als Recap-Commit auf genau diesen Agenten-Branch
-gepusht. Worker pushen nicht nach `main`; nur der aktivierte Integrationsablauf darf
-seinen geprüften Integrationscommit dorthin promoten.
-- Native Windows-/macOS-Launcher ohne Linux/WSL-Host, SSH-Agent-Brücken für Windows
-  ohne WSL-Socket und Git-Submodule sind kein Bestandteil dieses Assistenten.
-- Docker-Start, nativer Tk-Dialog und Windows-Übergabe benötigen einen Test auf dem
-  Zielhost. Hier sind Launcher-Verträge automatisiert getestet; der Entwicklungs-
-  container stellt keinen Docker-Daemon für einen vollständigen Hostlauf bereit.
+After a successful worker run, **Executions** shows a recap, changed files, tests
+and branch/commit evidence. With publication enabled, a recap commit containing
+`agent-changelogs/<agent-id>.md` reaches that agent branch. Workers do not publish
+to main; only the enabled integration workflow may promote its validated commit.
 
-Mount-Plan ohne Start/Änderungen anzeigen:
+Native Windows/macOS launchers without Linux/WSL, Windows SSH bridges without a WSL
+socket and Git submodules are outside the wizard's scope. Docker startup, Tk and
+Windows handoff require target-host testing. Launcher contracts are automated;
+a development container without a Docker daemon cannot perform a full host launch.
+
+Preview the mount plan without writing or starting anything:
 
 ```bash
-python3 scripts/setup-project.py --project /pfad/zum/projekt --dry-run
+python3 scripts/setup-project.py --project /path/to/project --dry-run
 ```
 
-## Sandbox-Fehler beim Start
+## Sandbox startup failures
 
-Der Starter führt nach dem Container-Healthcheck den Namespace-Selbsttest im
-gewählten Projektworkspace aus. Bei Fehlern hält er vor Codex-Anmeldung und
-Godot-Start an. Er erhöht Berechtigungen nicht automatisch und startet keine Worker
-ohne funktionierende Isolation. Für die bisherige lokale Umgebung den expliziten
-Override verwenden:
+After container health, the starter probes namespace isolation in the selected
+workspace. Failure stops before Codex login and Godot startup. It never raises
+permissions automatically or runs workers without isolation. Explicitly use
+`--privileged` if your local environment requires it.
 
-```bash
-python3 scripts/setup-project.py --privileged
-```
-
-Bleibt die Prüfung blockiert, im laufenden Backend die Diagnose ausführen:
+For a blocked check, run diagnostics inside the running backend:
 
 ```bash
 docker compose exec backend bash -lc \
   'source scripts/environment.sh && python3 scripts/sandbox-diagnostics.py'
 ```
 
-Mit `--workspace /workspaces/DEINE-PROJEKT-ID` prüfst du zusätzlich genau den
-Projektmount. Die Ausgabe enthält feste Fehlerkategorien und verfügbare numerische
-Namespace-Einstellungen; keine Tokens, Auth-Dateien oder rohen Tool-Ausgaben.
+Add `--workspace /workspaces/YOUR-PROJECT-ID` to inspect the exact mount. Output
+contains fixed categories and available numeric namespace settings, not tokens,
+auth files or raw tool output:
 
-- `namespace_denied`: Kernel-/Container-Regeln verbieten Namespace-Erstellung oder
-  Mounts. Falls Privileged bereits aktiv ist, die Docker-/WSL-Hostrichtlinien prüfen.
-- `namespace_limit`: Namespace-/Systemressourcen erschöpft.
-- `mount_failed` / `workspace_unavailable`: Projektmount und Verzeichnisrechte prüfen.
-- `runtime_missing` / `launch_failed`: Backend neu bauen beziehungsweise die lokale
-  Bubblewrap-Installation prüfen.
-- `timeout`: Selbsttest hat sein Zeitlimit erreicht.
+- `namespace_denied`: kernel/container rules reject namespaces or mounts. If already
+  privileged, check Docker/WSL host policies.
+- `namespace_limit`: namespace/system resources exhausted.
+- `mount_failed` / `workspace_unavailable`: check mounts and directory permissions.
+- `runtime_missing` / `launch_failed`: rebuild the image or check Bubblewrap installation.
+- `timeout`: the self-test reached its deadline.
 
-Der Assistent verwendet denselben Selbsttest wie der Workerstart. Schlägt er fehl,
-stehen Codex-Anmeldung und Git als **SKIP** im Bericht. Sie wurden dann nicht
-geprüft; die Meldung fordert nicht mehr fälschlich zur Codex-Neuanmeldung auf.
-Ein `ready`-Ergebnis belegt die lokale Namespace-Prüfung, nicht Modellverfügbarkeit
-oder Git-Remote-Berechtigungen. Ein Privileged-Container kann weiterhin durch die
-Konfiguration seines Hosts eingeschränkt sein; das Skript verändert diese nicht.
+Wizard and worker startup use the same probe. When it fails, login/Git checks show
+**SKIP**, not misleading login instructions. `ready` proves local isolation, not
+model access or remote Git permissions. Host policies may still constrain privileged
+containers; the starter does not modify them.
 
-## API und Tests
+## API and tests
 
-Alle Routen benötigen den vorhandenen Managementtoken:
+All routes require the management token:
 
-- `GET /management/setup`: freigegebene Hauptrepositories auflisten.
+- `GET /management/setup`: list approved main repositories.
 - `POST /management/setup/check`: `{ "project": "ID", "check_remote": false }`.
-- `POST /management/setup/documents/load`: Projektdateien laden.
-- `PUT /management/setup/documents`: Dateiinhalt mit erwartetem SHA-256 speichern.
-- `POST /management/setup/team`: `{ "project": "ID", "objective": "Ziel …" }`.
+- `POST /management/setup/documents/load`: load project files.
+- `PUT /management/setup/documents`: save content with the expected SHA-256.
+- `POST /management/setup/team`: `{ "project": "ID", "objective": "Objective …" }`.
 
-`scripts/check.sh` prüft Backend, Git-Worktrees, fehlende Voraussetzungen,
-Wiederaufnahme, Konflikte, Pfad-/API-Schutz, Launcher-Mounts und Tokenbehandlung.
-`game/tests/test_setup_input.gd` bedient den echten Assistenten mit Maus-/Tastatur-
-Ereignissen gegen einen separaten Testserver. Nur der Codex-Anmeldestatus wird im
-Fixture ersetzt; Git und Namespace-Prüfung laufen tatsächlich. Kein bezahlter
-Modellaufruf und kein externer Git-Dienst ist für diese Tests nötig.
+`scripts/check.sh` covers backend, worktrees, missing prerequisites, resume, conflicts,
+path/API protections, launcher mounts and token handling. `game/tests/test_setup_input.gd`
+uses real mouse/keyboard events against a separate test server. Only Codex login
+status is replaced; Git and namespaces are real. No paid model call or external Git
+service is needed.
 
-## Wo liegen die Arbeitsergebnisse?
+## Where are the working results?
 
-Die beiden Worker bearbeiten getrennte Projektkopien in persistenten Git-Worktrees,
-zum Beispiel `/workspaces/simulationworld-9e6a873f-backend` und
-`/workspaces/simulationworld-9e6a873f-frontend`. Der ursprüngliche Projektordner wird
-nicht automatisch mit diesen Änderungen zusammengeführt. Im Godot-Dialog unter
-**Executions** den Lauf auswählen: **Files saved in** zeigt den genauen Pfad und
-daneben steht die zugehörige Branch. **Workspaces → Git** zeigt Status und Commits.
-Ein fehlgeschlagener Lauf kann Teiländerungen enthalten; scheitert bereits die
-Git-Vorbereitung, wurde der Worker noch nicht ausgeführt.
+Workers edit separate persistent Git worktrees, for example
+`/workspaces/simulationworld-9e6a873f-backend` and
+`/workspaces/simulationworld-9e6a873f-frontend`. Changes are not automatically merged
+into the original source checkout. Select a run under **Executions**: **Files saved
+in** shows its exact path and branch. **Workspaces → Git** shows status and commits.
+Failed runs can leave partial changes; if Git preparation failed, the worker never ran.
 
-Dateien aus dem Backend auf den Docker-Host kopieren (Pfade aus dem Dialog übernehmen):
+Copy files to the Docker host, using paths from the dialog:
 
 ```bash
-docker compose cp backend:/workspaces/simulationworld-9e6a873f-backend ./backend-ergebnis
-docker compose cp backend:/workspaces/simulationworld-9e6a873f-frontend ./frontend-ergebnis
+docker compose cp backend:/workspaces/simulationworld-9e6a873f-backend ./backend-result
+docker compose cp backend:/workspaces/simulationworld-9e6a873f-frontend ./frontend-result
 ```
 
-Diese Kopien dienen zur Dateiansicht. Ihre `.git`-Datei verweist weiterhin auf
-Containerpfade; Git-Status, Diffs und Commits deshalb über die Verwaltung oder im
-ursprünglichen Container prüfen. Die beiden Projektstände müssen nach Review
-bewusst integriert werden. Ohne entsprechende Freischaltung erfolgt kein automatischer Merge oder Push.
+These copies are for file inspection. Their `.git` files still reference container
+paths, so inspect Git status/diffs/commits in management or the original container.
+Integration and publication require the corresponding explicit configuration.
 
-`runtime` speichert Aufgaben, Rollen, Konfiguration und Ausführungshistorie;
-`agent_workspaces` speichert die bearbeiteten Projektdateien. Normale Container-
-Neuerstellung erhält diese benannten Compose-Volumes. `docker compose down -v`
-löscht sie. Verwende dieselbe Compose-Projektidentität, damit beim nächsten Start
-dieselben Volumes eingebunden werden.
+`runtime` stores tasks, roles, configuration and execution history;
+`agent_workspaces` stores edited files. Ordinary container recreation preserves
+named volumes; `docker compose down -v` deletes them. Keep the same Compose project
+identity to reuse those volumes.
 
-Bei einem Git-Fehler während der Team-Einrichtung bleiben bereits gespeicherte
-Aufgaben und Agentenkonfigurationen erhalten. Nach Beheben der konkret genannten
-Ursache kann die Einrichtung wiederholt werden. Bestehende Arbeitsdateien werden
-nicht entfernt, gesperrte Branches nicht automatisch freigegeben.
+Git setup failures preserve saved tasks/configuration. Fix the reported cause and
+retry setup. Existing files are not deleted; occupied branches are not released automatically.
 
-## Ergebnisse automatisch auf GitHub hochladen
-
-Starte den Assistenten mit freigeschalteten Remote-Operationen:
+## Publish results to GitHub automatically
 
 ```bash
 python3 scripts/setup-project.py --publish-results --privileged
 ```
 
-`--privileged` ist nur nötig, wenn deine Containerumgebung es für die bereits
-vorhandene Namespace-Isolation benötigt. Wähle denselben Projektordner erneut.
-Der Starter verwendet weiterhin den bestehenden SSH-Agenten und `known_hosts`;
-es werden keine privaten Schlüssel kopiert. Der SSH-Agent muss Schreibzugriff
-auf das konfigurierte Repository besitzen.
+Use `--privileged` only if required for isolation. Select the same project folder.
+The starter uses the existing SSH agent and `known_hosts`; no private keys are copied.
+The loaded identity needs write access to the configured repository.
 
-In Godot unter **Setup**:
+In Godot **Setup**:
 
-1. Projekt auswählen und **Check project** ausführen.
-2. **Push successful results to each agent's own Git branch** aktivieren.
-3. **Create backend + frontend team** anklicken. Bei einem bestehenden Team wird
-   die Veröffentlichung freigeschaltet; bearbeitete Aufgaben bleiben erhalten.
-4. Unter **Agents** den jeweiligen Worker auswählen und **Start agent** anklicken.
+1. Select the project and run **Check project**.
+2. Enable **Push successful results to each agent's own Git branch**.
+3. Click **Create backend + frontend team**. Existing teams gain publication
+   permission while retaining edited tasks.
+4. Select each worker under **Agents** and click **Start agent**.
 
-Alternativ bei bestehenden Agenten unter **Agents** die Optionen **Allow push**
-und **Publish committed results after successful execution** aktivieren und
-**Save configuration** drücken. Dafür muss Remote Git ebenfalls über den Starter
-freigeschaltet sein. Ohne diese ausdrückliche Auswahl bleibt Veröffentlichung aus.
+Alternatively, enable **Allow push** and **Publish committed results after successful
+execution** in existing agent configurations and click **Save configuration**.
+Remote Git must also be enabled through the starter. Publication stays off without
+this explicit choice.
 
-Der Worker erhält die Anweisung, relevante Tests auszuführen und geprüfte Dateien
-über den vorhandenen Git-Helper zu committen. Nach erfolgreichem Runtime-Abschluss
-prüft der Controller, ob alle Projektänderungen committet sind. Er pusht genau
-`HEAD` auf `refs/heads/agent/<agent-id>/…`. Tags, andere Branches, Force-Push und
-Merge werden nicht ausgeführt. Die Worker erhalten keinen SSH-Agent-Socket.
+Workers are instructed to run relevant tests and commit checked files through the
+Git helper. After successful runtime completion, the controller requires all project
+changes committed and publishes the recorded HEAD to `refs/heads/agent/<agent-id>/…`.
+It does not publish tags, other branches or force-push. Workers never receive the
+SSH agent socket. The controller verifies the remote tip after publication.
 
-Unter **Executions** zeigt **Git: PUSHED** den erfolgreichen Push. Commit-ID,
-Remote-Name und Branch werden im Ausführungsdatensatz gespeichert. **FAILED**
-bedeutet, dass die Veröffentlichung scheiterte; **NOT_PUBLISHED**, dass der Lauf
-vor der Veröffentlichung abgebrochen/fehlgeschlagen ist. Dateien bleiben erhalten.
-Bei uncommitteten Änderungen, fehlenden Rechten oder abweichender Remote-Historie
-wird kein erfolgreicher Abschluss behauptet. Optional übernimmt die [Team-Automatik](automatic-integration.md) Integration und
-Requirements-Tests bis zur Main-Promotion; ohne diese Freischaltung bleiben es eigene Schritte; GitHub zeigt die Ergebnisse auf den Agenten-Branches, nicht auf `main`.
+**Executions → Git: PUSHED** records successful publication, commit, remote and branch.
+**FAILED** means publication failed; **NOT_PUBLISHED** means the run failed/stopped
+before publication. Files remain. Dirty trees, missing permissions or divergent
+remote history cannot be reported as success. Without [team automation](automatic-integration.md),
+results are on agent branches, not main.
 
-## Automatisch zusammenführen, gemeinsam testen und nach main übernehmen
+## Merge, test together and promote to main
 
-Im Setup zusätzlich **Integrate + requirements tests + promote green result to main**
-aktivieren. Das ergänzt den Integrations-/Testworker und ersetzt die manuelle
-Aufgabenannahme. [Vollständiger Ablauf und Testplanformat](automatic-integration.md).
+Also enable **Integrate + requirements tests + promote green result to main**.
+This adds the integration/test worker and removes the need for manual task acceptance.
+See the [workflow and test-plan format](automatic-integration.md).
 
-### Push bricht mit „No user exists for uid 1000“ ab
+### Push fails with “No user exists for uid 1000”
 
-Wenn Host- und Container-SSH funktionieren, aber der isolierte Push fehlschlägt,
-benötigt OpenSSH die öffentliche Benutzerzuordnung innerhalb seiner Sandbox.
-Aktuelle Versionen binden `/etc/passwd` und `/etc/group` ausschließlich lesbar
-für Git-SSH ein; private Schlüssel, Shadow-Dateien und Host-Homeverzeichnisse
-bleiben ausgeschlossen. Den VirtualAgentCafe-Feature-Branch aktualisieren und den
-Starter im Terminal mit geladenem SSH-Agenten erneut ausführen:
+If host/container SSH works but isolated push fails, OpenSSH needs public user identity
+mapping inside its sandbox. Current versions mount `/etc/passwd` and `/etc/group`
+read-only for Git SSH; private keys, shadow files and host home directories remain
+excluded. Update VirtualAgentCafe and rerun the starter from a terminal with a loaded
+SSH agent. Existing worktrees remain. Resume failed workers with Start/Restart;
+their tasks should inspect previous work and finish only outstanding changes.
+Restart alone does not retry an earlier failed publication.
 
-```bash
-python3 scripts/setup-project.py --publish-results --privileged
-```
+### Reconnect worktrees after mounting the wrong source
 
-Bestehende Worktrees bleiben erhalten. Die fehlgeschlagenen Worker können danach
-über Start/Restart fortsetzen; ihre Rollen und Aufgaben sollen vorhandene Änderungen
-zuerst prüfen und nur offene Arbeiten abschließen. Ein früher fehlgeschlagener Push
-wird nicht allein durch den Neustart automatisch nachgeholt.
-
-### Vorhandene Agenten-Worktrees nach falschem Projekt-Mount wieder anbinden
-
-Wenn der Starter einen Workspace unter einer anderen ID als der vorhandene Agent
-meldet, den echten Projektordner direkt an die ursprünglich gespeicherte ID
-binden. So bleiben Agenten-Worktrees und Ausführungen erhalten. Beispiel:
+If setup reports a different workspace ID from the existing agent, bind the real
+source folder to the originally saved ID to preserve worktrees/history:
 
 ```bash
-python3 scripts/setup-project.py \\
-  --project /mnt/f/Workspace/SimulationWorld \\
-  --workspace-id project-1467da4f208c3c30b8b116-fd507a6f \\
+python3 scripts/setup-project.py \
+  --project /mnt/f/Workspace/SimulationWorld \
+  --workspace-id project-1467da4f208c3c30b8b116-fd507a6f \
   --publish-results --privileged
 ```
 
-`--project` muss auf den echten Projektordner mit `.git` zeigen, nicht auf einen
-Docker-Desktop-Bind-Mount unter `/mnt/wsl/docker-desktop-bind-mounts/`. Die ID
-muss zur `gitdir:`-Zeile im bestehenden Worker-Worktree passen. Der Starter prüft
-den Sandbox-Mount, bevor Godot startet. Danach `git rev-parse --show-toplevel` im
-Worker-Worktree prüfen, bevor Agenten fortgesetzt werden.
+`--project` must select the real folder containing `.git`, not a temporary path under
+`/mnt/wsl/docker-desktop-bind-mounts/`. The ID must match the worker's `gitdir:` line.
+The starter checks isolation before launching Godot. Verify `git rev-parse
+--show-toplevel` in the worker worktree before resuming agents.
 
+## Next iteration after reviewing main
 
-## Nächste Runde nach deinem Test auf main
+Keep agents/worktrees and review current remote main yourself. A previous automatic
+publication is not required; an existing project may also start this way. In Setup:
 
-Agenten und Worktrees behalten. Den aktuellen Stand auf Remote-main selbst
-testen. Eine frühere automatische Veröffentlichung ist keine Voraussetzung;
-auch ein bereits bestehendes Projekt kann so gestartet werden. Dann in **Setup**:
+1. Select the existing project and click **Load project documents**.
+2. Enter additional requirements/acceptance criteria under **NEXT ITERATION**.
+   Existing tasks need not be rewritten manually.
+3. Click **Start next iteration** to authorize the round.
 
-1. Das bestehende Projekt auswählen und **Load project documents** klicken.
-2. Im Feld **NEXT ITERATION** die zusätzlichen Anforderungen und Abnahmekriterien
-   eingeben. Alte Tasks müssen dafür nicht manuell umgeschrieben werden.
-3. **Start next iteration** klicken. Dieser Klick autorisiert die neue Runde.
+The controller loads current remote main, merges it into clean worker branches
+without reset/force, appends source PLANNING.md and starts both workers. Existing
+tasks/roles remain; new instructions delimit the round. Each run freezes its documents;
+each iteration has an ID and recorded runs, so old results cannot start integration
+prematurely. Both successful publications trigger integration, controller tests and
+the already-configured main promotion.
 
-Der Controller lädt den aktuellen Remote-main, übernimmt ihn ohne Reset oder
-Force in beide sauberen Worker-Branches, ergänzt PLANNING.md im Quellordner und
-startet beide Worker. Die bisherigen Aufgaben/Rollen bleiben erhalten; der neue
-Auftrag grenzt die aktuelle Runde ausdrücklich ab. Die Dokumente werden pro Lauf
-unveränderlich gesichert. Jede Runde hat eine eigene ID und gespeicherte Runs;
-Ergebnisse einer alten Runde können die Integration nicht vorzeitig starten.
-Nach beiden erfolgreichen Veröffentlichungen folgen automatisch Integration,
-Controller-Tests und die bereits konfigurierte Veröffentlichung auf main.
+Typing/saving alone never starts work. Reload documents before the next click.
+GitHub-only edits become visible after updating the mounted source folder. The
+controller updates workers from remote main, not the local source main checkout.
 
-Kein Start durch bloßes Tippen oder Speichern: So bleibt Zeit für deinen Test und
-für das Formulieren vollständiger Anforderungen. Vor dem nächsten Klick Dokumente
-neu laden. Änderungen ausschließlich auf GitHub sind erst nach Aktualisierung des
-lokal eingebundenen Quellordners sichtbar. Der Controller überschreibt dessen
-lokalen main nicht; er aktualisiert die Worker aus Remote-main.
+Unsaved worker files, merge conflicts, missing SSH/push permission and stale planning
+produce concrete errors. Existing files survive partial preparation. A partially
+started round is recorded as failed; let running workers finish, reload documents
+and retry. Use Agent chat / Retry team integration for integration failures.
 
-Bei ungesicherten Worker-Dateien, Merge-Konflikten, fehlender SSH-/Push-Freigabe
-oder veralteter Planung bleibt ein konkreter Fehler sichtbar. Bestehende Dateien
-werden erhalten, auch wenn die Vorbereitung schon einen Worker aktualisiert hat.
-Ein teilweise gestarteter Lauf wird als fehlgeschlagene Runde gespeichert; laufende
-Worker zuerst beenden lassen und dann Dokumente laden und erneut starten. Bei
-Integrationsfehlern weiter Agent chat / Retry team integration verwenden.
+PLANNING.md is limited to 64 KiB UTF-8. Archive lengthy completed plans in separate
+history files and keep current planning concise. The new-requirements field allows
+16,000 characters.
 
-PLANNING.md ist auf 64 KiB UTF-8 begrenzt. Abgeschlossene umfangreiche Planungen
-bei Bedarf in separate Historien-Dateien archivieren und die aktuelle Planung
-kompakt halten; ein einzelnes neues Anforderungsfeld erlaubt 16.000 Zeichen.
-
-
-Die Compose-Dienste verwenden `init: true`, damit verwaiste Sandbox-Prozesse
-aufgeräumt werden. Bestehende Container müssen neu erstellt werden, damit diese
-Einstellung wirksam wird. Bei ausgeschöpften Namespace-Grenzen trotz freiem
-Plattenplatz den betroffenen Container neu starten; Isolation nicht deaktivieren.
+Compose services use `init: true` to reap orphaned sandbox processes. Recreate existing
+containers to apply it. If namespace limits are exhausted despite free disk space,
+restart the affected container rather than disabling isolation.

@@ -1,98 +1,95 @@
-# Automatische Integration und gemeinsame Requirements-Tests
+# Automatic integration and shared requirements tests
 
-## Automatische Reparatur und Agenten-Chat
+## Automatic repair and agent chat
 
-Die Integration führt bis zu `execution.repair_attempts` Versuche pro Zyklus aus
-(Standard **3**, einschließlich des ersten Versuchs; Agenteneinstellungen: 1–5).
-Nach fehlgeschlagener Ausführung oder gemeinsamer Validierung erhält der nächste
-Versuch die Testdiagnosen und arbeitet im selben Worktree weiter. Änderungen und
-Konfliktlösungen bleiben erhalten. Gemeinsame Testdiagnosen enthalten Fehlerklassen,
-Exit-Codes und erkannte pytest-Testnamen, keine rohen Assertions oder Ausgaben.
+Integration runs up to `execution.repair_attempts` attempts per cycle (default **3**,
+including the first; configurable from 1–5). After a repairable runtime or shared
+validation failure, the next attempt receives diagnostics and continues in the
+same worktree, preserving edits and conflict resolutions. Shared diagnostics include
+failure categories, exit codes and recognized pytest test names. Raw assertions
+and output are not included in public events. Infrastructure and unexplained failures
+require attention rather than speculative code repairs; see [controller validation](controller-validation.md).
 
-Währenddessen zeigt das Team `REPAIRING`. Wiederholt sich derselbe Fehler nach einem
-Reparaturversuch, ist das Budget verbraucht oder scheitert Veröffentlichung/Promotion,
-stoppt der Zyklus mit `NEEDS_INPUT`. Doppelte Worker-Benachrichtigungen starten ihn
-nicht erneut. Alle Prüfungen vor der Main-Promotion bleiben verpflichtend. Abbrechen
-des laufenden Integrationsagenten beendet auch den Reparaturzyklus.
+The team shows `REPAIRING` during retries. A repeated failure after repair, exhausted
+budget or publication/promotion failure stops the cycle as `NEEDS_INPUT`. Duplicate
+worker notifications do not restart it. All main-promotion checks remain mandatory.
+Cancelling integration also ends the repair cycle.
 
-Öffne **Management → Agent chat**, wähle den Integrationsagenten und lies seine letzte
-Antwort. Mit **Send & continue** speicherst du eine Klarstellung und startest einen
-neuen Zyklus. Der Chat funktioniert auch für einzelne Worker. Markdown-Aufgaben,
-Rollen und Sicherheitsregeln gelten weiterhin. Nachrichten liegen ausschließlich
-in der privaten Management-Datenbank, nicht im öffentlichen Eventstream. Die letzten
-40 Nachrichten bleiben gespeichert; die letzten 12 fließen in neue Ausführungen ein.
+Open **Management → Agent chat**, select the integrator and read its last response.
+Use **Send instruction & continue** to save clarification and start another cycle.
+Worker chat works the same way. **Ask question** only requests a read-only answer;
+it does not restart work or trigger integration. Markdown tasks, roles and security
+rules still apply. Messages persist in the private management database, not the
+public event stream. The last 40 messages are retained; up to 12 work-context
+messages enter subsequent executions.
 
-Nachrichten werden an Ausführungsgrenzen übergeben: Während eines laufenden Versuchs
-bedeutet `NEXT_ATTEMPT`, dass die Nachricht für den nächsten Start gespeichert ist.
-Endet der aktuelle Lauf ohne weiteren Versuch, nach seinem Ende mit **Send & continue**
-einen Folgelauf anfordern. Antworten erscheinen nach Ende einer Ausführung. Jeder
-Zyklus kann zusätzliche Modellnutzung verursachen. Fehler bei Mounts, Berechtigungen
-oder Anmeldung können weiterhin eine Korrektur der Umgebung erfordern.
+Instructions are delivered between executions. `NEXT_ATTEMPT` means an instruction
+sent during a run is saved for its next start. If no further attempt occurs, request
+a follow-up with **Send instruction & continue** after completion. Replies appear
+after execution. Additional cycles consume model usage. Mount, permission and login
+failures may require environment repair.
 
-Der Ablauf benötigt keine manuelle Aufgabenannahme in **Executions**:
+The workflow does not require manual task acceptance in **Executions**:
 
 ```text
 Backend commit + push ─┐
-                      ├─ Integrations-Feature-Branch ─ Requirements-Tests ─ main
+                      ├─ Integration feature branch ─ Requirements tests ─ main
 Frontend commit + push┘
 ```
 
-## Aktivieren
+## Enable automation
 
 ```bash
 python3 scripts/setup-project.py --publish-results --privileged
 ```
 
-`--privileged` nur verwenden, wenn deine lokale Containerumgebung es für die
-Namespace-Isolation benötigt. Im Setup das bestehende Projekt prüfen, dann
-**Integrate + requirements tests + promote green result to main** aktivieren und
-**Create backend + frontend team** klicken. Das schaltet auch die Worker-Pushes
-frei. Bestehende Aufgaben und Worktrees bleiben erhalten. Anschließend Backend und
-Frontend unter **Agents** starten. Der zusätzliche **Integration & Tests**-Worker
-startet automatisch, sobald beide aktuellen Aufgaben erfolgreich gepusht sind.
+Use `--privileged` only when your local environment requires it for namespace
+isolation. Check the existing project in Setup, enable **Integrate + requirements
+tests + promote green result to main**, then click **Create backend + frontend team**.
+This also enables worker publication. Existing tasks and worktrees are preserved.
+Start backend and frontend under **Agents**. The additional **Integration & Tests**
+worker starts automatically after both current tasks have been successfully pushed.
 
-Git-Remote/SSH-Agent/known_hosts werden wie bisher vom Starter übernommen. Das
-Remote muss einen `main` mit gemeinsamem Git-Verlauf besitzen. Benötigt werden
-Schreibrechte für die Agenten-Branches und für `main`. Eine serverseitige
-Branch-Schutzregel kann den direkten Main-Push ablehnen; sie wird nicht umgangen.
+The starter forwards the Git remote configuration, SSH agent and `known_hosts`.
+The remote needs a `main` branch with shared history. Write access is required for
+agent branches and `main`. Server-side branch protection may reject direct main
+pushes; the controller does not bypass it.
 
-## Was automatisch passiert
+## Automatic steps
 
-1. Der Controller wartet auf erfolgreiche Pushes beider Worker und prüft Aufgaben-,
-   Rollen- und Projekt-Snapshots. Fehlgeschlagene oder veraltete Läufe reichen nicht.
-2. Der zusätzliche isolierte Worktree nutzt
-   `agent/<projekt-id>-integration/validation`. Er übernimmt den aktuellen Remote-
-   Main-Commit und die genauen veröffentlichten Worker-Commits mit normalen Merges.
-3. Der Integrationsworker erhält unveränderliche gemeinsame Requirements aus
-   `AGENTS.md`, `PLANNING.md` und den beiden Aufgaben. Er gleicht die Schnittstellen
-   ab, erstellt gemeinsame Tests und committet die Testbasis samt Requirements.
-4. Der Controller führt die deklarierten Tests erneut aus: ohne Netzwerk,
-   Codex-Anmeldung, SSH-Agent oder Git-Schreibzugriff. Der Git-Helper ist in dieser
-   Phase abgeschaltet. Ein erfolgreicher Modellprozess allein reicht nicht.
-5. Bei grünen Prüfungen wird der Integrations-Feature-Branch gepusht. Nur dessen
-   geprüfter Commit darf anschließend als Fast-forward auf Remote-`main` landen.
-   Requirements und Worker-Aufgaben müssen weiterhin zu den getesteten Snapshots
-   passen. Ein zwischenzeitlich geändertes Remote-`main` blockiert die Promotion.
-6. Gemeinsames Ergebnis und Aufgaben erhalten `AUTO_VALIDATED`/`COMPLETED`;
-   der Projektstatus zeigt `PROMOTED`. Es gibt keinen Accept-/Reject-Schritt.
+1. Wait for both worker publications and verify task, role and project snapshots.
+   Failed or stale executions do not qualify.
+2. Use an isolated worktree on `agent/<project-id>-integration/validation`. Merge
+   current remote main and the exact published worker commits using ordinary merges.
+3. Give the integrator immutable shared requirements from `AGENTS.md`, `PLANNING.md`
+   and both tasks. It aligns interfaces and commits shared tests and requirements.
+4. Run the declared tests through the controller without network, Codex credentials,
+   SSH agent or Git write access. The Git helper is disabled for validation.
+   Model-process completion alone is insufficient.
+5. Publish the integration feature branch after passing validation. Only the tested
+   commit may reach remote `main` as a fast-forward. Requirements and tasks must
+   still match the snapshots. A concurrent remote-main change blocks promotion.
+   The controller verifies remote tips and commit ancestry rather than assuming success.
+6. Record `AUTO_VALIDATED`/`COMPLETED` and project status `PROMOTED`. No manual
+   Accept/Reject click is needed for this authorized workflow. Explicit desktop/product
+   acceptance remains separate and can be reported as `MANUAL_ACCEPTANCE_REQUIRED`.
 
-Das Quellverzeichnis auf dem Host wird dabei nicht überschrieben. Nach erfolgreicher
-Promotion steht das kombinierte Projekt auf GitHub auf `main`; die lokale Kopie
-kann bei sauberem Arbeitsstand regulär mit Git aktualisiert werden.
+The host source checkout is not overwritten. After promotion, the combined project
+is on GitHub's `main`; update a clean local checkout normally with Git.
 
-## Gemeinsame Testbasis
+## Shared test base
 
-Der Integrationsworker muss folgende Dateien committen:
+The integrator must commit:
 
-- `validation/requirements.md`: exakte Kopie des gemeinsamen Requirements-Snapshots.
-- `validation/plan.json`: Anforderung-zu-Test-Zuordnung und ausführbare Prüfsuiten.
-- Die eigentlichen Tests, beispielsweise `tests/test_contract.py`.
+- `validation/requirements.md`: an exact copy of the shared requirements snapshot.
+- `validation/plan.json`: requirement-to-test mapping and executable checks.
+- Actual tests, for example `tests/test_contract.py`.
 
 ```json
 {
-  "source_sha256": "SHA256 von validation/requirements.md",
+  "source_sha256": "SHA256 of validation/requirements.md",
   "requirements": [
-    {"id": "REQ-1", "description": "Frontend und Backend verwenden denselben API-Vertrag",
+    {"id": "REQ-1", "description": "Frontend and backend use the same API contract",
      "checks": ["backend-tests", "frontend-tests"]}
   ],
   "checks": [
@@ -102,106 +99,86 @@ Der Integrationsworker muss folgende Dateien committen:
 }
 ```
 
-Die SHA-256 stammt aus dem schreibgeschützten Snapshot unter
-`.cafe/instructions/requirements.md`. Der Controller prüft Hash und Dateiinhalte.
-Jede Anforderung muss auf vorhandene Checks verweisen, jeder Check muss einer
-Anforderung zugeordnet sein. Doppelte IDs, unbekannte Ausführungsarten, Pfad-Traversal,
-Symlinks und uncommittete Testpläne werden abgelehnt.
+The hash comes from the read-only `.cafe/instructions/requirements.md` snapshot.
+The controller checks the hash and exact contents. Every requirement must reference
+existing checks and every check must serve a requirement. Duplicate IDs, unsupported
+check kinds, path traversal, symlinks and uncommitted test plans are rejected.
 
-Unterstützte Checks:
-
-| Art | Ausführung |
+| Kind | Execution |
 | --- | --- |
-| `pytest` | Backend-Python `-m pytest -q -p no:cacheprovider` im angegebenen Projektordner |
-| `npm` | `npm test`, mit `CI=1` |
-| `godot` | Godot headless mit committetem Testscript, z. B. `"script": "tests/test_states.gd"` |
+| `pytest` | Runtime Python `-m pytest -q -p no:cacheprovider` in the declared directory; explicit project interpreter/targets supported |
+| `npm` | `npm test` with `CI=1` |
+| `godot` | Godot headless with a committed test script, e.g. `"script": "tests/test_states.gd"` |
 
-Projektabhängigkeiten müssen in der jeweiligen Testumgebung vorhanden sein; der
-Controller installiert während der isolierten Prüfung keine Pakete aus dem Netz.
-Testzuordnung und Testqualität werden vom Integrationsworker erstellt. Grüne
-Prüfungen belegen die deklarierten Tests, keinen formalen Beweis aller Prosa-Anforderungen.
+See [controller validation](controller-validation.md) for interpreter selection,
+scopes and cache rules. Dependencies must exist in the test environment; isolated
+validation does not install packages from the network. The integrator creates test
+coverage. Passing checks demonstrate those tests, not formal proof of all prose requirements.
 
-## Fehler, Wiederholung und Historie
+## Failures, retry and history
 
-**Executions** zeigt Worker-Status, Team-Status, Requirements-Prüfungen, Feature-
-Push und Main-Promotion. Die Auswahl eines Worker-Laufs zeigt auch den aktuellen
-Team-Status. Der Integrationslauf enthält Commit, Requirements-/Plan-Hashes,
-Anforderungszuordnung und Check-Ergebnisse. Rohe Tool-Ausgaben und private Prompts
-werden nicht in den öffentlichen Eventstream übernommen.
+**Executions** shows worker/team status, requirements checks, feature publication
+and main promotion. Selecting a worker run also shows current team status. The
+integration run records the commit, requirements/plan hashes, mappings and check
+results. Private prompts and raw tool output do not enter public events.
 
-- `WAITING_FOR_WORKERS`: Erst fehlgeschlagenen/veralteten Worker korrigieren und
-  erneut starten. Erfolgreiche andere Worktrees bleiben erhalten.
-- `FAILED`: Integrationsfehler, Konflikt oder fehlgeschlagene gemeinsame Prüfung;
-  `main` wird nicht automatisch mit dem fehlgeschlagenen Stand überschrieben.
-- `INTERRUPTED`: Backend während der Integration beendet; bestehende Dateien bleiben.
-- `PROMOTED`: Der getestete gemeinsame Commit wurde erfolgreich auf `main` gepusht.
+- `WAITING_FOR_WORKERS`: repair/rerun failed or stale workers; successful worktrees remain.
+- `FAILED`: integration/conflict/validation failure; the failed revision does not replace main.
+- `INTERRUPTED`: backend stopped during integration; working files remain.
+- `NEEDS_INPUT`: automatic repair stopped and requires a concrete instruction or environment fix.
+- `PROMOTED`: the tested combined commit reached remote main, with controller verification.
 
-Nach einer Korrektur kann **Retry team integration** im Ausführungsdialog den
-Ablauf erneut anstoßen. Merge-Konflikte werden im Integrations-Worktree an den Integrationsagenten
-übergeben. Er löst Inhalte auf, staged die aufgelösten Dateien und committet den
-Merge. Retry kann auch einen zuvor unterbrochenen Merge wieder aufnehmen. Es gibt
-kein automatisches Reset, Clean, Abort oder Force-Push.
-Bei geändertem Main wird erneut zusammengeführt und getestet. Agenten desselben
-Teams können während der laufenden Integration nicht neu gestartet werden.
+After correction, use **Retry team integration**. Merge conflicts are handed to the
+integrator to resolve, stage and commit. Retry can resume an interrupted merge.
+There is no automatic reset, clean, abort or force-push. A changed main is merged
+and tested again. Team workers cannot restart while their integration is active.
 
-Die Zustände und Ergebnisse überleben Backend-Neustarts. Unterbrochene Integration
-wird nicht als Erfolg behandelt. Nach Neustart im Codex-Modus werden aktivierte
-Teams wieder auf geeignete Worker-Ergebnisse geprüft.
+State and results survive backend restarts. Interrupted integration is not success.
+On restart in Codex mode, enabled teams are checked for eligible worker results.
 
-## API und Nachweis
+## API and evidence
 
-- Setup: `POST /management/setup/team` mit `auto_integrate: true` (impliziert
-  `publish_results: true`), vorhandene Remote-Git-Freigabe erforderlich.
-- Wiederholen: `POST /management/projects/{id}/integrate` mit `{}`.
-- Status: Management-Übersicht (`projects`) und bestehende Execution-/Log-Endpunkte.
-- Der bisherige `/executions/{id}/review`-Endpunkt bleibt für ältere API-Clients
-  erhalten, ist aber keine Voraussetzung und kann keine Main-Promotion freigeben.
+- Setup: `POST /management/setup/team` with `auto_integrate: true` (implies
+  `publish_results: true`); remote Git must already be enabled.
+- Retry: `POST /management/projects/{id}/integrate` with `{}`.
+- Status: management overview (`projects`) and existing execution/log endpoints.
+- `/executions/{id}/review` remains for older clients but is not required and cannot authorize main promotion.
 
-`test_team_integration.py` prüft mit echten temporären Git-Repositories und echten
-isolierten pytest-Läufen die erfolgreiche Main-Promotion sowie Test-, Worker-,
-Plan- und Merge-Fehler, konkurrierende Main-Updates und geänderte Requirements.
-Das erfordert weder externe Git-Hosts noch Modellaufrufe.
+`test_team_integration.py` uses temporary Git repositories and actual isolated
+pytest runs to test promotion, worker/test/plan/merge failures, concurrent main
+updates and changed requirements. No external Git hosting or model calls are required.
 
-### Retry zeigt keinen sichtbaren Start
+### Retry appears not to start
 
-Unter Executions steht der Team-Status direkt über **Retry team integration**.
-Ein Klick zeigt sofort die Anfrage, anschließend `QUEUED`, `PREPARING`, den
-konkreten Blockierungsgrund oder `PROMOTED`, wenn genau diese Worker-Ergebnisse
-bereits integriert wurden. Eine angenommene Anfrage bedeutet noch keinen Abschluss.
+Under Executions, team status appears directly above **Retry team integration**.
+A click immediately shows the request, followed by `QUEUED`, `PREPARING`, a specific
+blocker or `PROMOTED` if those exact results were already integrated. An accepted
+request is not completion.
 
-Der Controller prüft vor dem Einreihen den jeweils neuesten Worker-Lauf. Die
-Rückmeldung nennt den betroffenen Agenten und unterscheidet fehlende/laufende/
-fehlgeschlagene Ausführungen, fehlende Veröffentlichung sowie geänderte Aufgaben,
-Projekt-Markdown-Dateien oder Rollen. Bei geänderten Vorgaben reichen ältere
-`COMPLETED`-/`PUSHED`-Ergebnisse nicht aus. Die Meldung wird auch bei automatisch
-angestoßener Integration als Team-Status gespeichert.
+Before queuing, the controller checks the latest worker runs. Messages identify
+the agent and distinguish missing/running/failed executions, missing publication,
+and changed tasks/project Markdown/roles. Earlier `COMPLETED`/`PUSHED` results do
+not satisfy changed instructions. Automatic integration records the same blockers.
 
-Die letzte Retry-Antwort bleibt zusätzlich im kopierbaren Feld **LAST RETRY**
-unter dem Button stehen. Automatische Log-Abfragen ändern nur den aktuellen
-Team-Status darüber. Die Antwort ist dem ausgewählten Lauf zugeordnet und bleibt
-beim Wechsel zwischen Läufen in derselben Godot-Sitzung erhalten. Eine neue
-Retry-Anfrage für diesen Lauf ersetzt sie; nach einem Client-Neustart kann die
-Antwort erneut angefordert werden.
+The copyable **LAST RETRY** field keeps the last response below the button. Log
+polling only updates current team status above it. Responses belong to the selected
+run and survive switching runs within the Godot session. Another retry replaces
+the response; after restarting the client, request it again.
 
+### Conflicts and team recreation
 
-### Konflikte und erneutes Team-Setup
+Merge conflicts no longer prevent the integrator from starting. It receives existing
+files, the pending merge, current requirements and exact required main/worker commits.
+Only this agent may use its Git helper to merge commits approved for the current
+run. Other commits, branch switches and direct pushes remain unavailable there.
 
-Ein Git-Merge-Konflikt verhindert den Start des Integrationsagenten nicht mehr.
-Er erhält die vorhandenen Dateien, den begonnenen Merge, die aktuellen Requirements
-und die exakten benötigten Main-/Worker-Commits. Über den Git-Helper darf nur dieser
-Agent die für seinen aktuellen Lauf freigegebenen Commits zusammenführen. Fremde
-Commits, Branchwechsel und direkte Pushes werden darüber nicht freigegeben.
+Before publication and requirements validation, the controller requires a clean
+project tree, no pending merge and all required commits in HEAD history. A model's
+success claim is insufficient. Unresolved conflicts retain files for another attempt;
+contradictory requirements may still need human clarification.
 
-Vor Veröffentlichung und Requirements-Validierung prüft der Controller: keine
-uncommitteten Projektänderungen, kein offener Merge und alle benötigten Commits in
-der HEAD-Historie. Eine Erfolgsmeldung des Modells reicht nicht. Nicht lösbare
-Konflikte bleiben als fehlgeschlagener Lauf mit erhaltenen Dateien zur erneuten
-Bearbeitung verfügbar. Semantisch widersprüchliche Anforderungen können weiterhin
-menschliche Klärung erfordern.
-
-Einzeln gelöschte Worker werden beim erneuten Team-Setup wieder angelegt. Vorhandene
-passende Worktrees, Branches und Markdown-Dateien werden weiterverwendet; die
-Neueinrichtung verwirft keine lokale Arbeit und bedeutet keinen leeren Neustart.
+Individually deleted workers are recreated during team setup. Matching worktrees,
+branches and Markdown files are reused; recreation preserves local work.
 
 ## Godot validation paths and diagnostics
 

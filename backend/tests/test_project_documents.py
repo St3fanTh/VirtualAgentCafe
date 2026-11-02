@@ -171,7 +171,7 @@ def test_document_api_authorization_conflicts_and_fixed_paths(tmp_path):
 
 
 def test_large_planning_utf8_roundtrip_and_byte_limit(tmp_path):
-    content = "# Planning\n" + "Anforderung äöü\n" * 2500
+    content = "# Planning\n" + "Requirement äöü\n" * 2500
     data = ProjectDocumentInput(
         project="sample", name="PLANNING.md", content=content, expected_sha256=""
     )

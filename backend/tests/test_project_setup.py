@@ -331,7 +331,7 @@ def test_launcher_stops_before_login_and_godot_if_sandbox_fails(tmp_path, monkey
         return SimpleNamespace(returncode=0, stdout="")
 
     monkeypatch.setattr(launcher.subprocess, "run", run)
-    with pytest.raises(ValueError, match="Codex-Login und Godot-Start"):
+    with pytest.raises(ValueError, match="Codex login and Godot launch were skipped"):
         launcher.main()
     assert "Namespace denied" in capsys.readouterr().out
     assert not any("codex" in command for command in calls)
@@ -455,7 +455,7 @@ def test_launcher_rejects_invalid_workspace_id(tmp_path, monkeypatch):
             "--dry-run",
         ],
     )
-    with pytest.raises(ValueError, match="Workspace-ID"):
+    with pytest.raises(ValueError, match="Workspace ID"):
         launcher.main()
 
 

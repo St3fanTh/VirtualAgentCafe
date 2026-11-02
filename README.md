@@ -1,215 +1,206 @@
 # VirtualAgentCafe
 
-VirtualAgentCafe zeigt echte Codex-Agenten als Charaktere in einem Godot-Café.
-Backend- und Frontend-Agent arbeiten in getrennten Git-Worktrees an deinem Projekt.
-Ein Integrationsagent führt ihre Ergebnisse zusammen und prüft sie vor der
-optionalen Veröffentlichung auf `main`. Animationen folgen tatsächlichen
-Laufzeitereignissen wie Programmieren, Testen, Warten und Abschluss.
+VirtualAgentCafe displays real Codex agents as characters in a Godot café.
+Backend and frontend agents work on your project in separate Git worktrees.
+An integration agent combines their results and validates them before optional
+publication to `main`. Animations follow actual runtime events such as coding,
+testing, waiting and completion.
 
-## Voraussetzungen
+## Prerequisites
 
-Für den normalen Betrieb verwendest du **das Python-Setup-Skript und Godot**.
-Das Skript baut und startet das Backend mit Docker Compose; Python-Pakete, Codex CLI,
-Git und Testwerkzeuge für die Agenten werden im Container installiert.
+For normal use, you run **the Python setup script and Godot**. The script builds
+and starts the backend through Docker Compose. Python packages, Codex CLI, Git
+and the agents' test tools are installed inside the container.
 
-| Voraussetzung auf deinem Rechner | Wofür? |
+| Requirement on your computer | Purpose |
 | --- | --- |
-| Linux oder Windows mit WSL2 | Das Setup-Skript läuft auf dem Linux-/WSL-Host. |
-| Python **3.10+** | Führt `scripts/setup-project.py` aus; keine zusätzlichen Python-Pakete nötig. |
-| Docker mit Compose V2 und Unterstützung für `up --wait` | Baut und betreibt das Backend. Unter Windows Docker Desktop starten und die WSL-Integration aktivieren. |
-| Godot **4.4.1 Standard** | Öffnet die Café-Oberfläche. Unter Windows kann die Windows-Version verwendet werden. |
-| Git und ein VirtualAgentCafe-Checkout | Zum Herunterladen und Aktualisieren dieser Anwendung. |
-| Ein separates Projekt mit echtem `.git`-Verzeichnis und mindestens einem Commit | Das ist der Ordner, den die Agenten bearbeiten sollen; kein bestehender Worktree und nicht VirtualAgentCafe selbst. |
-| Codex-Zugang | Der Starter öffnet bei fehlender Anmeldung den Login im Container. Die Agenten verwenden diesen gemeinsamen Zugang; Modellnutzung kann Kosten verursachen. |
-| Git-Remote und SSH-Zugang mit Schreibrechten, wenn Ergebnisse gepusht werden sollen | Im Zielprojekt muss `origin` auf dein Repository zeigen. Ein geladener SSH-Agent und geprüfte `~/.ssh/known_hosts` werden vom Starter eingebunden. |
+| Linux or Windows with WSL2 | Run the setup script on the Linux/WSL host. |
+| Python **3.10+** | Runs `scripts/setup-project.py`; no additional Python packages needed. |
+| Docker with Compose V2 supporting `up --wait` | Builds and runs the backend. On Windows, start Docker Desktop and enable WSL integration. |
+| Godot **4.4.1 Standard** | Opens the café interface. The Windows version works from WSL. |
+| Git and a VirtualAgentCafe checkout | Downloads and updates this application. |
+| A separate project with a real `.git` directory and at least one commit | The folder agents will develop; select the main repository, not an existing worktree or VirtualAgentCafe itself. |
+| Codex access | The starter opens login inside the container when needed. Agents share this login; model usage may incur costs. |
+| A Git remote and SSH write access, for publishing results | Your project's `origin` must point to its repository. The starter forwards a loaded SSH agent and verified `~/.ssh/known_hosts`. |
 
-Für die Ordnerauswahl nutzt WSL Windows PowerShell. Unter Linux ist Python-Tk mit
-grafischer Sitzung optional; ohne Dialog fragt das Skript nach dem Pfad.
-Die Agenten benötigen funktionierende Linux-Namespaces/Bubblewrap. Der Starter
-prüft das vor dem Start. Für lokale Umgebungen, die den zusätzlichen Containerzugriff
-benötigen, gibt es den ausdrücklich gewählten Schalter `--privileged`.
+WSL uses Windows PowerShell for folder selection. On Linux, Python Tk with a
+graphical session is optional; otherwise the script prompts for a path.
+Agents require working Linux namespaces/Bubblewrap. The starter checks this.
+For local environments that require extra container permissions, explicitly use
+`--privileged`.
 
 ## Getting started
 
-### 1. VirtualAgentCafe herunterladen
+### 1. Download VirtualAgentCafe
 
-Im Linux-/WSL-Terminal:
+In a Linux/WSL terminal:
 
 ```bash
 git clone https://github.com/St3fanTh/VirtualAgentCafe.git
 cd VirtualAgentCafe
 ```
 
-Bei einem vorhandenen Checkout zuerst eigene Änderungen sichern, dann auf `main`
-wechseln und aktualisieren:
+For an existing checkout, save your changes before switching to and updating `main`:
 
 ```bash
 git switch main
 git pull --ff-only origin main
 ```
 
-### 2. Dein Projekt vorbereiten
+### 2. Prepare your project
 
-Wähle später den Hauptordner deines eigenen Git-Projekts, beispielsweise
-`/mnt/f/Workspace/SimulationWorld`. Dort gehören auch diese Dateien hin:
+You will select the main folder of your own Git project, for example
+`/mnt/f/Workspace/SimulationWorld`. Put these files there:
 
-- **AGENTS.md:** gemeinsame Regeln, Architekturvorgaben und Einschränkungen.
-- **PLANNING.md:** Ziele, nächste Aufgaben und prüfbare Abnahmekriterien.
+- **AGENTS.md:** shared rules, architecture conventions and restrictions.
+- **PLANNING.md:** objectives, next tasks and verifiable acceptance criteria.
 
-Vorhandene Dateien können im Assistenten geladen und bearbeitet werden. Fehlende
-Dateien erhalten Vorlagen. Auch `agents.md` und `planning.md` werden erkannt.
-Projekt-Markdown darf jeweils bis zu **64 KiB UTF-8** groß sein; eine Überschrift
-ist nicht vorgeschrieben. Committe den gewünschten Ausgangsstand: Neue Worktrees
-beginnen bei `HEAD`, uncommittete Dateien werden nicht automatisch mitgenommen.
+The wizard can load and edit existing files and provides templates for missing
+ones. Lowercase `agents.md` and `planning.md` are also recognized. Each project
+Markdown file may contain up to **64 KiB UTF-8**; a heading is optional.
+Commit your intended starting point: new worktrees start at `HEAD`; uncommitted
+files are not copied automatically.
 
-Für Veröffentlichungen: Lade deinen vorhandenen SSH-Schlüssel in den SSH-Agenten
-und prüfe den Git-Zugang auf dem Host. Der öffentliche Schlüssel muss beim
-Git-Anbieter hinterlegt sein. Private Schlüssel gehören weder in die GUI noch
-in das Repository. Details: [Git-Zugang und Setup](docs/project-setup.md).
+For publishing, load your existing SSH key into your SSH agent and verify Git
+access on the host. Register the public key with your Git provider. Keep private
+keys out of the GUI and repository. See [Git access and setup](docs/project-setup.md).
 
-### 3. Setup starten und Projektordner auswählen
+### 3. Run setup and select the project folder
 
-Im **VirtualAgentCafe-Verzeichnis auf dem Host**, nicht im Container:
+Run this from the **VirtualAgentCafe directory on the host**, not inside the container:
 
 ```bash
 python3 scripts/setup-project.py --publish-results
 ```
 
-Der Ordnerdialog öffnet sich. Wähle dein Projekt mit `.git`. Der Starter:
+Select your project containing `.git` in the folder dialog. The starter:
 
-1. Bindet genau diesen Projektordner ein und verwendet dessen Git-Repository.
-2. Baut/startet das Backend und prüft die Sandbox.
-3. Öffnet die Codex-Anmeldung, falls nötig, und speichert sie im Container-Volume.
-4. Speichert die lokale Verbindung für Godot, ohne dass du einen Token eintippen musst.
-5. Startet Godot, wenn `godot` oder `godot4` im PATH gefunden wird.
+1. Mounts that project folder and uses its Git repository.
+2. Builds/starts the backend and checks the sandbox.
+3. Opens Codex login if needed and persists it in the container volume.
+4. Saves the local Godot connection without requiring you to enter a token.
+5. Launches Godot if `godot` or `godot4` is available on PATH.
 
-`--publish-results` erlaubt Remote-Git für spätere Veröffentlichungen. Das Setup
-allein startet noch keine Agenten und führt keine Pushes oder Merges aus.
-Ohne diesen Schalter ist lokales Arbeiten möglich; der automatische Ablauf bis
-Remote-`main` benötigt die Remote-Freigabe.
+`--publish-results` enables remote Git for later publication. Setup alone does not
+start agents, push or merge. Without it, local development is available; the
+automatic workflow through remote `main` requires remote access to be enabled.
 
-Für Windows-Godot kannst du den Pfad angeben:
+You can specify Windows Godot explicitly:
 
 ```bash
 python3 scripts/setup-project.py --publish-results \
   --godot '/mnt/c/Tools/Godot/Godot_v4.4.1-stable_win64.exe'
 ```
 
-Falls deine lokale Umgebung den Namespace-Override benötigt, ergänze `--privileged`:
+If your local environment needs the namespace override, add `--privileged`:
 
 ```bash
 python3 scripts/setup-project.py --publish-results --privileged
 ```
 
-Alternativ öffnest du in Godot **`game/project.godot`** aus diesem Checkout und
-startest mit **F5**. Wenn der Starter Godot direkt öffnet, ist F5 nicht nötig.
-Mit `--no-godot` startet nur das Backend; mit `--login` öffnest du die Anmeldung erneut.
+Alternatively, open **`game/project.godot`** from this checkout in Godot and press
+**F5**. F5 is unnecessary when the starter launches the game directly.
+Use `--no-godot` to start only the backend or `--login` to reopen login.
 
-### 4. Team im Café einrichten
+### 4. Set up the team in the café
 
-1. **Manage agents → Setup project** öffnen und das eingebundene Projekt wählen.
-2. **Load project documents** klicken. `AGENTS.md` und `PLANNING.md` prüfen; über
-   **Import Markdown file** lassen sich weitere lokale Inhalte auswählen.
-   **Save project document** speichert Änderungen im Projektordner.
-3. Das Ziel beschreiben oder die geladene Planung verwenden. **Check project**
-   ausführen und angezeigte **FIX**-Hinweise beheben.
-4. Für den vollständigen Ablauf **Push successful results to each agent's own Git branch** und
-   **Integrate + requirements tests + promote green result to main** aktivieren.
-5. **Create backend + frontend team** klicken. Mit Integration entsteht zusätzlich
-   der Integrations-/Testagent. Die Erstellung allein startet keine Modellaufträge.
-6. Unter **Agents** bei Bedarf pro Agent das **Model** wählen und
-   **Save configuration** klicken. Danach Backend und Frontend jeweils mit
-   **Start agent** starten.
+1. Open **Manage agents → Setup project** and select the mounted project.
+2. Click **Load project documents**. Review `AGENTS.md` and `PLANNING.md`;
+   **Import Markdown file** selects additional local content.
+   **Save project document** saves changes in the project folder.
+3. Describe the objective or use the loaded plan. Run **Check project** and
+   resolve any **FIX** messages.
+4. For the complete workflow, enable **Push successful results to each agent's own Git branch**
+   and **Integrate + requirements tests + promote green result to main**.
+5. Click **Create backend + frontend team**. Enabling integration also creates
+   the integration/test agent. Creating the team does not start model tasks.
+6. Under **Agents**, optionally choose each agent's **Model** and click
+   **Save configuration**. Then use **Start agent** for the backend and frontend workers.
 
-## Der Arbeitsablauf
+## Workflow
 
-### Entwickeln → integrieren → testen → veröffentlichen
+### Develop → integrate → test → publish
 
-1. **Backend und Frontend arbeiten parallel.** Jeder Agent hat einen eigenen
-   Worktree, Aufgaben, Rollen und einen eigenen Branch. Fortschritt und echte
-   CLI-Testereignisse erscheinen im Café und in den Live Logs.
-2. **Erfolgreiche Worker veröffentlichen ihre Ergebnisse auf ihren Agenten-Branches.**
-   `Done`/`Completed` bedeutet noch nicht, dass das Gesamtprojekt auf `main` steht.
-   Prüfe zusätzlich den Veröffentlichungsstatus **Pushed**.
-3. **Der Integrator startet automatisch**, wenn die Team-Automatik eingeschaltet
-   ist und beide erforderlichen Worker-Ergebnisse erfolgreich veröffentlicht sind.
-   Er führt deren konkrete Commits auf einem Integrationsbranch zusammen und
-   erstellt bzw. aktualisiert gemeinsame Requirements-Tests.
-4. **Der Controller prüft den eingereichten Stand erneut.** Nur nach erfolgreicher
-   gemeinsamer Validierung wird der geprüfte Commit ohne Force-Push nach Remote-`main`
-   übernommen. Fehlschläge verhindern die Promotion; grüne Tests ersetzen trotzdem
-   nicht deinen eigenen Produkttest.
-5. **Du prüfst das Ergebnis.** Unter **Executions** findest du Berichte, Tests und
-   Changelogs; Git-Ansichten zeigen Branch, Commits und Diffs. Agenten-Recaps liegen
-   auch unter `agent-changelogs/` im Ergebnisrepository. Aktualisiere deinen lokalen
-   Zielprojekt-Checkout mit `git pull --ff-only origin main`, bevor du ihn testest.
-   Der Controller überschreibt deinen lokalen Quell-Checkout nicht automatisch.
+1. **Backend and frontend work in parallel.** Each agent has its own worktree,
+   task, roles and branch. The café and Live Logs show progress and actual CLI tests.
+2. **Successful workers publish to their agent branches.** `Done`/`Completed`
+   does not mean the combined project is on `main`. Also check for **Pushed**.
+3. **The integrator starts automatically** when team automation is enabled and
+   both required worker results have been published. It merges their exact commits
+   on an integration branch and creates or updates shared requirements tests.
+4. **The controller validates the submitted revision.** Only after successful
+   shared validation can the tested commit reach remote `main`, without force-push.
+   Failures block promotion. Passing tests still do not replace your product review.
+5. **Review the result.** **Executions** contains reports, tests and changelogs;
+   Git views show branches, commits and diffs. Agent recaps also live in
+   `agent-changelogs/` in the result repository. Run `git pull --ff-only origin main`
+   in your local target-project checkout before testing. The controller does not
+   overwrite your source checkout automatically.
 
-Die vollständigen Regeln stehen unter [automatische Integration](docs/automatic-integration.md).
+See [automatic integration](docs/automatic-integration.md) for the complete rules
+and [controller validation](docs/controller-validation.md) for diagnostic and acceptance states.
 
-### Wenn ein Agent Hilfe braucht
+### When an agent needs help
 
-Integrationsfehler werden innerhalb eines begrenzten Budgets automatisch erneut
-bearbeitet. Bei wiederholtem Fehler oder ausgeschöpftem Budget pausiert das Team
-als **NEEDS_INPUT**. Unter **Manage agents → Agent chat** gibt es zwei getrennte Wege:
+Integration failures receive a bounded number of automatic repair attempts.
+Repeated failure or an exhausted budget pauses the team as **NEEDS_INPUT**.
+**Manage agents → Agent chat** provides two separate actions:
 
-- **Ask question:** etwa „Wo ist das Startskript?“ Der Agent liest das Projekt
-  schreibgeschützt und antwortet. Es startet keine Entwicklung oder Integration;
-  der bisherige Arbeitsstatus bleibt erhalten.
-- **Send instruction & continue:** etwa „Behebe diesen Test anhand dieser Vorgabe“.
-  Das setzt die Arbeit fort und kann anschließend die Team-Integration auslösen.
-  Während eines laufenden Auftrags gespeicherte Anweisungen gelten für den nächsten Versuch.
+- **Ask question:** for example, “Where is the startup script?” The agent reads
+  the project through a read-only mount and answers without starting development
+  or integration. Its existing work status is preserved.
+- **Send instruction & continue:** for example, “Fix this test using this requirement.”
+  Resumes work and may subsequently trigger team integration. Instructions saved
+  during an active task apply to the next attempt.
 
-Die Antwort auf eine Frage erscheint im Chat. Für aktive Arbeit stehen zusätzlich
-Live Logs und Ausführungsberichte bereit. **Retry team integration** stößt einen
-weiteren Integrationsversuch an; bei einem fachlichen Blocker zuerst eine konkrete
-Arbeitsanweisung geben. Fragen und Arbeitsanweisungen verwenden das konfigurierte Modell.
+Answers appear in chat; active work also has Live Logs and execution reports.
+**Retry team integration** requests another integration attempt. For a requirements
+blocker, provide a concrete instruction first. Questions and work instructions
+use the configured model.
 
-### Nächste Runde nach deinem Test
+### Start the next round after reviewing
 
-Agenten und Worktrees behalten; kein neues Team und kein erneutes Setup nötig:
+Keep the agents and worktrees; no new team or setup is needed:
 
-1. Im **Setup project** das vorhandene Projekt auswählen und **Load project documents** klicken.
-2. Unter **NEXT ITERATION** neue Anforderungen und Abnahmekriterien eintragen.
-3. **Start next iteration** klicken.
+1. Select the existing project in **Setup project** and click **Load project documents**.
+2. Enter new requirements and acceptance criteria under **NEXT ITERATION**.
+3. Click **Start next iteration**.
 
-Der Controller übernimmt den aktuellen Remote-`main` in die sauberen Worker-Branches,
-ergänzt die Planung und startet beide Worker für diese Runde. Danach folgen wieder
-Integration, gemeinsame Tests und die freigegebene Main-Veröffentlichung.
-Bloßes Editieren von `PLANNING.md` startet keine Runde. Bei Änderungen auf GitHub
-zuerst den lokalen Projektordner aktualisieren und die Dokumente neu laden.
+The controller merges current remote `main` into clean worker branches, appends
+the plan and starts both workers. Integration, shared tests and authorized main
+publication follow. Editing `PLANNING.md` alone does not start a round. For changes
+made on GitHub, update the local project folder and reload documents first.
 
-## Neustart, Verbindung und Fehlerbehebung
+## Restart, connection and troubleshooting
 
-- **Nach einem VirtualAgentCafe-Update:** `git pull --ff-only origin main` im
-  VirtualAgentCafe-Checkout, dann den Starter mit denselben benötigten Optionen
-  erneut ausführen und Godot neu öffnen. Den gleichen echten Projektordner wählen.
-- **Connection settings:** manuelle Backend-Adresse/Anmeldung für Sonderfälle.
-  Beim normalen Starter-Ablauf werden die Einstellungen automatisch geladen;
-  **Connect / Refresh** lädt sie erneut. Die API bleibt durch einen lokal
-  gespeicherten Token geschützt.
-- **No visible git project:** Den Starter auf dem Host erneut ausführen und den
-  Hauptordner mit `.git` auswählen. **Find projects** durchsucht nur freigegebene
-  Mounts und kann keine beliebigen Hostordner einbinden.
-- **Namespace sandbox unavailable:** Die Hinweise des Starters befolgen; für die
-  lokale Umgebung gegebenenfalls `--privileged` verwenden. Isolation bleibt erforderlich.
-- **Codex login fehlt:** Starter mit `--login` erneut ausführen.
-- **Git push failed:** Remote und SSH-Zugang müssen auch im Backend verfügbar sein.
-  Den Starter im Terminal mit geladenem SSH-Agenten und `known_hosts` ausführen.
-- **Port erreichbar, aber keine Café-Seite:** Die Oberfläche ist die native
-  Godot-Anwendung. `http://127.0.0.1:8000/health` ist nur ein Backend-Healthcheck.
-- **Daten behalten:** Konfigurationen, Historie und Worktrees sind persistent.
-  `.runtime` und Docker-Volumes nicht löschen, wenn du weiterarbeiten möchtest.
+- **After updating VirtualAgentCafe:** run `git pull --ff-only origin main` in
+  its checkout, rerun the starter with the same required options and reopen Godot.
+  Select the same real project folder.
+- **Connection settings:** manual backend address/authentication for special cases.
+  Normal setup loads settings automatically; **Connect / Refresh** reloads them.
+  A locally stored token continues to protect the API.
+- **No visible git project:** rerun the starter on the host and select the main
+  folder containing `.git`. **Find projects** searches approved mounts only; it
+  cannot mount arbitrary host directories.
+- **Namespace sandbox unavailable:** follow the starter's diagnostics; use
+  `--privileged` when required for your local environment. Isolation remains mandatory.
+- **Missing Codex login:** rerun the starter with `--login`.
+- **Git push failed:** the remote and SSH access must also be available to the
+  backend. Run the starter in a terminal with a loaded SSH agent and `known_hosts`.
+- **Port reachable but no café page:** the interface is a native Godot application.
+  `http://127.0.0.1:8000/health` is a backend health check only.
+- **Keep your data:** configuration, history and worktrees persist. Keep `.runtime`
+  and Docker volumes if you want to continue working.
 
-Das Backend ist lokal über `127.0.0.1:8000` erreichbar. Ein Backend-Prozess betreibt
-die Verwaltung; Browser-Exports werden nicht unterstützt. Private Anmeldedaten,
-Tokens und `.runtime` gehören nicht ins Git-Repository.
+The backend listens locally on `127.0.0.1:8000`. Use one backend process for
+management; browser exports are unsupported. Keep credentials, tokens and
+`.runtime` out of Git.
 
-## Entwicklung und Tests an VirtualAgentCafe
+## Developing and testing VirtualAgentCafe
 
-Für die normale Nutzung ist keine lokale Backend-Installation nötig. Wer am
-VirtualAgentCafe-Code arbeitet, benötigt zusätzlich Python **3.12+**, die Pakete aus
-`backend/requirements.lock`, Linux-Godot und Bubblewrap mit funktionierenden Namespaces.
+Normal use does not require a local backend installation. Contributors also need
+Python **3.12+**, packages from `backend/requirements.lock`, Linux Godot and
+Bubblewrap with working namespaces.
 
 ```bash
 python3 -m venv .venv
@@ -219,21 +210,20 @@ python -m pip install --no-deps -e backend
 scripts/check.sh
 ```
 
-Die Prüfung umfasst Ruff, pytest einschließlich API-, Git-, Sandbox- und GUI-Tests,
-Godot-Import, Zustandsprüfungen, Headless-Start und einen Live-WebSocket-Smoke-Test.
-GitHub Actions prüft zusätzlich gerenderte Oberflächen, Compose und den Containerstart.
-Normale Tests verwenden deterministische Laufzeit-Fixtures und benötigen keinen
-bezahlten Modellaufruf. Ein echter Codex-Smoke-Test ist separat über
-`scripts/codex-smoke.sh` möglich. `scripts/demo.sh demo` startet eine ausdrücklich
-als simuliert markierte Demo ohne Codex-Zugang.
+Checks cover Ruff, pytest including API/Git/sandbox/GUI tests, Godot import,
+state tests, headless startup and a live WebSocket smoke test. GitHub Actions
+also checks rendered interfaces, Compose and container startup. Normal tests use
+deterministic runtime fixtures and do not require paid model calls. A real Codex
+smoke test is available separately through `scripts/codex-smoke.sh`.
+`scripts/demo.sh demo` starts an explicitly simulated demo without Codex access.
 
-## Weitere Dokumentation
+## Further documentation
 
-- [Ausführlicher Setup-Assistent](docs/project-setup.md)
-- [Agentenverwaltung, Modelle und Chat](docs/agent-management.md)
-- [Automatische Integration und Requirements-Tests](docs/automatic-integration.md)
-- [Controller-Prüfungen, Fehlerdiagnose und Abnahmestatus](docs/controller-validation.md)
-- [Container-Sandbox](docs/container-sandbox.md)
-- [Architektur](docs/architecture.md) und [Event-Protokoll](docs/event-schema.md)
-- [Grafik und 4K-Darstellung](docs/graphics.md)
-- [Änderungen und Testnachweise](PROGRESS.md)
+- [Detailed setup wizard](docs/project-setup.md)
+- [Agent management, models and chat](docs/agent-management.md)
+- [Automatic integration and requirements tests](docs/automatic-integration.md)
+- [Controller validation, diagnostics and acceptance](docs/controller-validation.md)
+- [Container sandbox](docs/container-sandbox.md)
+- [Architecture](docs/architecture.md) and [event protocol](docs/event-schema.md)
+- [Graphics and 4K rendering](docs/graphics.md)
+- [Changes and test evidence](PROGRESS.md)
