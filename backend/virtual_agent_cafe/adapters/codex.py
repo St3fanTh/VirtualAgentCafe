@@ -10,7 +10,7 @@ from pathlib import Path
 
 from ..models import EventType
 from .base import Emit, RunResult
-from .diagnostics import test_diagnostic
+from .diagnostics import godot_user_data_failure, test_diagnostic
 
 
 def test_command_label(command: str, depth: int = 0) -> str | None:
@@ -50,7 +50,7 @@ def test_command_label(command: str, depth: int = 0) -> str | None:
                 return executable + " test"
         if executable == "check.sh" and "scripts/" in words[0]:
             return "project checks"
-        if executable == "godot" and "--headless" in words[1:]:
+        if executable in {"godot", "godot4"} and "--headless" in words[1:]:
             return "Godot headless tests"
         if executable == "uv" and words[1:2] == ["run"]:
             nested = test_command_label(shlex.join(words[2:]), depth + 1)
@@ -148,6 +148,11 @@ class CodexObserver:
                     self.emit(EventType.CODING, detail)
             elif item_type == "command_execution":
                 test_label = test_command_label(str(item.get("command", "")))
+                output = str(item.get("aggregated_output", ""))
+                if not test_label and godot_user_data_failure(output):
+                    # Wrapper scripts can hide the executable; this specific engine
+                    # diagnostic still proves a blocked runtime, not a harmless helper.
+                    test_label = "Godot runtime"
                 testing = bool(test_label)
                 if kind == "item.started":
                     self.emit(
@@ -175,7 +180,8 @@ class CodexObserver:
                         )
                         diagnostic["passed"] = not failed
                         if godot_error:
-                            diagnostic["category"] = "TEST_FAILURE"
+                            if diagnostic["category"] != "ENVIRONMENT_ERROR":
+                                diagnostic["category"] = "TEST_FAILURE"
                             diagnostic["causes"].append("Godot reported a script or runtime error")
                         self.test_runs.append(diagnostic)
                         self.test_runs = self.test_runs[-100:]

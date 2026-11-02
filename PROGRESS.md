@@ -967,3 +967,36 @@ Starlette/httpx deprecation warnings were pre-existing, not test failures.
 - Next: push the release commit to the feature branch and fast-forward main, then
   verify hosted CI, including rendered GUI, Compose and container build/health.
   User-project commits and desktop acceptance remain outside this release verification.
+
+## Godot user-data startup failure in nested Codex sandbox — 2026-11-02
+
+- Reproduced with actual Godot 4.4.1 and offline Codex CLI 0.162.1: the outer Sandbox
+  succeeds, but nested `codex sandbox -c sandbox_mode="workspace-write"` fails to
+  create `/home/agent/.local`, reports `Error attempting to create data dir`, crashes
+  with signal 11 and exits 134. Existing controller-only Godot tests did not exercise
+  this second filesystem policy. No model calls or user credentials were needed.
+- Sandbox now sets XDG data/config/cache homes inside its private `/tmp` tmpfs;
+  HOME/auth/Git permissions are unchanged. Each process receives fresh user data.
+  Incremented validation cache version so old environment results are not reused.
+- Precise Godot startup evidence remains ENVIRONMENT_ERROR in controller and observer,
+  including wrapped commands and zero-exit error output. Added godot4 command recognition.
+  No assertion that the user's past run used any particular wrapper: its raw command
+  events are unavailable. Publication must be checked in controller records, not prose.
+- Files: management/sandbox.py and validation.py, adapters/codex.py and diagnostics.py,
+  new tests/test_godot_sandbox.py, docs/controller-validation.md and PROGRESS.md.
+- Regressions run real Godot directly and inside Codex isolation, verify user:// write/
+  read, fresh data across runs, hidden host/auth/SSH paths and read-only Git metadata.
+  Observer/controller tests assert infrastructure classification, failed completion
+  and redaction. Test results and commit evidence follow below.
+- New focused regressions: 9 PASS. Broader Godot/controller suite: 51 PASS / 1 FAIL
+  from an existing test assuming controller sys.executable equals runtime Python:
+  launching pytest as `python` instead of `python3` exposed the differing aliases.
+  Corrected the recorded-context expectation to the selected runtime interpreter;
+  separate host-only interpreter regressions continue to enforce runtime selection.
+- Final `scripts/check.sh` PASS: **281 pytest passed in 385.26s**, Ruff/format,
+  Godot import/state/headless and live WebSocket/selection smoke PASS. Only the
+  existing Starlette/httpx deprecation warning remains. `git diff --check` PASS.
+- Commit locator: `git log --grep='provide private Godot user data in agent sandboxes'`.
+  Publishing to the feature branch and authorized main by fast-forward. Next: rebuild
+  the user's backend with the existing starter options, preserve all volumes/worktrees,
+  retry frontend tests and inspect controller publication separately from model prose.

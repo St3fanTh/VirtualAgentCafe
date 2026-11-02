@@ -130,3 +130,24 @@ Their actual test output, dependency set and integration/desktop acceptance cann
 be reconstructed here. The fixes were reproduced with local temporary Git
 repositories, real sandboxed pytest/Godot executions and deterministic Codex events;
 no claim is made that those two external commits have passed controller validation.
+
+## Godot user data in managed runs
+
+Both controller checks and Codex workers receive `XDG_DATA_HOME`, `XDG_CONFIG_HOME`
+and `XDG_CACHE_HOME` under `/tmp/vac-user/` inside the per-process private tmpfs.
+This lets Godot create `user://` logs and saves under its data directory, even inside
+Codex's nested workspace-write policy. The data is ephemeral: separate runs start
+with fresh user data. Keep durable project results in the assigned workspace.
+
+Host home directories, credentials and other workspaces remain hidden; Git metadata
+retains its existing read-only protections. No broader HOME write permission or
+sandbox bypass is needed. If Godot reports `Error attempting to create data dir`,
+the observer/controller classify an environment error rather than a code-test defect.
+The observer also recognizes this specific startup failure through wrapper commands;
+a completed model turn cannot clear the observed failure.
+
+After updating, rebuild/restart the backend through the project starter, preserving
+its project selection/options and volumes. Retry the affected frontend task; use
+**Retry team integration** if the integration worker was blocked. The model's final
+text is not controller publication evidence: inspect the execution's **Git: PUSHED**
+and recorded branch/commit. Historical outputs are not retroactively reclassified.

@@ -65,6 +65,15 @@ class Sandbox:
         ]
         if not network:
             args += ["--unshare-net"]
+        # Codex workspace-write cannot write HOME. Godot's user:// and desktop
+        # caches must live in the private tmpfs, also writable in the nested sandbox.
+        # Never bind host user data or broaden HOME/authentication permissions.
+        for name, directory in (
+            ("XDG_DATA_HOME", "/tmp/vac-user/data"),
+            ("XDG_CONFIG_HOME", "/tmp/vac-user/config"),
+            ("XDG_CACHE_HOME", "/tmp/vac-user/cache"),
+        ):
+            args += ["--setenv", name, directory]
         # No /workspace, /home/node, /run, host /tmp, SSH socket or controller environment.
         for location in ["/usr", "/bin", "/lib", "/lib64", "/opt/venv"]:
             if Path(location).exists():

@@ -3,8 +3,14 @@
 import re
 
 
+def godot_user_data_failure(output: str) -> bool:
+    return "Error attempting to create data dir:" in output
+
+
 def failure_category(label: str, code: object, output: str) -> str:
     """Evidence-based categories; exit status alone is never proof of a code defect."""
+    if godot_user_data_failure(output):
+        return "ENVIRONMENT_ERROR"
     if code == 0:
         return "PASSED"
     if any(
@@ -41,6 +47,10 @@ def test_diagnostic(label: str, code: object, output: str) -> dict:
     code = code if type(code) is int else None
     text = re.sub(r"\x1b\[[0-9;]*[A-Za-z]", "", output)
     causes = []
+    if godot_user_data_failure(text):
+        causes.append(
+            "Godot cannot create its user data directory; check writable sandbox XDG directories"
+        )
     for kind, hint in (
         ("ModuleNotFoundError", "Missing Python dependency or incorrect import path"),
         ("ImportError", "Python import failed"),

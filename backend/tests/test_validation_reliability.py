@@ -96,7 +96,7 @@ async def test_controller_collection_error_retains_both_streams_and_exact_contex
     check = report["checks"][0]
     assert check["exit_code"] == 2
     assert check["context"]["cwd"] == str(workspace / "backend")
-    assert check["context"]["command"][0] == sys.executable
+    assert check["context"]["command"][0] == validation.runtime_python()
     assert check["context"]["command"][-1] == "./tests"
     assert report["commit"] == (await manager.git.run(workspace, "rev-parse", "HEAD")).strip()
     raw = manager.store.get("validation_outputs", run["id"] + ":backend")

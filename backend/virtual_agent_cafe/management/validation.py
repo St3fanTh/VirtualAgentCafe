@@ -377,7 +377,7 @@ async def _validate(manager, config, run, workspace, trace):
         )
         cache_key = hashlib.sha256(
             json.dumps(
-                ["validation-v2", context, trace.report["plan_sha256"], plan.source_sha256],
+                ["validation-v3-xdg", context, trace.report["plan_sha256"], plan.source_sha256],
                 sort_keys=True,
             ).encode()
         ).hexdigest()
@@ -402,7 +402,8 @@ async def _validate(manager, config, run, workspace, trace):
             if capture["error"]:
                 diagnostics.update(category="ENVIRONMENT_ERROR", causes=[capture["error"]])
             elif godot_error:
-                diagnostics["category"] = "TEST_FAILURE"
+                if diagnostics["category"] != "ENVIRONMENT_ERROR":
+                    diagnostics["category"] = "TEST_FAILURE"
                 diagnostics["causes"].append("Godot reported a script or runtime error")
             result = {
                 "id": check.id,
