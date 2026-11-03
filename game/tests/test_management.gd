@@ -128,10 +128,12 @@ func _process(_delta: float) -> bool:
 				"changelog": long_recap, "publication": "PUSHED",
 				"published": {"branch": "agent/backend", "commit": "abc123"},
 				"test_runs": [{"tool": "pytest", "exit_code": 2, "passed": false,
-					"causes": ["ModuleNotFoundError"], "tests": ["tests/test_api.py"]}]})
+					"causes": ["ModuleNotFoundError"], "tests": ["tests/test_api.py"], "superseded": true}]})
 			assert("END OF RECAP" in rendered)
 			assert("ModuleNotFoundError" in rendered and "tests/test_api.py" in rendered)
 			assert("abc123" in rendered and "agent/backend" in rendered)
+			assert("SUPERSEDED" in rendered and "runtime-test-output" in rendered)
+			assert("separate from controller plan" in rendered)
 			check_no_manual_acceptance(ui)
 			# Real rejected retry followed by real log polling must preserve its response.
 			ui.call_api("integration_retry", "/projects/missing-project/integrate", HTTPClient.METHOD_POST, {})

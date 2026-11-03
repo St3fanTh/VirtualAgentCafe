@@ -166,3 +166,38 @@ checks its exact revision, configuration and environment independently.
 Earlier failed attempts remain in history as superseded. A zero-exit run containing
 Godot ERROR/SCRIPT ERROR output is still unsuccessful, even when it also prints PASS.
 A model's prose assertion does not resolve a failure: a clean observed rerun is required.
+
+### Worker failures versus controller plan failures
+
+The literal `Unresolved tests:` summary is produced by the Codex command observer.
+It describes commands actually emitted by the worker in that attempt, not hidden
+controller commands. Three passing scripts do not resolve a failed fourth script.
+A superseded failed attempt is now explicitly labeled SUPERSEDED in the execution
+report; it is historical evidence, not a current blocker.
+
+The controller reads the committed repository-root `validation/plan.json` from
+the submitted integration HEAD. A nested `frontend/validation/plan.json` is not
+the controller plan. Godot checks must now explicitly declare `script`, relative
+to their declared `directory` (or using `res://`). There is no default test script.
+Only the declared checks execute. Existing revision, clean-tree, blob-content,
+requirements and cache checks remain mandatory.
+
+Inspect private worker evidence at
+`/management/executions/<execution-id>/runtime-test-output`: command, provider
+command ID, reported cwd, assigned workspace, observed HEAD, exit code and combined
+output. This includes Godot startup failures detected through wrapper scripts.
+Codex may omit cwd or truncate combined output; the controller does not fabricate
+missing provider evidence. The observed HEAD is sampled after command completion.
+
+Controller checks have their exact argv/cwd/commit in the execution report, and
+separate stdout/stderr, exit code and capture errors at
+`/management/executions/<execution-id>/validation-output/<check-id>`.
+These endpoints require management authorization; raw command/output data remains
+outside public animation events. Unexplained engine ERROR output stays blocking
+but is UNCLASSIFIED_ERROR, not proof of an implementation defect. Script assertions
+are TEST_FAILURE, missing-script loading errors CONFIGURATION_ERROR, and known
+unwritable user-data failures ENVIRONMENT_ERROR.
+
+Passing tests do not prove publication or integration. Check the separately
+recorded publication, workflow integration and main-promotion results. The
+controller's existing ancestry and expected-commit checks remain in place.

@@ -1026,3 +1026,38 @@ Starlette/httpx deprecation warnings were pre-existing, not test failures.
 - Next: update/rebuild the backend using the existing starter configuration and run
   the frontend task again. Old execution reports remain historical; no worktree or
   project reset is needed. Verify publication from controller branch/commit records.
+
+## 2026-11-03 — Separate observed worker failures from controller validation
+
+- Confirmed: the literal "Unresolved tests" summary originates in CodexObserver /
+  CodexAdapter, not the requirements-plan executor. A failed obsolete worker command
+  remains unresolved when three different scripts pass; silently clearing it would
+  bypass evidence. No stale plan or wrong-revision execution was reproduced.
+- Removed the implicit Godot script default: plans must declare their script.
+  Schema errors now retain structured, input-free details in the validation report.
+- Fixed lost private command evidence for Godot startup failures inside wrappers:
+  capture follows the observer's actual recognized test record, including command ID.
+- Generic engine ERROR output no longer automatically means implementation failure.
+  Unexplained errors stay blocking/unclassified, missing-file loading is configuration,
+  script assertions remain test failures, known user-data failures remain environment.
+- UI distinguishes superseded observed failures from unresolved ones and explains
+  worker versus controller provenance, with the private command-evidence endpoint.
+- Regression fixture has main without scripts, three declared integration scripts,
+  and a committed failing obsolete smoke script. Exactly the declared checks pass
+  at submitted HEAD; unchanged repeat reuses all successful cached results.
+- Files: adapters/{codex,diagnostics}.py, management/{execution,validation}.py,
+  tests/{test_validation_provenance,test_godot_validation}.py,
+  game/{scripts/management,tests/test_management}.gd,
+  docs/controller-validation.md, PROGRESS.md.
+- Focused regressions: 71 passed in 128.95s; Ruff and format checks passed.
+  Required full scripts/check.sh running; final outcome recorded below.
+- Limitations: no access to the user's failing execution's raw command events or
+  SimulationWorld commits. Its actual failed command/publication/integration and
+  desktop acceptance remain unverified. No project data or historical run rewritten.
+- Commit locator: git log --grep='clarify Godot validation provenance and failures'.
+  Next: rebuild backend, reopen Godot, inspect private evidence for the affected
+  execution, and retry only after resolving the identified command/configuration.
+- Final required check: scripts/check.sh PASS; 299 pytest passed in 378.30s,
+  Ruff/format PASS, Godot import/state/headless PASS, live WebSocket/selection PASS.
+  Existing Starlette/httpx deprecation warning only. git diff --check PASS.
+  Publishing this milestone on feat/virtual-agent-cafe-mvp; main is unchanged.

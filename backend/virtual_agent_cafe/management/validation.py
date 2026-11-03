@@ -15,7 +15,7 @@ from typing import Literal
 
 from pydantic import Field, ValidationError, model_validator
 
-from ..adapters.diagnostics import test_diagnostic
+from ..adapters.diagnostics import godot_failure_category, test_diagnostic
 from ..models import EventType
 from .config import StrictModel
 from .files import ApprovedFiles
@@ -32,6 +32,8 @@ class Check(StrictModel):
 
     @model_validator(mode="after")
     def supported_scope(self):
+        if self.kind == "godot" and not self.script:
+            raise ValueError("Godot checks require an explicit script; no implicit tests are run")
         if self.script is not None and self.kind != "godot":
             raise ValueError("script is only supported for Godot; use targets for pytest")
         if self.python != "runtime" and self.kind != "pytest":
@@ -218,8 +220,11 @@ async def _validate(manager, config, run, workspace, trace):
     trace.require(path.stat().st_size <= 65536, "plan.size", "Test plan exceeds size limit")
     try:
         plan = TestPlan.model_validate_json(path.read_text())
-    except ValidationError:
-        trace.reject("plan.schema", "Invalid shared test plan schema or requirement/check coverage")
+    except ValidationError as error:
+        trace.report["schema_errors"] = error.errors(
+            include_url=False, include_input=False, include_context=False
+        )
+        trace.reject("plan.schema", "Invalid shared test plan; inspect validation schema_errors")
     trace.require(
         plan.source_sha256 == run.get("requirements_sha256"),
         "plan.requirements_snapshot",
@@ -298,7 +303,7 @@ async def _validate(manager, config, run, workspace, trace):
                 trace.require(target_path.exists(), trace.rule, "Pytest target is absent")
                 command.append("./" + target_path.relative_to(directory).as_posix())
         elif check.kind == "godot":
-            declared = check.script if check.script is not None else "tests/test_states.gd"
+            declared = check.script
             script = declared.removeprefix("res://")
             trace.context["script"] = declared
             trace.rule = "godot.script_path"
@@ -403,7 +408,7 @@ async def _validate(manager, config, run, workspace, trace):
                 diagnostics.update(category="ENVIRONMENT_ERROR", causes=[capture["error"]])
             elif godot_error:
                 if diagnostics["category"] != "ENVIRONMENT_ERROR":
-                    diagnostics["category"] = "TEST_FAILURE"
+                    diagnostics["category"] = godot_failure_category(output)
                 diagnostics["causes"].append("Godot reported a script or runtime error")
             result = {
                 "id": check.id,

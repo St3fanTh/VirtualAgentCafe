@@ -635,6 +635,8 @@ class ExecutionManager:
             if len(record["checks"]) < 100:
                 record["checks"].append(
                     {
+                        "origin": "worker_command",
+                        "command_id": item.get("id"),
                         "command": str(item.get("command", "")),
                         "reported_cwd": item.get("cwd"),
                         "workspace": str(path),

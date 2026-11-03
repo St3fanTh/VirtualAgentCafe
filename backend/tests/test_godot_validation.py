@@ -249,6 +249,11 @@ async def test_godot_execution_errors_are_not_missing_scripts(tmp_path, exit_cod
         await validate(manager, config, run, workspace)
     assert run["validation"]["checks"][-1]["passed"] is False
     assert run["validation"]["checks"][-1]["exit_code"] == exit_code
+    assert run["validation"]["checks"][-1]["diagnostics"]["category"] == "UNCLASSIFIED_ERROR"
+    assert run["validation"]["state"] == "VALIDATION_INFRA_ERROR"
+    evidence = manager.store.get("validation_outputs", run["id"] + ":test_contract")
+    assert evidence["context"]["cwd"] == str(workspace / "frontend")
+    assert "fixture execution failure" in evidence["stdout"] + evidence["stderr"]
 
 
 async def test_committed_scripts_with_git_crlf_checkout_rules(tmp_path):

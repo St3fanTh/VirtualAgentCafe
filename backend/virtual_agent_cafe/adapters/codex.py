@@ -10,7 +10,7 @@ from pathlib import Path
 
 from ..models import EventType
 from .base import Emit, RunResult
-from .diagnostics import godot_user_data_failure, test_diagnostic
+from .diagnostics import godot_failure_category, godot_user_data_failure, test_diagnostic
 
 
 def test_command_label(command: str, depth: int = 0) -> str | None:
@@ -198,9 +198,11 @@ class CodexObserver:
                             str(item.get("aggregated_output", "")),
                         )
                         diagnostic["passed"] = not failed
+                        diagnostic["origin"] = "worker_command"
+                        diagnostic["command_id"] = item.get("id")
                         if godot_error:
                             if diagnostic["category"] != "ENVIRONMENT_ERROR":
-                                diagnostic["category"] = "TEST_FAILURE"
+                                diagnostic["category"] = godot_failure_category(output)
                             diagnostic["causes"].append("Godot reported a script or runtime error")
                         self.test_runs.append(diagnostic)
                         self.test_runs = self.test_runs[-100:]
@@ -382,13 +384,15 @@ class CodexAdapter:
                     data = json.loads(line)
                     if not isinstance(data, dict):
                         raise ValueError("Invalid Codex event")
+                    previous_test = observer.test_runs[-1] if observer.test_runs else None
                     observer.consume(data)
                     item = data.get("item", {})
                     if (
                         self.evidence_sink
                         and data.get("type") == "item.completed"
                         and item.get("type") == "command_execution"
-                        and is_test_command(str(item.get("command", "")))
+                        and observer.test_runs
+                        and observer.test_runs[-1] is not previous_test
                     ):
                         await self.evidence_sink(item, workspace)
                     if data.get("type") == "item.completed" and item.get("type") in {

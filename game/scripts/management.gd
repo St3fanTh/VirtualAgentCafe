@@ -1487,20 +1487,23 @@ func format_execution_report(record: Dictionary) -> String:
 	var published: Dictionary = record.get("published", {})
 	if not published.is_empty():
 		text += "\nBranch: " + str(published.get("branch", "")) + "\nCommit: " + str(published.get("commit", ""))
-	text += "\n\nOBSERVED TEST RUNS\n"
+	text += "\n\nOBSERVED TEST RUNS (worker commands, separate from controller plan)\n"
 	var runs: Array = record.get("test_runs", [])
 	if runs.is_empty():
 		text += "No structured test evidence recorded for this execution.\n"
 	for run in runs:
-		text += str(run.get("tool", "")) + " · " + ("PASS" if run.get("passed", false) else "FAIL") + " · exit " + str(run.get("exit_code", "unknown")) + "\n"
+		text += str(run.get("tool", "")) + " · " + ("SUPERSEDED" if run.get("superseded", false) else ("PASS" if run.get("passed", false) else "UNRESOLVED")) + " · exit " + str(run.get("exit_code", "unknown")) + "\n"
 		for cause in run.get("causes", []):
 			text += "  " + str(cause) + "\n"
 		for test in run.get("tests", []):
 			text += "  " + str(test) + "\n"
+	text += "Private worker command/cwd/commit/output evidence: /management/executions/" + str(record.get("id", "")) + "/runtime-test-output\n"
 	var validation: Dictionary = record.get("validation", {})
 	if not validation.is_empty():
 		text += "\nVALIDATION SNAPSHOT\nRef: " + str(validation.get("selected_ref", "")) + " · Branch: " + str(validation.get("branch", ""))
 		text += "\nCommit: " + str(validation.get("commit", "")) + "\nRepository: " + str(validation.get("repository_root", ""))
+		if validation.has("schema_errors"):
+			text += "\nPlan errors: " + JSON.stringify(validation.schema_errors)
 		text += "\nFailed rule: " + str(validation.get("failed_rule", "none")) + "\nDetailed path/blob diagnostics are in Live logs.\n"
 	text += "\nSHARED REQUIREMENTS CHECKS\n"
 	for check in record.get("validation", {}).get("checks", []):

@@ -7,6 +7,19 @@ def godot_user_data_failure(output: str) -> bool:
     return "Error attempting to create data dir:" in output
 
 
+def godot_failure_category(output: str) -> str:
+    """Engine ERROR alone does not prove an implementation defect."""
+    if godot_user_data_failure(output):
+        return "ENVIRONMENT_ERROR"
+    if re.search(
+        r"(?im)^ERROR:.*(?:does not exist|not found|could not load|failed loading).*", output
+    ):
+        return "CONFIGURATION_ERROR"
+    if re.search(r"(?m)^SCRIPT ERROR:|AssertionError", output):
+        return "TEST_FAILURE"
+    return "UNCLASSIFIED_ERROR"
+
+
 def failure_category(label: str, code: object, output: str) -> str:
     """Evidence-based categories; exit status alone is never proof of a code defect."""
     if godot_user_data_failure(output):
