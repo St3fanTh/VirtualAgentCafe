@@ -60,6 +60,11 @@ def test_diagnostic(label: str, code: object, output: str) -> dict:
     code = code if type(code) is int else None
     text = re.sub(r"\x1b\[[0-9;]*[A-Za-z]", "", output)
     causes = []
+    if "_sock == -1" in text and "net_socket_unix.cpp" in text:
+        causes.append(
+            "Godot could not create a network socket; inspect sandbox network permissions "
+            "and socket limits (XDG/font settings cannot grant socket access)"
+        )
     if godot_user_data_failure(text):
         causes.append(
             "Godot cannot create its user data directory; check writable sandbox XDG directories"

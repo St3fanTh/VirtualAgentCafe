@@ -364,6 +364,8 @@ async def _validate(manager, config, run, workspace, trace):
             "command": command,
             "check": check.model_dump(),
             "environment_sha256": environment["sha256"],
+            "runtime_environment": Sandbox.runtime_environment(),
+            "network_policy": "isolated namespace with local loopback; no external network",
             "network": False,
             "timeout_seconds": min(config.execution.timeout_seconds, 300),
         }
@@ -382,7 +384,12 @@ async def _validate(manager, config, run, workspace, trace):
         )
         cache_key = hashlib.sha256(
             json.dumps(
-                ["validation-v3-xdg", context, trace.report["plan_sha256"], plan.source_sha256],
+                [
+                    "validation-v4-runtime-fonts",
+                    context,
+                    trace.report["plan_sha256"],
+                    plan.source_sha256,
+                ],
                 sort_keys=True,
             ).encode()
         ).hexdigest()
@@ -497,7 +504,15 @@ def environment_identity():
     for file in ("/etc/os-release", "/var/lib/dpkg/status"):
         if Path(file).is_file():
             tools[file] = hashlib.sha256(Path(file).read_bytes()).hexdigest()
+    # Font configuration is now a read-only runtime input to Godot/SystemFont.
+    fonts = {}
+    if Path("/etc/fonts").is_dir():
+        for path in sorted(Path("/etc/fonts").rglob("*")):
+            if path.is_file():
+                fonts[str(path)] = hashlib.sha256(path.read_bytes()).hexdigest()
     identity = {
+        "font_configuration": fonts,
+        "sandbox_environment": Sandbox.runtime_environment(),
         "python": runtime_python(),
         "version": sys.version,
         "packages": packages,

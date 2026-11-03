@@ -21,6 +21,20 @@ def bubblewrap() -> str:
 
 
 class Sandbox:
+    @staticmethod
+    def runtime_environment() -> dict[str, str]:
+        environment = {
+            "HOME": "/home/agent",
+            "XDG_DATA_HOME": "/tmp/vac-user/data",
+            "XDG_CONFIG_HOME": "/tmp/vac-user/config",
+            "XDG_CACHE_HOME": "/tmp/vac-user/cache",
+            "XDG_RUNTIME_DIR": "/tmp/vac-user/runtime",
+        }
+        if Path("/etc/fonts/fonts.conf").is_file():
+            environment["FONTCONFIG_FILE"] = "/etc/fonts/fonts.conf"
+            environment["FONTCONFIG_PATH"] = "/etc/fonts"
+        return environment
+
     def __init__(self, auth_home: Path | None = None):
         self.auth_home = auth_home
 
@@ -51,9 +65,6 @@ class Sandbox:
             "PATH",
             "/opt/venv/bin:/usr/local/bin:/usr/bin:/bin",
             "--setenv",
-            "HOME",
-            "/home/agent",
-            "--setenv",
             "CODEX_HOME",
             "/home/agent/.codex",
             "--setenv",
@@ -68,17 +79,19 @@ class Sandbox:
         # Codex workspace-write cannot write HOME. Godot's user:// and desktop
         # caches must live in the private tmpfs, also writable in the nested sandbox.
         # Never bind host user data or broaden HOME/authentication permissions.
-        for name, directory in (
-            ("XDG_DATA_HOME", "/tmp/vac-user/data"),
-            ("XDG_CONFIG_HOME", "/tmp/vac-user/config"),
-            ("XDG_CACHE_HOME", "/tmp/vac-user/cache"),
-        ):
+        for name, directory in self.runtime_environment().items():
             args += ["--setenv", name, directory]
         # No /workspace, /home/node, /run, host /tmp, SSH socket or controller environment.
         for location in ["/usr", "/bin", "/lib", "/lib64", "/opt/venv"]:
             if Path(location).exists():
                 args += ["--ro-bind", location, location]
-        for location in ["/etc/ssl", "/etc/resolv.conf", "/etc/hosts", "/etc/nsswitch.conf"]:
+        for location in [
+            "/etc/ssl",
+            "/etc/resolv.conf",
+            "/etc/hosts",
+            "/etc/nsswitch.conf",
+            "/etc/fonts",
+        ]:
             if Path(location).exists():
                 args += ["--ro-bind", location, location]
         args += [
@@ -93,6 +106,8 @@ class Sandbox:
             "--dir",
             "/home/agent/.codex",
         ]
+        # Runtime sockets require an existing, owner-only directory, not just an env var.
+        args += ["--perms", "0700", "--dir", "/tmp/vac-user/runtime"]
         if authenticated:
             home = self.auth_home or Path(os.getenv("CODEX_HOME", Path.home() / ".codex"))
             auth = home / "auth.json"

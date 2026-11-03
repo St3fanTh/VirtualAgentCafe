@@ -1061,3 +1061,38 @@ Starlette/httpx deprecation warnings were pre-existing, not test failures.
   Ruff/format PASS, Godot import/state/headless PASS, live WebSocket/selection PASS.
   Existing Starlette/httpx deprecation warning only. git diff --check PASS.
   Publishing this milestone on feat/virtual-agent-cafe-mvp; main is unchanged.
+
+## 2026-11-03 — Reproduce Godot socket denial and fix runtime setup
+
+- Reproduced with Godot 4.4.1 and Codex CLI 0.162.1: the same real GDScript
+  SystemFont + TCPServer loopback test passes in the controller namespace, but
+  nested Codex workspace-write returns EPERM from socket(AF_INET, SOCK_STREAM).
+  Godot logs _sock == -1 even though a test ignoring listen() failure prints PASS
+  and exits zero. Correct XDG/font settings do not remove the nested socket denial.
+- Confirmed independent environment defect: /etc/fonts was not mounted; SystemFont
+  printed "Cannot load default config file". Expose only system font configuration
+  read-only; set FONTCONFIG_FILE/PATH explicitly. Add private owner-only 0700
+  XDG_RUNTIME_DIR under tmpfs. Keep private HOME and existing network restrictions.
+- Validation evidence includes runtime defaults and network policy; font config
+  contents/defaults enter cache identity and the cache version is bumped.
+- Socket diagnostic now points to sandbox permissions/socket limits; no error is
+  whitelisted, no exit-zero script/runtime error is accepted automatically.
+- New real regressions: runtime directory ownership/mode in outer/nested sandboxes,
+  font initialization without warnings, syscall EPERM evidence versus clean local
+  listen, observer rejection despite PASS/exit zero, controller committed-plan
+  execution with fonts and asserted loopback setup.
+- Files: management/{sandbox,validation}.py, adapters/diagnostics.py,
+  tests/test_godot_runtime_environment.py, docs/controller-validation.md, PROGRESS.md.
+- Focused results: 32 passed in 28.49s. Required full scripts/check.sh running.
+- Scope limitation: actual user test and full stack unavailable; requested exact
+  command, stack lines and networking initialization. No arbitrary networking
+  permission change or bypass of unresolved worker tests. That worker still blocks
+  if it attempts sockets in nested Codex; the controller fixture passes cleanly.
+- Commit locator: git log --grep='configure Godot runtime and diagnose socket denial'.
+  Next: rebuild backend and inspect the actual test's call stack; preserve real
+  network coverage and resolve execution-policy mismatch before publication.
+- Final verification: scripts/check.sh PASS; 304 pytest passed in 403.31s,
+  Ruff/format PASS, Godot import/state/headless PASS, live WebSocket/selection PASS.
+  Only the existing Starlette/httpx deprecation warning. git diff --check PASS.
+  Controller fixture VALIDATION_PASSED; user's run remains unverified/blocked
+  until its actual socket call and execution policy are resolved. Feature push only.

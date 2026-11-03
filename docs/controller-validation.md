@@ -201,3 +201,48 @@ unwritable user-data failures ENVIRONMENT_ERROR.
 Passing tests do not prove publication or integration. Check the separately
 recorded publication, workflow integration and main-promotion results. The
 controller's existing ancestry and expected-commit checks remain in place.
+
+### Godot socket errors and runtime environment
+
+A real Godot 4.4.1 / Codex 0.162.1 regression reproduces this sequence: a script
+creates a SystemFont, opens a TCPServer on 127.0.0.1, prints PASS and exits zero.
+In the controller's isolated network namespace it succeeds cleanly. Inside the
+additional Codex workspace-write sandbox, socket creation returns EPERM and Godot
+logs `_sock == -1` at `drivers/unix/net_socket_unix.cpp`. Correct XDG and Fontconfig
+settings do not change that result. The nested policy denies sockets; the outer
+controller namespace allows private loopback without granting external access.
+
+This is not a harmless initialization message to whitelist. Tests must check the
+return value of listen/connect and accurately distinguish an intended offline test
+from a network integration test. Do not remove network coverage to obtain green
+results. A scene/autoload can initiate networking even if the test itself does not
+explicitly create a socket. Inspect the following Godot stack lines and command
+evidence before blaming either application logic or the sandbox.
+
+The sandbox now supplies:
+- HOME=/home/agent (private; not broadened for writes).
+- XDG_DATA_HOME=/tmp/vac-user/data.
+- XDG_CONFIG_HOME=/tmp/vac-user/config.
+- XDG_CACHE_HOME=/tmp/vac-user/cache.
+- XDG_RUNTIME_DIR=/tmp/vac-user/runtime, created with mode 0700 and current UID.
+- FONTCONFIG_FILE=/etc/fonts/fonts.conf and FONTCONFIG_PATH=/etc/fonts when the
+  runtime's system configuration exists, with /etc/fonts mounted read-only.
+
+Previously /etc/fonts was absent from the sandbox. A real SystemFont fixture
+reproduced "Cannot load default config file"; the read-only mount fixes that
+separate defect. No project-specific fonts.conf is selected implicitly.
+Validation reports record the configured runtime environment/network policy.
+Font configuration content and sandbox defaults participate in cache identity;
+the cache version changed to avoid reusing old environment results.
+
+The observer still blocks zero-exit runs with Godot errors. A socket-creation
+diagnostic identifies permissions/resource limits as investigation targets, not
+proof of an application defect or automatic permission to broaden network access.
+An unresolved worker socket error still blocks its run; this change does not
+bypass that gate or automatically promote the worker into controller validation.
+
+Evidence: backend/tests/test_godot_runtime_environment.py. Source of the engine
+condition: https://github.com/godotengine/godot/blob/4.4.1-stable/drivers/unix/net_socket_unix.cpp
+The user's actual test_states.gd and complete error stack were unavailable during
+this investigation, so the reproduced mechanism is not proof of that project's
+specific call site.
