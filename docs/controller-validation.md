@@ -151,3 +151,18 @@ its project selection/options and volumes. Retry the affected frontend task; use
 **Retry team integration** if the integration worker was blocked. The model's final
 text is not controller publication evidence: inspect the execution's **Git: PUSHED**
 and recorded branch/commit. Historical outputs are not retroactively reclassified.
+
+### Rerun Godot after repairing its environment
+
+A clean repeat of the same Godot command/cwd resolves earlier observed failures
+when only leading XDG data/config/cache/runtime or Fontconfig assignments changed.
+These variables repair runtime directories/fonts without selecting a different test.
+The optional plain `env` launcher is normalized too. Other environment assignments,
+executables, project paths, scripts, test arguments and cwd remain significant.
+Complex shell setup is conservatively kept distinct rather than guessed equivalent.
+This normalization only links observed attempts; controller validation/cache still
+checks its exact revision, configuration and environment independently.
+
+Earlier failed attempts remain in history as superseded. A zero-exit run containing
+Godot ERROR/SCRIPT ERROR output is still unsuccessful, even when it also prints PASS.
+A model's prose assertion does not resolve a failure: a clean observed rerun is required.

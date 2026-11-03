@@ -1000,3 +1000,29 @@ Starlette/httpx deprecation warnings were pre-existing, not test failures.
   Publishing to the feature branch and authorized main by fast-forward. Next: rebuild
   the user's backend with the existing starter options, preserve all volumes/worktrees,
   retry frontend tests and inspect controller publication separately from model prose.
+
+## Resolve equivalent Godot reruns after environment repair — 2026-11-02
+
+- Reproduced two unresolved zero-exit Godot errors followed by a clean identical test
+  with XDG/Fontconfig assignments: observer still returned unsuccessful with two open
+  failures. Scope hashes included the supporting environment prefixes verbatim.
+- Normalize only leading Godot XDG/Fontconfig assignments and plain env launchers
+  for observed rerun matching. Keep executable, cwd, project/script, selectors and
+  other environment settings significant. Controller cache/validation gates unchanged.
+- Retain failed history as superseded after a clean matching rerun. Godot errors at
+  exit zero remain blocking; PASS text alone never overrides engine/script errors.
+- Files: adapters/codex.py, new tests/test_godot_reruns.py,
+  docs/controller-validation.md, PROGRESS.md. The user's actual raw command events
+  and project commit are unavailable; this confirms the reported sequence's matching
+  bug, not that every historical runtime error was merely a warning.
+- Commit locator: git log --grep='match Godot reruns after runtime environment repairs'.
+- Focused observer/Codex/roles regression suite: **57 PASS** (including nine new
+  cases). Environment restart interrupted the initial full-check evidence; rerunning
+  the required full suite on 2026-11-03 with an ignored persistent check log.
+- Final verification on 2026-11-03: `scripts/check.sh` PASS, **290 pytest passed in
+  355.85s**, Ruff/format, Godot import/state/headless and live WebSocket/selection
+  smoke PASS. Only the existing Starlette/httpx deprecation warning remains.
+  `git diff --check` PASS. Publishing the tested fix to feature and authorized main.
+- Next: update/rebuild the backend using the existing starter configuration and run
+  the frontend task again. Old execution reports remain historical; no worktree or
+  project reset is needed. Verify publication from controller branch/commit records.

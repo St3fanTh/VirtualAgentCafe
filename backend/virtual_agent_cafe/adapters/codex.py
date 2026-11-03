@@ -86,6 +86,25 @@ def test_scope_tokens(command: str, depth: int = 0):
         if index == len(group):
             continue
         executable = Path(group[index]).name
+        if executable in {"godot", "godot4"} and "--headless" in group[index + 1 :]:
+            # Runtime-directory/font repairs do not change which Godot suite runs.
+            # This identifies observed reruns only, never controller cache entries.
+            # Keep other environment values, executable, script, cwd and flags intact.
+            setup_variables = {
+                "XDG_DATA_HOME",
+                "XDG_CONFIG_HOME",
+                "XDG_CACHE_HOME",
+                "XDG_RUNTIME_DIR",
+                "FONTCONFIG_FILE",
+                "FONTCONFIG_PATH",
+            }
+            prefix = [
+                word
+                for word in group[:index]
+                if word != "env" and word.split("=", 1)[0] not in setup_variables
+            ]
+            group[:] = prefix + group[index:]
+            index = len(prefix)
         if executable in {"bash", "sh", "zsh"}:
             for offset in range(index + 1, len(group) - 1):
                 if group[offset].startswith("-") and "c" in group[offset]:
