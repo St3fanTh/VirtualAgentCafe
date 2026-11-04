@@ -108,9 +108,17 @@ func build_ui() -> void:
 	ui.add_child(management)
 	var manage_button := Button.new()
 	manage_button.text = "Manage agents"
-	manage_button.position = Vector2(1280, 84)
-	manage_button.pressed.connect(management.show_management)
+	manage_button.position = Vector2(1100, 84)
+	manage_button.pressed.connect(func():
+		management.tabs.current_tab = 0
+		management.show_management())
 	ui.add_child(manage_button)
+	var changelog_button := Button.new()
+	changelog_button.name = "ChangelogButton"
+	changelog_button.text = "Changelog"
+	changelog_button.position = Vector2(1370, 84)
+	changelog_button.pressed.connect(management.show_changelog)
+	ui.add_child(changelog_button)
 	var title := label("VIRTUAL AGENT CAFE", 46)
 	title.position = Vector2(44, 20)
 	ui.add_child(title)

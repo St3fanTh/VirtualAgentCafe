@@ -1096,3 +1096,35 @@ Starlette/httpx deprecation warnings were pre-existing, not test failures.
   Only the existing Starlette/httpx deprecation warning. git diff --check PASS.
   Controller fixture VALIDATION_PASSED; user's run remains unverified/blocked
   until its actual socket call and execution policy are resolved. Feature push only.
+
+## 2026-11-04 — Agent requirement changelog
+
+- Added a Changelog toolbar button beside Manage agents and a dedicated management
+  view with agent subcategories and newest-first execution history.
+- Read-only private /management/changelog projects existing persisted recaps into
+  explicit requirement sections (e.g. 1.1, 1.2, REQ-42), preserving partial/blocked
+  notes and legacy general summaries. No chat contents or raw test output included.
+- Worker final-response instructions now request the original requirement IDs with
+  implementation, files, test evidence and remaining work. Never infer implemented
+  work from the assigned task or pretend model claims are controller acceptance.
+- Each run separately shows branch/commit, publication, validation, integration and
+  acceptance. Agent display names are saved with new recaps; history remains readable
+  without an active agent. Refresh preserves the selected agent and scroll position.
+- Reused persistent execution storage, management authentication, HTTP queue and
+  existing Godot modal design. No new dependencies or model calls.
+- Files: management/{changelog,api,execution}.py; tests/test_changelog.py;
+  tests/fixtures/managed_runtime_app.py; game/scripts/{cafe,management}.gd;
+  game/tests/{test_gui_input,test_management}.gd; README.md; PROGRESS.md.
+- Focused tests: 9 passed in 70.40s (API auth/history/parsing and seven Godot GUI
+  integration cases). Added pointer-based agent subcategory switching coverage
+  before starting the required full scripts/check.sh; final outcome below.
+- Limits: old recaps without explicit IDs remain general summaries; new IDs are
+  agent-reported and do not replace controller gates. No fabricated backfill.
+- Commit locator: git log --grep='add per-agent requirement changelog'.
+  Next: rebuild backend and reopen Godot from the feature branch; use explicit
+  requirement IDs in tasks/planning and inspect the new Changelog after a run.
+- Final required verification: scripts/check.sh PASS; 306 pytest passed in 385.42s,
+  including real pointer navigation/subcategory tests and runtime-to-recap UI tests.
+  Ruff/format, Godot import/state/headless and live WebSocket/selection all PASS.
+  Existing Starlette/httpx deprecation warning only; git diff --check PASS.
+  Publishing on feat/virtual-agent-cafe-mvp; main unchanged.

@@ -566,6 +566,12 @@ class ExecutionManager:
             "A successful runtime requires separate human acceptance of the task. "
             "End with a concise factual recap: completed work, changed files, tests, and "
             "whether the controller published the branch (the runtime itself cannot know).\n"
+            "CHANGELOG FORMAT: In your final response use one Markdown heading per explicit "
+            "requirement, e.g. '## Requirement 1.1 — Login endpoint'. Preserve the task's "
+            "original requirement IDs; never invent IDs. Under each heading explain what you "
+            "implemented, changed files, test evidence and remaining work. Clearly identify "
+            "partial or blocked requirements. If no IDs were assigned, use '## General recap'. "
+            "Do not claim controller validation, publication or acceptance you cannot verify.\n"
             "The exact Markdown task/role snapshots are mounted read-only at "
             ".cafe/instructions/task.md and .cafe/instructions/roles/. Read them before editing.\n"
             "Precedence: system security > validated configuration > "
@@ -731,6 +737,7 @@ class ExecutionManager:
                 runtime_success=result.success,
                 detail=result.reason[:256],
                 changelog=changelog,
+                agent_name=config.name,
                 test_runs=list(result.test_runs),
                 # COMPLETED describes the process. Acceptance remains separately unverified.
                 task_state=TaskState.ASSIGNED if result.success else TaskState.FAILED,

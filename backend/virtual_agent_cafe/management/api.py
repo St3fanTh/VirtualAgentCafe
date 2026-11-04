@@ -5,6 +5,7 @@ from typing import Literal
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import Field
 
+from .changelog import overview as changelog_overview
 from .config import AgentConfig, MarkdownInput, ReviewInput, StrictModel, WorkspaceInput
 from .execution import ExecutionManager
 from .git import GitOperationError
@@ -240,6 +241,10 @@ def management_router(manager: ExecutionManager, validated_body, mode: str) -> A
                 "remote_git": os.getenv("VAC_ALLOW_REMOTE_GIT") == "1",
             },
         }
+
+    @router.get("/changelog")
+    async def changelog():
+        return await guarded(lambda: asyncio.to_thread(changelog_overview, manager.store))
 
     @router.post("/agents", status_code=201)
     async def create(request: Request):

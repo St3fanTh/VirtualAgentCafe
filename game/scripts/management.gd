@@ -37,6 +37,10 @@ var commit_message: LineEdit
 var git_result: TextEdit
 var executions: ItemList
 var logs: TextEdit
+var changelog_agents: ItemList
+var changelog_report: TextEdit
+var changelog_data: Array = []
+var changelog_selected := ""
 var execution_report: TextEdit
 var execution_status: Label
 var project_document_size: Label
@@ -81,7 +85,7 @@ var chat_history: TextEdit
 var chat_input: TextEdit
 var instruction_input: TextEdit
 var chat_status: Label
-var tab_keys := ["Agents", "Markdown", "Workspaces", "Executions", "Setup", "Agent chat"]
+var tab_keys := ["Agents", "Markdown", "Workspaces", "Executions", "Setup", "Agent chat", "Changelog"]
 var setup_project: OptionButton
 var setup_objective: TextEdit
 var setup_result: TextEdit
@@ -272,6 +276,7 @@ func _ready() -> void:
 	build_executions(tabs)
 	build_setup(tabs)
 	build_chat(tabs)
+	build_changelog(tabs)
 	bind_form_changes()
 	update_buttons()
 	add_child(poll)
@@ -534,6 +539,8 @@ func refresh() -> void:
 		token.text = saved
 	call_api("overview", "")
 	call_api("models", "/models")
+	if tabs.current_tab == 6:
+		call_api("changelog", "/changelog")
 
 func poll_updates() -> void:
 	if not visible or token.text.strip_edges().is_empty() or not active_request.is_empty() or not request_queue.is_empty():
@@ -542,7 +549,9 @@ func poll_updates() -> void:
 	for popup in [agent_model, chat_agent, workspace, task_file, repository, git_workspace, definition_kind, definition_select]:
 		if popup.get_popup().visible:
 			return
-	if tabs.current_tab == 5 and not chosen(chat_agent).is_empty():
+	if tabs.current_tab == 6:
+		call_api("changelog", "/changelog", HTTPClient.METHOD_GET, {}, true)
+	elif tabs.current_tab == 5 and not chosen(chat_agent).is_empty():
 		load_chat()
 	elif not selected_execution.is_empty():
 		call_api("logs", "/executions/" + selected_execution + "/logs?after=" + str(log_sequence), HTTPClient.METHOD_GET, {}, true)
@@ -662,6 +671,8 @@ func received(_result: int, code: int, _headers: PackedStringArray, body: Packed
 		if data.get("auto_integrate", false):
 			setup_result.text += "\n\nAUTOMATIC INTEGRATION ENABLED\nAfter both worker pushes, the integration/test worker merges their commits, builds the common requirements test plan, reruns its suites and promotes the green commit to main. No manual task acceptance."
 		set_notice("Project configured. Start your workers in Agents.")
+	elif finished_action == "changelog":
+		populate_changelog(data.get("agents", []))
 	elif finished_action == "overview":
 		cache = data
 		populate()
@@ -1618,3 +1629,74 @@ func start_next_iteration() -> void:
 	call_api("iteration_start", "/projects/" + project + "/iterations", HTTPClient.METHOD_POST, {
 		"content": iteration_requirements.text.strip_edges(),
 		"expected_sha256": setup_documents.get("PLANNING.md", {}).get("sha256", "")})
+
+func show_changelog() -> void:
+	tabs.current_tab = 6
+	show_management()
+
+func build_changelog(parent_tabs: TabContainer) -> void:
+	var row := page(parent_tabs, "Changelog")
+	var navigation := card(row, "Agents", 370)
+	navigation.add_child(caption("Implementation history by agent"))
+	changelog_agents = ItemList.new()
+	changelog_agents.custom_minimum_size = Vector2(330, 420)
+	changelog_agents.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	changelog_agents.item_selected.connect(select_changelog_agent)
+	navigation.add_child(changelog_agents)
+	button(navigation, "Refresh changelog", func(): call_api("changelog", "/changelog"))
+	var content := card(row, "Requirements & delivered changes", 1100)
+	content.add_child(caption("Agent-reported implementation · Controller verification is shown separately"))
+	changelog_report = TextEdit.new()
+	changelog_report.editable = false
+	changelog_report.wrap_mode = TextEdit.LINE_WRAPPING_BOUNDARY
+	changelog_report.custom_minimum_size = Vector2(1000, 500)
+	changelog_report.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	changelog_report.text = "Open Changelog or refresh to load saved results."
+	content.add_child(changelog_report)
+	parent_tabs.tab_changed.connect(func(index):
+		if index == 6:
+			call_api("changelog", "/changelog"))
+
+func populate_changelog(groups: Array) -> void:
+	changelog_data = groups
+	changelog_agents.clear()
+	var selected := 0
+	for index in range(groups.size()):
+		var group: Dictionary = groups[index]
+		changelog_agents.add_item(str(group.name) + " · " + str(group.entries.size()) + " runs")
+		changelog_agents.set_item_tooltip(index, str(group.id))
+		if str(group.id) == changelog_selected:
+			selected = index
+	if groups.is_empty():
+		changelog_report.text = "No agent results yet. Completed and failed runs appear here once a recap is available."
+		return
+	changelog_agents.select(selected)
+	select_changelog_agent(selected)
+
+func select_changelog_agent(index: int) -> void:
+	if index < 0 or index >= changelog_data.size():
+		return
+	var group: Dictionary = changelog_data[index]
+	var same_agent := changelog_selected == str(group.id)
+	var scroll := changelog_report.scroll_vertical
+	changelog_selected = str(group.id)
+	var text := str(group.name) + "\n" + str(group.id) + "\n"
+	if group.entries.is_empty():
+		text += "\nNo execution recap yet."
+	for entry in group.entries:
+		text += "\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+		text += str(entry.get("date", "")) + "  ·  " + str(entry.get("status", "")) + "\n"
+		text += "Task: " + str(entry.get("task", "")) + "\n"
+		text += "Branch: " + str(entry.get("branch", "")) + "  ·  Commit: " + str(entry.get("commit", "")) + "\n"
+		text += "Controller: publication " + str(entry.get("publication", "")) + " · acceptance " + str(entry.get("acceptance", "")) + "\n"
+		var workflow: Dictionary = entry.get("workflow", {})
+		text += "Validation: " + str(workflow.get("validation", "UNVERIFIED")) + " · Integration: " + str(workflow.get("integration", "UNVERIFIED")) + "\n"
+		var published: Dictionary = entry.get("published", {})
+		if not published.is_empty():
+			text += "Published: " + str(published.get("branch", "")) + " · " + str(published.get("commit", "")) + "\n"
+		for section in entry.get("sections", []):
+			text += "\n" + ("Requirement " + str(section.requirement) + " · " if not str(section.requirement).is_empty() else "") + str(section.title) + "\n"
+			text += str(section.description) + "\n"
+	if changelog_report.text != text:
+		changelog_report.text = text
+		changelog_report.scroll_vertical = scroll if same_agent else 0

@@ -23,6 +23,10 @@ if 'fixture: wait' in prompt:
 assert 'ROLE backend.md' in prompt
 assert 'TASK task.md' in prompt
 (workspace / 'managed-result.txt').write_text('roles and Markdown task received')
+(workspace / '.cafe/last-response.md').write_text(
+    '## Requirement 1.1 — Result file' + chr(10) +
+    'Implemented managed-result.txt. Tests: pytest passed. Remaining: none.'
+)
 send({'type': 'item.completed', 'item': {'type': 'file_change', 'status': 'completed'}})
 send({'type': 'item.started', 'item': {'type': 'command_execution', 'command': 'pytest -q'}})
 send({'type': 'item.completed', 'item': {'type': 'command_execution',

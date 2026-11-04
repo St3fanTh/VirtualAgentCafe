@@ -140,6 +140,30 @@ Use `--no-godot` to start only the backend or `--login` to reopen login.
 See [automatic integration](docs/automatic-integration.md) for the complete rules
 and [controller validation](docs/controller-validation.md) for diagnostic and acceptance states.
 
+### Requirement changelog
+
+Click **Changelog** beside **Manage agents** in the café toolbar. Select an agent
+on the left to see its saved execution recaps, newest first. Each entry separates
+requirement IDs such as **1.1** from the implementation description and shows the
+branch/commit plus controller validation, publication and integration status.
+The view refreshes automatically while open and preserves selection/scroll position.
+
+Use explicit IDs in your task or PLANNING.md, for example:
+
+```markdown
+## Requirement 1.1 — Login form
+Implement validation and display API errors.
+## Requirement 1.2 — Authentication endpoint
+Implement the endpoint and cover invalid credentials with tests.
+```
+
+New worker instructions request a final recap under those same IDs, including
+implemented changes, files, tests and remaining work. These descriptions are
+**agent-reported**, not automatic acceptance. Older unstructured recaps remain
+available as general summaries; the UI does not invent requirement mappings.
+Question-only chat messages do not become changelog entries. Reports use the
+existing persistent execution storage and private management authentication.
+
 ### When an agent needs help
 
 Integration failures receive a bounded number of automatic repair attempts.

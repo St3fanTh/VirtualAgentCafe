@@ -112,6 +112,23 @@ func run() -> void:
 	await frames(12)
 	var ui = cafe.management
 	ui.poll.stop() # Polls are explicitly triggered in the race regression below.
+	var changelog_button: Button = cafe.find_child("ChangelogButton", true, false)
+	check(changelog_button != null, "Changelog entry point exists")
+	await click(changelog_button)
+	await settled(ui)
+	check(ui.visible and ui.tabs.current_tab == 6, "Real pointer opens Changelog")
+	check("No agent results yet" in ui.changelog_report.text, "Empty changelog is explained")
+	ui.populate_changelog([
+		{"id": "backend", "name": "Backend", "entries": []},
+		{"id": "frontend", "name": "Frontend", "entries": [
+			{"sections": [{"requirement": "1.1", "title": "Login", "description": "Implemented login form."}]}]}
+	])
+	await frames()
+	await click(ui.changelog_agents, ui.changelog_agents.get_item_rect(1).get_center())
+	check(ui.changelog_selected == "frontend", "Pointer selects agent subcategory")
+	check("Requirement 1.1" in ui.changelog_report.text and "Implemented login form." in ui.changelog_report.text, "Requirement implementation is displayed")
+	check("No execution recap" not in ui.changelog_report.text, "Switching agents replaces the previous report")
+	await click(ui.buttons["Close"])
 	var open_button: Button
 	for node in cafe.find_children("*", "Button", true, false):
 		if node is Button and node.text == "Manage agents":

@@ -190,8 +190,17 @@ func _process(_delta: float) -> bool:
 				stage = 12
 		12:
 			if ui.cache.agents[0].state == "CANCELLED":
-				print("Godot managed agent, Markdown, workspace, runtime, logs, acceptance and stop tests: PASS")
-				quit(0)
+				ui.show_changelog()
+				stage = 13
+		13:
+			if ui.changelog_data.is_empty():
+				return false
+			assert(ui.changelog_agents.item_count == 1)
+			assert("Requirement 1.1" in ui.changelog_report.text)
+			assert("Implemented managed-result.txt" in ui.changelog_report.text)
+			assert("UNVERIFIED" in ui.changelog_report.text)
+			print("Godot managed agent, requirement changelog, runtime and stop tests: PASS")
+			quit(0)
 	return false
 
 func check_no_manual_acceptance(ui: Node) -> void:
