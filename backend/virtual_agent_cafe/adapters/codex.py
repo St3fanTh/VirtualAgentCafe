@@ -122,6 +122,11 @@ def test_scope_tokens(command: str, depth: int = 0):
     return groups
 
 
+def test_scope_id(command: str, cwd) -> str:
+    scope = json.dumps([test_scope_tokens(command), cwd])
+    return hashlib.sha256(scope.encode()).hexdigest()
+
+
 MAX_LINE = 1024 * 1024
 
 
@@ -207,10 +212,7 @@ class CodexObserver:
                         self.test_runs.append(diagnostic)
                         self.test_runs = self.test_runs[-100:]
                         # A passing subset must not clear a failure in a different cwd/suite.
-                        scope = json.dumps(
-                            [test_scope_tokens(str(item.get("command", ""))), item.get("cwd")]
-                        )
-                        framework = hashlib.sha256(scope.encode()).hexdigest()
+                        framework = test_scope_id(str(item.get("command", "")), item.get("cwd"))
                         diagnostic["scope_sha256"] = framework
                         for prior in self.test_runs[:-1]:
                             if prior.get("scope_sha256") == framework:
@@ -426,7 +428,8 @@ class CodexAdapter:
                         False,
                         "Unresolved tests: " + "; ".join(observer.failed_diagnostics.values()),
                         tuple(observer.test_runs),
-                        implementation_complete=observer.turn_complete
+                        implementation_complete=code == 0
+                        and observer.turn_complete
                         and not observer.fatal
                         and not observer.failed_patch,
                     )

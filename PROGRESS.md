@@ -1128,3 +1128,43 @@ Starlette/httpx deprecation warnings were pre-existing, not test failures.
   Ruff/format, Godot import/state/headless and live WebSocket/selection all PASS.
   Existing Starlette/httpx deprecation warning only; git diff --check PASS.
   Publishing on feat/virtual-agent-cafe-mvp; main unchanged.
+
+## 2026-11-04 — Recover socket-blocked worker validation
+
+- Confirmed the orchestration gap: the nested Codex workspace-write sandbox denies
+  socket creation, producing Godot net_socket_unix.cpp errors even with exit 0.
+  A completed worker with that observed failure never reached controller validation.
+- Reuse the controller's existing offline validator to recheck all recorded Godot
+  scopes at the exact committed worker revision with private loopback, runtime/XDG
+  paths and validated Fontconfig settings. No external network or Git RPC authority.
+  Genuine script/runtime errors still fail even at exit 0. Shared requirements
+  validation and manual acceptance remain separate mandatory gates.
+- Added Retry validation for existing failed workers: a linked new execution reuses
+  saved evidence without another model turn. Exact commit/branch/workspace and
+  instruction snapshots, clean tree and complete command evidence are required.
+  Preserve original failures, successful replacement evidence and prior history.
+- Strictly parse recorded explicit Godot invocations into validation checks; never
+  replay arbitrary shell strings. Reject unsupported arguments, escaping/symlink
+  paths, unrelated failures, incomplete evidence and incomplete model executions.
+- Files: management/{worker_validation,validation,execution,api}.py;
+  adapters/codex.py; tests/test_worker_validation.py;
+  game/scripts/management.gd; game/tests/test_management.gd;
+  README.md; docs/controller-validation.md; PROGRESS.md.
+- Regression coverage: real offline Codex sandbox socket reproduction, real Godot
+  rechecks and local Git publication, genuine error rejection, immutable retry,
+  parser/path limits, API authorization and automatic shared team integration.
+- Initial focused run: 14 passed. Expanded controller + native GUI run: 23 passed.
+  Final full-suite result recorded below after completion.
+- Limitations: the user's SimulationWorld repository is not present here; its real
+  run is not claimed validated. Unsupported composite commands require a new worker
+  run with standalone explicit tests. Desktop acceptance remains a human action.
+- Commit locator: git log --grep='recover socket-blocked worker validation'.
+  Next: rebuild the backend, reopen Godot, select the blocked frontend worker and
+  use Retry validation. New eligible worker runs enter recovery automatically.
+- Final local verification: full scripts/check.sh pytest stage produced 323 passed
+  and one incomplete-history regression failure (439.82s). That process had loaded
+  the module before the missing retention-limit guard was added. The final-source
+  focused suite passed all 18 tests (49.20s), including that regression. No remaining
+  known test failure. Re-ran scripts/check.sh lint, godot-import, godot-states,
+  godot-headless and websocket-smoke: all PASS. git diff --check PASS.
+  Full clean-source execution will also run in GitHub CI after publication.

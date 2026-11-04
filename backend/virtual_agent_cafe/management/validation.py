@@ -11,6 +11,7 @@ import signal
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Literal
 
 from pydantic import Field, ValidationError, model_validator
@@ -27,6 +28,8 @@ class Check(StrictModel):
     kind: Literal["pytest", "godot", "npm"]
     directory: str = Field(default=".", max_length=256)
     script: str | None = Field(default=None, max_length=256)
+    fontconfig_file: str | None = Field(default=None, max_length=512)
+    fontconfig_path: str | None = Field(default=None, max_length=512)
     targets: list[str] = Field(default_factory=list, max_length=50)
     python: Literal["runtime", "project-venv"] = "runtime"
 
@@ -34,6 +37,8 @@ class Check(StrictModel):
     def supported_scope(self):
         if self.kind == "godot" and not self.script:
             raise ValueError("Godot checks require an explicit script; no implicit tests are run")
+        if (self.fontconfig_file or self.fontconfig_path) and self.kind != "godot":
+            raise ValueError("Fontconfig overrides are only supported for Godot")
         if self.script is not None and self.kind != "godot":
             raise ValueError("script is only supported for Godot; use targets for pytest")
         if self.python != "runtime" and self.kind != "pytest":
@@ -76,12 +81,12 @@ class ValidationRuleError(ValueError):
 class ValidationTrace:
     """Persist diagnostic metadata in authenticated management logs, never public events."""
 
-    def __init__(self, manager, run, workspace):
+    def __init__(self, manager, run, workspace, report_key="validation"):
         self.manager, self.run = manager, run
         self.context = {"selected_ref": "HEAD", "repository_root": str(workspace)}
         self.report = {**self.context, "passed": False, "checks": [], "diagnostics": []}
         self.rule = "git.snapshot"
-        run["validation"] = self.report  # Never retain a previous successful validation.
+        run[report_key] = self.report  # Never retain a previous successful validation.
         self.save()
 
     def save(self):
@@ -117,11 +122,18 @@ class ValidationTrace:
             self.reject(rule, message)
 
 
-async def validate(manager, config, run: dict, workspace: Path) -> dict:
+async def validate(
+    manager, config, run: dict, workspace: Path, *, observed_checks: list[Check] | None = None
+) -> dict:
     workspace = await asyncio.to_thread(workspace.resolve)
-    trace = ValidationTrace(manager, run, workspace)
+    trace = ValidationTrace(
+        manager,
+        run,
+        workspace,
+        "worker_validation" if observed_checks is not None else "validation",
+    )
     try:
-        return await _validate(manager, config, run, workspace, trace)
+        return await _validate(manager, config, run, workspace, trace, observed_checks)
     except ValidationRuleError:
         raise
     except ValueError as error:
@@ -145,7 +157,7 @@ async def validate(manager, config, run: dict, workspace: Path) -> dict:
         )
 
 
-async def _validate(manager, config, run, workspace, trace):
+async def _validate(manager, config, run, workspace, trace, observed_checks=None):
     files = ApprovedFiles(workspace)
     root = (await manager.git.run(workspace, "rev-parse", "--show-toplevel")).strip()
     head = (await manager.git.run(workspace, "rev-parse", "--verify", "HEAD^{commit}")).strip()
@@ -214,36 +226,56 @@ async def _validate(manager, config, run, workspace, trace):
             "Workspace file differs from the selected commit; commit changes and retry",
         )
 
-    trace.rule = "plan.path"
-    path = files.path("validation/plan.json")
-    await committed(path, "plan.committed")
-    trace.require(path.stat().st_size <= 65536, "plan.size", "Test plan exceeds size limit")
-    try:
-        plan = TestPlan.model_validate_json(path.read_text())
-    except ValidationError as error:
-        trace.report["schema_errors"] = error.errors(
-            include_url=False, include_input=False, include_context=False
+    if observed_checks is not None:
+        trace.require(
+            0 < len(observed_checks) <= 20 and all(c.kind == "godot" for c in observed_checks),
+            "worker.observed_checks",
+            "Only bounded observed Godot checks can be revalidated",
         )
-        trace.reject("plan.schema", "Invalid shared test plan; inspect validation schema_errors")
-    trace.require(
-        plan.source_sha256 == run.get("requirements_sha256"),
-        "plan.requirements_snapshot",
-        "Test plan does not reference the current requirements snapshot",
-    )
-    source = files.path("validation/requirements.md")
-    await committed(source, "requirements.committed")
-    trace.require(
-        source.stat().st_size <= 262144
-        and hashlib.sha256(source.read_bytes()).hexdigest() == run.get("requirements_sha256"),
-        "requirements.content",
-        "Committed requirements must match the exact shared requirements snapshot",
-    )
-    trace.report.update(
-        source_sha256=plan.source_sha256,
-        plan_sha256=hashlib.sha256(path.read_bytes()).hexdigest(),
-        requirements=[r.model_dump() for r in plan.requirements],
-        manual_acceptance=plan.manual_acceptance,
-    )
+        source_hash = run["task_sha256"]
+        plan = SimpleNamespace(checks=observed_checks, source_sha256=source_hash)
+        trace.report.update(
+            scope="observed_worker_godot",
+            source_sha256=source_hash,
+            plan_sha256=hashlib.sha256(
+                json.dumps([c.model_dump() for c in observed_checks], sort_keys=True).encode()
+            ).hexdigest(),
+            requirements=[],
+            manual_acceptance=[],
+        )
+    else:
+        trace.rule = "plan.path"
+        path = files.path("validation/plan.json")
+        await committed(path, "plan.committed")
+        trace.require(path.stat().st_size <= 65536, "plan.size", "Test plan exceeds size limit")
+        try:
+            plan = TestPlan.model_validate_json(path.read_text())
+        except ValidationError as error:
+            trace.report["schema_errors"] = error.errors(
+                include_url=False, include_input=False, include_context=False
+            )
+            trace.reject(
+                "plan.schema", "Invalid shared test plan; inspect validation schema_errors"
+            )
+        trace.require(
+            plan.source_sha256 == run.get("requirements_sha256"),
+            "plan.requirements_snapshot",
+            "Test plan does not reference the current requirements snapshot",
+        )
+        source = files.path("validation/requirements.md")
+        await committed(source, "requirements.committed")
+        trace.require(
+            source.stat().st_size <= 262144
+            and hashlib.sha256(source.read_bytes()).hexdigest() == run.get("requirements_sha256"),
+            "requirements.content",
+            "Committed requirements must match the exact shared requirements snapshot",
+        )
+        trace.report.update(
+            source_sha256=plan.source_sha256,
+            plan_sha256=hashlib.sha256(path.read_bytes()).hexdigest(),
+            requirements=[r.model_dump() for r in plan.requirements],
+            manual_acceptance=plan.manual_acceptance,
+        )
     trace.rule = "environment.inspect"
     environment = await asyncio.to_thread(environment_identity)
     trace.report["environment"] = environment
@@ -266,6 +298,7 @@ async def _validate(manager, config, run, workspace, trace):
         trace.require(directory.is_dir(), trace.rule, "Validation directory does not exist")
         relative = directory.relative_to(workspace).as_posix()
         prefix = "" if relative == "." else relative + "/"
+        check_environment = Sandbox.runtime_environment()
         if check.kind == "pytest":
             trace.require(
                 any(
@@ -327,6 +360,18 @@ async def _validate(manager, config, run, workspace, trace):
                 "godot.script_name",
                 "Godot test script filename must start with 'test' (file is committed)",
             )
+            project = project_files.path("project.godot")
+            await committed(project, "godot.project")
+            if check.fontconfig_file:
+                font_file = files.path(check.fontconfig_file)
+                await committed(font_file, "godot.fontconfig")
+                check_environment["FONTCONFIG_FILE"] = str(font_file)
+            if check.fontconfig_path:
+                font_directory = files.path(check.fontconfig_path)
+                trace.require(
+                    font_directory.is_dir(), "godot.fontconfig_path", "Font directory absent"
+                )
+                check_environment["FONTCONFIG_PATH"] = str(font_directory)
             script = target.relative_to(directory).as_posix()
             command = [
                 "godot",
@@ -346,7 +391,13 @@ async def _validate(manager, config, run, workspace, trace):
         manager.emit(run, EventType.TESTING, f"Shared check {check.id}: {check.kind} RUNNING")
         sandbox = Sandbox().command(
             workspace,
-            ["/usr/bin/env", "CI=1", "PYTHONDONTWRITEBYTECODE=1", *command],
+            [
+                "/usr/bin/env",
+                "CI=1",
+                "PYTHONDONTWRITEBYTECODE=1",
+                *[f"{k}={v}" for k, v in check_environment.items()],
+                *command,
+            ],
             metadata=manager.git.metadata(workspace),
             writable_git=False,
             network=False,
@@ -364,8 +415,9 @@ async def _validate(manager, config, run, workspace, trace):
             "command": command,
             "check": check.model_dump(),
             "environment_sha256": environment["sha256"],
-            "runtime_environment": Sandbox.runtime_environment(),
+            "runtime_environment": check_environment,
             "network_policy": "isolated namespace with local loopback; no external network",
+            "validation_scope": trace.report.get("scope", "shared_requirements"),
             "network": False,
             "timeout_seconds": min(config.execution.timeout_seconds, 300),
         }

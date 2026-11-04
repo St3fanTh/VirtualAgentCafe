@@ -238,11 +238,55 @@ the cache version changed to avoid reusing old environment results.
 The observer still blocks zero-exit runs with Godot errors. A socket-creation
 diagnostic identifies permissions/resource limits as investigation targets, not
 proof of an application defect or automatic permission to broaden network access.
-An unresolved worker socket error still blocks its run; this change does not
-bypass that gate or automatically promote the worker into controller validation.
+A socket error is never ignored. The controller recovery path below can replace
+the observed failure only with successful checks at the submitted commit.
 
 Evidence: backend/tests/test_godot_runtime_environment.py. Source of the engine
 condition: https://github.com/godotengine/godot/blob/4.4.1-stable/drivers/unix/net_socket_unix.cpp
 The user's actual test_states.gd and complete error stack were unavailable during
 this investigation, so the reproduced mechanism is not proof of that project's
 specific call site.
+
+### Automatic recovery of socket-blocked worker tests
+
+After the model turn finishes, a worker whose only outstanding test failures are
+observed Godot socket-creation errors can enter a controller recheck. The controller
+stops the agent Git RPC watcher first, pins HEAD, and reuses the existing validator:
+approved paths, committed script/project/config blobs, clean working tree, unchanged
+branch/HEAD/environment, bounded subprocess capture, timeout, and strict Godot error
+detection. The sandbox has private loopback but no external network or credentials.
+
+All active observed Godot scopes are rechecked, including passing companion suites.
+No synthetic script or undeclared default is added. A small parser accepts a single
+explicit `godot --headless --path ... --script ...`, optionally with a literal shell
+wrapper, leading `cd ... &&`, and supported XDG/Fontconfig assignments. It never
+executes the recorded shell string. Pipelines, redirects, arbitrary wrappers, extra
+test selectors, unknown environment variables, incomplete history and unapproved
+paths remain blocked. Keep test invocations separate from setup/report commands.
+
+XDG values use the fresh private runtime directories. Explicit workspace Fontconfig
+files/paths are preserved and checked; custom configuration files must be committed.
+The same optional `fontconfig_file` / `fontconfig_path` fields are supported for
+Godot checks in the shared plan, relative to the repository root.
+
+Successful rechecks mark the old attempts superseded with the controller check ID
+and tested commit; they remain in history. New controller evidence is persisted in
+`worker_validation`, separately from shared requirements validation. Private
+stdout/stderr remain available through the existing validation-output endpoint.
+The existing commit/config/environment cache is reused. Failed rechecks cannot
+publish or promote anything. Unrelated failures, incomplete model turns and failed
+patches are never cleared by this path.
+
+For an existing failed worker, open **Manage agents**, select it and click
+**Retry validation**. This creates a new execution linked by `recheck_of`, reuses
+the saved command evidence and recap, and does not start another Codex model turn.
+The previous run must describe a completed implementation and its exact commit,
+workspace, branch, task, role and project-document hashes must still match.
+Dirty trees or changed submissions are rejected. Integration agents continue to
+use **Retry team integration**, preserving the current published-worker inputs.
+
+New worker runs enter rechecks automatically when eligible. After a clean recheck,
+the existing configured publication/team workflow resumes: the worker pushes only
+its branch; the integrator must still merge the actual commits, pass the committed
+shared requirements plan and satisfy promotion gates. Manual desktop acceptance
+remains separate. This grants no broader network access to agent commands.

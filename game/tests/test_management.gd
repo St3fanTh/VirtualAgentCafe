@@ -113,6 +113,8 @@ func _process(_delta: float) -> bool:
 			if not "CODING" in ui.logs.text or not "TESTING" in ui.logs.text:
 				return false
 			assert("Requested model: fixture-model" in ui.execution_report.text)
+			assert(ui.buttons.has("Retry validation"))
+			assert(ui.buttons["Retry validation"].disabled, "Successful workers do not offer failed-test recovery")
 			# A changed or temporarily missing catalog must preserve an unsaved selection.
 			ui.choose(ui.agent_model, "fixture-model-other")
 			ui.available_models = []

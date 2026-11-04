@@ -182,6 +182,20 @@ Answers appear in chat; active work also has Live Logs and execution reports.
 blocker, provide a concrete instruction first. Questions and work instructions
 use the configured model.
 
+### Recover a Godot socket-blocked worker
+
+If a completed worker is blocked by Godot `_sock == -1`, select it under
+**Manage agents** and click **Retry validation**. The controller checks the saved
+commit in an isolated environment with private loopback, without another model
+turn. Keep the worker/workspace and committed files intact. A changed commit or
+dirty workspace must be handled as a new agent run.
+
+New eligible runs are rechecked automatically. Only clean controller results clear
+the blocker; real script/runtime errors and unrelated failures remain blocking.
+Configured worker publication and automatic team integration then continue normally.
+Inspect **Executions → Changelog & tests → Controller worker recheck** for evidence.
+This does not waive shared requirements tests or manual desktop acceptance.
+
 ### Start the next round after reviewing
 
 Keep the agents and worktrees; no new team or setup is needed:

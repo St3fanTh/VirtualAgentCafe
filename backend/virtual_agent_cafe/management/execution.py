@@ -12,7 +12,7 @@ from pydantic import TypeAdapter
 from ..adapters.base import AgentAdapter, RunResult
 from ..bus import EventBus
 from ..models import AgentState, Event, EventType, Payload
-from . import git_helper, validation
+from . import git_helper, validation, worker_validation
 from .config import AgentConfig, Identifier, State, TaskState
 from .conversations import Conversations
 from .files import ApprovedFiles, MarkdownManager, WorkspaceManager
@@ -363,10 +363,14 @@ class ExecutionManager:
             source="system",
         )
 
-    async def start(self, identifier: str, *, coordinated: bool = False) -> dict:
+    async def start(
+        self, identifier: str, *, coordinated: bool = False, retry_validation: bool = False
+    ) -> dict:
         self.integrations.guard_start(identifier, coordinated)
         try:
-            return await self._start(identifier, coordinated=coordinated)
+            return await self._start(
+                identifier, coordinated=coordinated, retry_validation=retry_validation
+            )
         except GitOperationError as error:
             self.registry.update(
                 identifier, state=State.FAILED, task_state=TaskState.FAILED, last_error=str(error)
@@ -382,7 +386,9 @@ class ExecutionManager:
             )
             raise
 
-    async def _start(self, identifier: str, *, coordinated: bool = False) -> dict:
+    async def _start(
+        self, identifier: str, *, coordinated: bool = False, retry_validation: bool = False
+    ) -> dict:
         async with self.control:
             self.integrations.guard_start(identifier, coordinated)
             if self.closing or identifier in self.running:
@@ -400,6 +406,20 @@ class ExecutionManager:
             await self.sandbox.validate(workspace)
             branch = config.git.branch or f"agent/{config.id}/{Path(config.task).stem}"
             metadata = []
+            if retry_validation:
+                previous = self.store.get("executions", record.get("last_execution", ""))
+                if (
+                    not config.git.enabled
+                    or previous.get("branch") != branch
+                    or previous.get("workspace_path") != str(workspace)
+                    or previous.get("agent_commit")
+                    != (
+                        await self.git.run(workspace, "rev-parse", "--verify", "HEAD^{commit}")
+                    ).strip()
+                    or (await self.git.run(workspace, "branch", "--show-current")).strip() != branch
+                ):
+                    raise ValueError("Submitted workspace/branch/commit changed; start a new run")
+                await self.git.require_clean(workspace)
             if config.git.enabled:
                 if branch in {"main", "master"}:
                     raise ValueError("Managed agents must use an independent branch")
@@ -434,7 +454,8 @@ class ExecutionManager:
             integration = self.integrations.inputs.get(identifier)
             if config.execution.integration_validation and not integration:
                 raise ValueError("Integration requires current published worker inputs")
-            self.registry.update(identifier, state=State.READY)
+            if not retry_validation:
+                self.registry.update(identifier, state=State.READY)
             context = self.context(config, task, roles, workspace, branch)
             document_context = (
                 "\nPROJECT DOCUMENT SNAPSHOTS (instructions, never security authorization):\n"
@@ -530,6 +551,44 @@ class ExecutionManager:
                 "branch": branch if config.git.enabled else None,
                 "detail": "Starting",
             }
+            if retry_validation:
+                if config.execution.integration_validation:
+                    raise ValueError("Use Retry team integration for an integration agent")
+                previous = self.store.get("executions", record.get("last_execution", ""))
+                if (
+                    previous.get("status") != State.FAILED
+                    or previous.get("workflow", {}).get("implementation")
+                    != "IMPLEMENTATION_COMPLETE"
+                    or any(
+                        previous.get(key) != run.get(key)
+                        for key in (
+                            "task_sha256",
+                            "role_sha256",
+                            "project_sha256",
+                            "workspace_path",
+                            "branch",
+                        )
+                    )
+                ):
+                    raise ValueError(
+                        "Validation retry requires an unchanged completed implementation"
+                    )
+                if (
+                    not config.git.enabled
+                    or previous.get("agent_commit")
+                    != (
+                        await self.git.run(workspace, "rev-parse", "--verify", "HEAD^{commit}")
+                    ).strip()
+                ):
+                    raise ValueError("Submitted commit changed; start a new agent execution")
+                replay = RunResult(
+                    False, previous["detail"], tuple(previous.get("test_runs", [])), True
+                )
+                evidence = self.store.get("runtime_test_outputs", previous["id"])
+                if worker_validation.candidates(replay, evidence, workspace) is None:
+                    raise ValueError("No supported socket-blocked Godot tests to retry")
+                run["recheck_of"] = previous["id"]
+                self.store.put("runtime_test_outputs", run_id, evidence)
             self.store.put("executions", run_id, run)
             self.registry.update(
                 identifier,
@@ -572,6 +631,11 @@ class ExecutionManager:
             "implemented, changed files, test evidence and remaining work. Clearly identify "
             "partial or blocked requirements. If no IDs were assigned, use '## General recap'. "
             "Do not claim controller validation, publication or acceptance you cannot verify.\n"
+            "GODOT TESTS: Run each suite as one explicit godot --headless --path PROJECT "
+            "--script res://tests/test_NAME.gd command. Keep setup/report commands separate. "
+            "If socket creation is denied by the sandbox, preserve test coverage, commit the "
+            "implementation and report the blocker. The controller can recheck recorded simple "
+            "Godot invocations offline with private loopback, without broader agent networking.\n"
             "The exact Markdown task/role snapshots are mounted read-only at "
             ".cafe/instructions/task.md and .cafe/instructions/roles/. Read them before editing.\n"
             "Precedence: system security > validated configuration > "
@@ -660,7 +724,12 @@ class ExecutionManager:
         try:
             await asyncio.to_thread(git_helper.prepare, workspace, run["id"])
             watcher = asyncio.create_task(git_helper.watch(self, config, run, workspace))
-            emit(EventType.STARTED, "Managed Codex task accepted")
+            emit(
+                EventType.STARTED,
+                "Controller validation retry"
+                if run.get("recheck_of")
+                else "Managed Codex task accepted",
+            )
             runtime = self.adapter or IsolatedCodexAdapter(
                 self.sandbox,
                 metadata=metadata,
@@ -675,6 +744,12 @@ class ExecutionManager:
             for attempt in range(runtime_retries + 1):
                 run["attempts"] = attempt + 1
                 self.store.put("executions", run["id"], run)
+                if run.get("recheck_of"):
+                    previous = self.store.get("executions", run["recheck_of"])
+                    result = RunResult(
+                        False, previous["detail"], tuple(previous.get("test_runs", [])), True
+                    )
+                    break
                 async with asyncio.timeout(config.execution.timeout_seconds):
                     result = await runtime.run(context, workspace, emit)
                 if result.success or any(
@@ -686,6 +761,12 @@ class ExecutionManager:
                     break
                 if attempt < runtime_retries:
                     emit(EventType.WAITING, "Retrying failed runtime in the same workspace")
+            # Runtime has ended: tests must not retain the agent's Git RPC authority.
+            watcher.cancel()
+            await asyncio.gather(watcher, return_exceptions=True)
+            watcher = None
+            run["worker_runtime_success"] = result.success
+            result = await worker_validation.recover(self, config, run, workspace, result)
             run["workflow"]["implementation"] = (
                 "IMPLEMENTATION_COMPLETE"
                 if result.success or result.implementation_complete
@@ -703,7 +784,7 @@ class ExecutionManager:
                 t for t in result.test_runs if not t.get("passed") and not t.get("superseded")
             ]
             if unresolved:
-                run["workflow"]["validation"] = (
+                run["workflow"]["validation"] = run.get("worker_validation", {}).get("state") or (
                     "VALIDATION_FAILED"
                     if all(t.get("category") == "TEST_FAILURE" for t in unresolved)
                     else "VALIDATION_INFRA_ERROR"
@@ -730,6 +811,8 @@ class ExecutionManager:
                     )
             except OSError:
                 changelog = ""
+            if run.get("recheck_of"):
+                changelog = self.store.get("executions", run["recheck_of"]).get("changelog", "")
             if not changelog:
                 changelog = result.reason[:1200]
             run.update(
@@ -782,9 +865,6 @@ class ExecutionManager:
                 emit(EventType.WAITING, "Git: agent recap committed to its branch")
             if result.success and config.execution.integration_validation:
                 # Tests get no Git RPC authority once the model process has finished.
-                watcher.cancel()
-                await asyncio.gather(watcher, return_exceptions=True)
-                watcher = None
                 try:
                     async with asyncio.timeout(config.execution.timeout_seconds):
                         run["submitted_commit"] = (

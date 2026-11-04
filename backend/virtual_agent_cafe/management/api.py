@@ -323,7 +323,9 @@ def management_router(manager: ExecutionManager, validated_body, mode: str) -> A
 
     @router.post("/agents/{identifier}/{action}", status_code=202)
     async def control(
-        identifier: str, action: Literal["start", "stop", "restart"], request: Request
+        identifier: str,
+        action: Literal["start", "stop", "restart", "retry-validation"],
+        request: Request,
     ):
         await validated_body(request, EmptyInput)
         if mode != "codex":
@@ -332,8 +334,10 @@ def management_router(manager: ExecutionManager, validated_body, mode: str) -> A
         async def operate():
             if action == "stop" or (action == "restart" and identifier in manager.running):
                 await manager.stop(identifier)
-            if action in {"start", "restart"}:
-                return await manager.start(identifier)
+            if action in {"start", "restart", "retry-validation"}:
+                return await manager.start(
+                    identifier, retry_validation=action == "retry-validation"
+                )
             return manager.registry.get(identifier)
 
         return await guarded(operate)

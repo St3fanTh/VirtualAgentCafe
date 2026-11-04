@@ -387,6 +387,7 @@ func build_agents(tabs: TabContainer) -> void:
 	button(actions, "Start agent", func(): control("start"))
 	button(actions, "Stop agent", func(): control("stop"))
 	button(actions, "Restart agent", func(): control("restart"))
+	button(actions, "Retry validation", func(): control("retry-validation"))
 	button(left, "Delete agent", ask_delete_agent)
 	delete_dialog.title = "Delete agent"
 	delete_dialog.ok_button_text = "Delete agent"
@@ -864,17 +865,22 @@ func update_buttons() -> void:
 		buttons["Import Markdown file"].disabled = busy or setup_document_project != chosen(setup_project) or setup_documents.is_empty()
 		setup_document_editor.editable = not busy and setup_document_project == chosen(setup_project) and not setup_documents.is_empty()
 	var running := false
+	var failed := false
 	var ready := false
 	var selected: Dictionary = {}
 	for record in cache.get("agents", []):
 		if record.config.id == active_agent:
 			running = record.state == "RUNNING"
+			failed = record.state == "FAILED"
 			ready = record.config.get("task") != null
 			selected = record.config
 	buttons["Start agent"].disabled = busy or active_agent.is_empty() or running or not ready or dirty
 	buttons["Stop agent"].disabled = busy or active_agent.is_empty() or not running
 	buttons["Restart agent"].disabled = busy or active_agent.is_empty() or not ready or dirty
+	buttons["Retry validation"].disabled = busy or active_agent.is_empty() or not failed or not ready or dirty
+	buttons["Retry validation"].tooltip_text = "Recheck the unchanged committed Godot result without starting Codex. Available after a socket-blocked failure."
 	var automatic := bool(selected.get("execution", {}).get("integration_validation", false))
+	buttons["Retry validation"].disabled = buttons["Retry validation"].disabled or automatic
 	buttons["Start agent"].disabled = buttons["Start agent"].disabled or automatic
 	buttons["Restart agent"].disabled = buttons["Restart agent"].disabled or automatic
 	buttons["Delete agent"].disabled = busy or running or active_agent.is_empty()
@@ -924,6 +930,7 @@ func update_buttons() -> void:
 		buttons["Start agent"].disabled = true
 		buttons["Start agent"].tooltip_text = "Use live Codex mode to run agents."
 		buttons["Restart agent"].disabled = true
+		buttons["Retry validation"].disabled = true
 	for operation in ["fetch", "pull", "push"]:
 		buttons["Confirm " + operation].disabled = busy or not bool(capabilities.get("remote_git", false)) or not bool(selected.get("git", {}).get("allow_" + operation, false)) or not bool(selected.get("git", {}).get("enabled", false)) or chosen(git_workspace) != str(selected.get("workspace", ""))
 	buttons["Clone remote (explicit action)"].disabled = busy or not bool(capabilities.get("remote_git", false))
@@ -1516,6 +1523,14 @@ func format_execution_report(record: Dictionary) -> String:
 		if validation.has("schema_errors"):
 			text += "\nPlan errors: " + JSON.stringify(validation.schema_errors)
 		text += "\nFailed rule: " + str(validation.get("failed_rule", "none")) + "\nDetailed path/blob diagnostics are in Live logs.\n"
+	var worker_validation: Dictionary = record.get("worker_validation", {})
+	if not worker_validation.is_empty():
+		text += "\nCONTROLLER WORKER RECHECK\nCommit: " + str(worker_validation.get("commit", ""))
+		text += "\nResult: " + ("PASS" if worker_validation.get("passed", false) else "FAIL")
+		text += "\nRule: " + str(worker_validation.get("failed_rule", worker_validation.get("detail", "none"))) + "\n"
+		for check in worker_validation.get("checks", []):
+			text += str(check.get("id", "")) + " · exit " + str(check.get("exit_code", "")) + " · " + str(check.get("diagnostics", {}).get("category", "")) + "\n"
+			text += "  " + JSON.stringify(check.get("context", {})) + "\n"
 	text += "\nSHARED REQUIREMENTS CHECKS\n"
 	for check in record.get("validation", {}).get("checks", []):
 		text += str(check.get("id", "")) + " · exit " + str(check.get("exit_code", "")) + " · " + str(check.get("diagnostics", {}).get("category", "unknown")) + (" · cached" if check.get("cached", false) else "") + "\n"
