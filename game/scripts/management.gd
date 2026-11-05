@@ -101,6 +101,8 @@ var setup_document_project := ""
 var setup_document: OptionButton
 var setup_document_editor: TextEdit
 var setup_file_dialog: FileDialog
+var diagnostics_dialog: FileDialog
+var diagnostics_export: Dictionary = {}
 
 const INK := Color("e4ece6")
 const MUTED := Color("92a9aa")
@@ -493,6 +495,16 @@ func build_executions(tabs: TabContainer) -> void:
 		show_retry_feedback()
 		refresh())
 	var monitor := card(row, "Live activity & integration", 950)
+	button(monitor, "Download logs", func():
+		call_api("download_logs", "/executions/" + selected_execution + "/diagnostics"))
+	diagnostics_dialog = FileDialog.new()
+	diagnostics_dialog.file_mode = FileDialog.FILE_MODE_SAVE_FILE
+	diagnostics_dialog.access = FileDialog.ACCESS_FILESYSTEM
+	diagnostics_dialog.filters = PackedStringArray(["*.json ; Execution diagnostics"])
+	diagnostics_dialog.use_native_dialog = true
+	diagnostics_dialog.title = "Save execution logs"
+	diagnostics_dialog.file_selected.connect(save_diagnostics)
+	add_child(diagnostics_dialog)
 	monitor.add_child(caption("Observed execution, shared requirements checks and main promotion."))
 	execution_status = caption("Select an execution to monitor its current status.")
 	execution_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -611,7 +623,11 @@ func received(_result: int, code: int, _headers: PackedStringArray, body: Packed
 		call_deferred("after_response")
 		return
 	var finished_action: String = completed.get("action", action)
-	if finished_action == "models":
+	if finished_action == "download_logs":
+		diagnostics_export = data
+		diagnostics_dialog.current_file = "cafe-logs-" + str(completed.get("execution", "run")) + ".json"
+		diagnostics_dialog.popup_centered(Vector2i(1000, 700))
+	elif finished_action == "models":
 		available_models = data.get("models", [])
 		fill_model_options(chosen(agent_model))
 		model_status.text = str(data.get("detail", ""))
@@ -832,7 +848,20 @@ func mark_dirty() -> void:
 	form_status.add_theme_color_override("font_color", Color("e6bf7d"))
 	update_buttons()
 
+func save_diagnostics(path: String) -> void:
+	var file := FileAccess.open(path, FileAccess.WRITE)
+	if file == null:
+		set_notice("Cannot save logs at the selected location. Choose another folder.", true)
+		return
+	file.store_string(JSON.stringify(diagnostics_export, "  "))
+	file.flush()
+	var error := file.get_error()
+	file.close()
+	set_notice("Logs saved to " + path if error == OK else "Writing logs failed. Check disk space and permissions.", error != OK)
+
 func update_buttons() -> void:
+	if buttons.has("Download logs"):
+		buttons["Download logs"].disabled = selected_execution.is_empty() or not active_request.is_empty() or not request_queue.is_empty()
 	var busy := not active_request.is_empty() and int(active_request.get("method", HTTPClient.METHOD_GET)) != HTTPClient.METHOD_GET
 	for queued in request_queue:
 		if int(queued.method) != HTTPClient.METHOD_GET:

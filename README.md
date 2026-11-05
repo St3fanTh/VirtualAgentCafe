@@ -265,3 +265,22 @@ smoke test is available separately through `scripts/codex-smoke.sh`.
 - [Architecture](docs/architecture.md) and [event protocol](docs/event-schema.md)
 - [Graphics and 4K rendering](docs/graphics.md)
 - [Changes and test evidence](PROGRESS.md)
+
+### Download execution logs
+
+Open **Manage agents → Executions**, select a run, then click **Download logs**
+directly under **Live activity & integration**. Choose a local JSON file in the
+save dialog. No terminal command or new agent run is required.
+
+The authenticated export contains the execution status and commit/branch metadata,
+all persisted activity (including entries beyond the live view), recorded runtime
+commands and combined tool output, final responses, test evidence and controller
+stdout/stderr/context. New runs also persist non-test commands and runtime stderr
+in the existing SQLite volume. Reasoning events and credential files are excluded;
+known secret patterns are redacted. Review project content before sharing the file.
+
+Running executions export a snapshot; download again after completion for final
+results. Old runs contain only previously captured evidence. Provider truncation
+still applies; the runtime stdout limit is 64 MiB and retained stderr is 8 MiB,
+with explicit truncation indicators. This is diagnostic evidence, not a backup of
+the project or a guarantee that every arbitrary secret can be detected.

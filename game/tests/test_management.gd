@@ -201,7 +201,25 @@ func _process(_delta: float) -> bool:
 			assert("Requirement 1.1" in ui.changelog_report.text)
 			assert("Implemented managed-result.txt" in ui.changelog_report.text)
 			assert("UNVERIFIED" in ui.changelog_report.text)
-			print("Godot managed agent, requirement changelog, runtime and stop tests: PASS")
+			ui.selected_execution = execution_id
+			ui.update_buttons()
+			assert(not ui.buttons["Download logs"].disabled)
+			ui.diagnostics_dialog.use_native_dialog = false
+			ui.buttons["Download logs"].pressed.emit()
+			stage = 14
+		14:
+			if ui.diagnostics_export.is_empty():
+				return false
+			assert(ui.diagnostics_export.execution.id == execution_id)
+			assert(ui.diagnostics_export.activity.size() > 0)
+			ui.diagnostics_dialog.hide()
+			var path := "user://diagnostics-test.json"
+			ui.diagnostics_dialog.file_selected.emit(path)
+			var saved = JSON.parse_string(FileAccess.get_file_as_string(path))
+			assert(saved.execution.id == execution_id)
+			assert(saved.format == "virtual-agent-cafe-diagnostics-v1")
+			DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
+			print("Godot managed agent, diagnostics download, runtime and stop tests: PASS")
 			quit(0)
 	return false
 

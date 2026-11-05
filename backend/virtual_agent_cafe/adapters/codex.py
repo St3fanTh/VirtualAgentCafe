@@ -269,11 +269,13 @@ class CodexAdapter:
         *,
         model: str | None = None,
         evidence_sink=None,
+        event_sink=None,
     ):
         self.executable = executable or shutil.which("codex") or "codex"
         self.timeout = timeout
         self.model = model
         self.evidence_sink = evidence_sink
+        self.event_sink = event_sink
 
     def arguments(self, workspace: Path) -> list[str]:
         return [
@@ -363,6 +365,7 @@ class CodexAdapter:
     async def run(self, prompt: str, workspace: Path, emit: Emit) -> RunResult:
         observer = CodexObserver(emit)
         process = None
+        stderr_task = None
         try:
             await asyncio.to_thread(self.prepare_response_file, workspace)
             previous_files = await asyncio.to_thread(self.code_snapshot, workspace)
@@ -371,10 +374,32 @@ class CodexAdapter:
                     *self.arguments(workspace),
                     stdin=asyncio.subprocess.PIPE,
                     stdout=asyncio.subprocess.PIPE,
-                    stderr=asyncio.subprocess.DEVNULL,
+                    stderr=asyncio.subprocess.PIPE
+                    if self.event_sink
+                    else asyncio.subprocess.DEVNULL,
                     start_new_session=True,
                     limit=MAX_LINE,
                 )
+                if self.event_sink:
+
+                    async def capture_stderr():
+                        captured = bytearray()
+                        truncated = False
+                        while chunk := await process.stderr.read(16384):
+                            remaining = 8 * MAX_LINE - len(captured)
+                            captured.extend(chunk[:remaining])
+                            truncated = truncated or len(chunk) > remaining
+                        if captured:
+                            await self.event_sink(
+                                {
+                                    "type": "runtime.stderr",
+                                    "text": captured.decode("utf-8", errors="replace"),
+                                    "truncated": truncated,
+                                    "limit_bytes": 8 * MAX_LINE,
+                                }
+                            )
+
+                    stderr_task = asyncio.create_task(capture_stderr())
                 process.stdin.write(prompt.encode("utf-8"))
                 await process.stdin.drain()
                 process.stdin.close()
@@ -382,10 +407,31 @@ class CodexAdapter:
                 while line := await process.stdout.readline():
                     total += len(line)
                     if total > 64 * MAX_LINE:
+                        if self.event_sink:
+                            await self.event_sink(
+                                {
+                                    "type": "capture.truncated",
+                                    "stream": "stdout",
+                                    "limit_bytes": 64 * MAX_LINE,
+                                }
+                            )
                         raise ValueError("Codex stream exceeds limit")
                     data = json.loads(line)
                     if not isinstance(data, dict):
                         raise ValueError("Invalid Codex event")
+                    if self.event_sink and (
+                        data.get("type")
+                        in {
+                            "thread.started",
+                            "turn.started",
+                            "turn.completed",
+                            "turn.failed",
+                            "error",
+                        }
+                        or data.get("item", {}).get("type")
+                        in {"command_execution", "file_change", "agent_message"}
+                    ):
+                        await self.event_sink(data)
                     previous_test = observer.test_runs[-1] if observer.test_runs else None
                     observer.consume(data)
                     item = data.get("item", {})
@@ -472,3 +518,11 @@ class CodexAdapter:
                     os.killpg(process.pid, signal.SIGKILL)
                 except ProcessLookupError:
                     pass
+
+            if stderr_task:
+                try:
+                    async with asyncio.timeout(2):
+                        await stderr_task
+                except TimeoutError:
+                    stderr_task.cancel()
+                    await asyncio.gather(stderr_task, return_exceptions=True)

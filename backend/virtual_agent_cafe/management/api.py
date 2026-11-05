@@ -7,6 +7,7 @@ from pydantic import Field
 
 from .changelog import overview as changelog_overview
 from .config import AgentConfig, MarkdownInput, ReviewInput, StrictModel, WorkspaceInput
+from .diagnostics import export as export_diagnostics
 from .execution import ExecutionManager
 from .git import GitOperationError
 from .model_catalog import ModelCatalog
@@ -358,6 +359,12 @@ def management_router(manager: ExecutionManager, validated_body, mode: str) -> A
             lambda: asyncio.to_thread(
                 manager.store.get, "validation_outputs", execution + ":" + check
             )
+        )
+
+    @router.get("/executions/{execution}/diagnostics")
+    async def diagnostics(execution: str):
+        return await guarded(
+            lambda: asyncio.to_thread(export_diagnostics, manager.store, execution)
         )
 
     @router.get("/executions/{execution}/logs")

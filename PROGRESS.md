@@ -1168,3 +1168,33 @@ Starlette/httpx deprecation warnings were pre-existing, not test failures.
   known test failure. Re-ran scripts/check.sh lint, godot-import, godot-states,
   godot-headless and websocket-smoke: all PASS. git diff --check PASS.
   Full clean-source execution will also run in GitHub CI after publication.
+
+## 2026-11-05 — Downloadable execution diagnostics
+
+- Added Download logs directly below Live activity & integration. Select an
+  execution and save a local JSON diagnostic bundle through a native file dialog.
+  Running runs export a consistent snapshot; existing runs retain old evidence.
+- Authenticated read-only endpoint exports all persisted activity without the
+  live view's 200-entry page limit, execution/Git/integration state, worker command
+  evidence and controller captures. No filesystem crawling or credential files.
+- Persist newly observed command/file-change/final-message/lifecycle events and
+  runtime stderr in the existing SQLite volume. Exclude reasoning events, redact
+  known secrets at capture/export, and disclose provider/stream capture limits.
+- Added regression coverage for authentication, missing runs, histories over 200
+  entries, cross-run isolation, restart persistence, secret redaction, non-test
+  command capture, stderr and exclusion of reasoning. Godot management integration
+  exercises the real Download logs API request and file-selected save callback.
+- Files: management/{diagnostics,storage,execution,sandbox,api}.py; adapters/codex.py;
+  tests/test_diagnostics_export.py; game/scripts/management.gd;
+  game/tests/test_management.gd; README.md; PROGRESS.md.
+- Limitations: old raw events cannot be reconstructed. The export may contain
+  proprietary project content; pattern redaction is not an exhaustive secret
+  detector. Runtime stdout cap 64 MiB, stderr capture cap 8 MiB; limits disclosed.
+- Commit locator: git log --grep='add downloadable execution diagnostics'.
+  Next: download the failing Godot run and inspect its exact recorded command.
+- Focused verification: 9 tests passed in 76.21s (backend export/runtime capture
+  and seven native Godot management cases, including download and saved JSON).
+  Added legacy private-key/credential redaction coverage before the full check.
+- Final scripts/check.sh: PASS. 327 pytest tests passed in 451.93s; Ruff/format,
+  Godot import/state/headless and live WebSocket/selection checks all PASS.
+  Only the existing Starlette/httpx deprecation warning. git diff --check PASS.

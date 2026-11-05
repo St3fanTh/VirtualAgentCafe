@@ -24,6 +24,10 @@ class Store:
             "CREATE TABLE IF NOT EXISTS logs "
             "(sequence INTEGER PRIMARY KEY AUTOINCREMENT, execution TEXT, data TEXT NOT NULL)"
         )
+        self.db.execute(
+            "CREATE TABLE IF NOT EXISTS runtime_events "
+            "(sequence INTEGER PRIMARY KEY AUTOINCREMENT, execution TEXT, data TEXT NOT NULL)"
+        )
         self.db.commit()
 
     def put(self, kind: str, identifier: str, data: dict):
@@ -120,3 +124,12 @@ class Store:
                 (execution, after),
             ).fetchall()
         return [{"sequence": row[0], **json.loads(row[1])} for row in rows]
+
+    def runtime_event(self, execution: str, data: dict):
+        from .diagnostics import redact
+
+        with self.lock, self.db:
+            self.db.execute(
+                "INSERT INTO runtime_events(execution,data) VALUES (?,?)",
+                (execution, json.dumps(redact(data))),
+            )

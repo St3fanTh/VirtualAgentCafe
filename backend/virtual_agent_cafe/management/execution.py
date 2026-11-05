@@ -689,6 +689,13 @@ class ExecutionManager:
         def emit(kind: EventType, detail: str):
             self.emit(run, kind, detail)
 
+        async def runtime_event(data):
+            await asyncio.to_thread(
+                self.store.runtime_event,
+                run["id"],
+                {"timestamp": datetime.now(UTC).isoformat(), **data},
+            )
+
         async def evidence(item, path):
             try:
                 commit = (
@@ -737,6 +744,7 @@ class ExecutionManager:
                 model=config.model,
                 instructions=self.contexts.path(run["id"]),
                 evidence_sink=evidence,
+                event_sink=runtime_event,
             )
             runtime_retries = (
                 0 if config.execution.integration_validation else config.execution.max_retries
