@@ -284,3 +284,40 @@ results. Old runs contain only previously captured evidence. Provider truncation
 still applies; the runtime stdout limit is 64 MiB and retained stderr is 8 MiB,
 with explicit truncation indicators. This is diagnostic evidence, not a backup of
 the project or a guarantee that every arbitrary secret can be detected.
+
+### Resume the development orchestrator
+
+From the host's VirtualAgentCafe checkout:
+
+```bash
+./resume.sh                       # latest /workspace session, YOLO, Astra 6
+./resume.sh --pick                # choose a previous session
+./resume.sh --session SESSION_ID  # resume a specific session
+./resume.sh --privileged          # only when container namespaces need it
+./resume.sh --ssh                 # forward host SSH agent for Git operations
+```
+
+Inside an existing development container, use `./resume.sh --local`.
+The host launcher builds the Compose `codex` service, mounts this checkout, and
+reuses its `codex_home` volume for login and session history. It does not start the
+backend service. An optional local `compose.override.yaml` is included if present.
+The setup script generates `.runtime/setup/project.compose.json` for the backend
+only; its project mounts and SSH configuration do not transfer to this development
+container.
+Sessions stored outside that volume are not automatically imported. If the volume
+has no session yet, first start one with `docker compose --profile dev run --rm codex`.
+
+YOLO bypasses Codex approvals and its command sandbox; container privileged mode
+is a separate explicit option. For Git SSH access, use `--ssh` with an existing
+host SSH agent (`SSH_AUTH_SOCK`) and `~/.ssh/known_hosts`. This includes the existing
+`compose.ssh.yaml`, forwarding the agent socket and mounting known_hosts read-only;
+it never mounts private keys. `--ssh` and `--privileged` apply only on the host,
+not with `--local`. Managed Café workers keep their configured
+security policies. Model access depends on your account/runtime; the launcher
+passes `gpt-6-astra` explicitly and never silently substitutes another model.
+Override it intentionally with `--model MODEL` or `VAC_ORCHESTRATOR_MODEL`.
+
+[AGENTS.md](AGENTS.md) defines Astra 6 as orchestrator only, delegating bounded work
+to backend, Godot, runtime/Git, QA/integration and documentation subagents. This
+requires a Codex runtime with subagent capabilities; Markdown alone does not
+install or enable those capabilities.

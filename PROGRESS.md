@@ -1198,3 +1198,28 @@ Starlette/httpx deprecation warnings were pre-existing, not test failures.
 - Final scripts/check.sh: PASS. 327 pytest tests passed in 451.93s; Ruff/format,
   Godot import/state/headless and live WebSocket/selection checks all PASS.
   Only the existing Starlette/httpx deprecation warning. git diff --check PASS.
+
+## 2026-11-09 — Resume launcher and orchestrator roles
+
+- Added executable root resume.sh: default latest /workspace session, explicit
+  gpt-6-astra model and YOLO mode; picker, session ID, model override, local mode,
+  optional privileged Compose and SSH agent forwarding. Reuse codex_home sessions;
+  no backend service start, credential copying, shell evaluation or silent model fallback.
+- AGENTS.md now assigns Astra 6 orchestration only and defines bounded backend,
+  Godot, runtime/Git, QA/integration and documentation subagents with file ownership,
+  evidence requirements and centrally coordinated Git publication. Availability of
+  subagent tools and the requested model is required, not provisioned by Markdown.
+- Runtime/QA subagent reviewed and corrected Compose handling: backend-generated
+  project.compose.json does not configure codex; optional local override and explicit
+  --ssh use the existing development configuration instead.
+- Files: resume.sh, AGENTS.md, README.md, PROGRESS.md.
+- Evidence: installed codex resume --help confirms flags; bash -n and git diff --check
+  PASS. Reviewer ran 14 isolated fake Docker/Codex argument/error cases, including
+  spaces, literal shell text, local/host selection, SSH socket/known_hosts and
+  privileged options. No live model or Docker daemon launched (Docker unavailable
+  in this editing container). Full scripts/check.sh result recorded below.
+- Commit locator: git log --grep='add yolo resume launcher and orchestrator roles'.
+  Next: run ./resume.sh --ssh on the host or ./resume.sh --local inside the container.
+- Final scripts/check.sh PASS: 327 pytest passed in 457.50s; Ruff/format,
+  Godot import/state/headless and live WebSocket/selection checks PASS.
+  Existing Starlette/httpx deprecation warning only; final bash -n and diff check PASS.
