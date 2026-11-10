@@ -28,6 +28,7 @@ class Sandbox:
             "XDG_DATA_HOME": "/tmp/vac-user/data",
             "XDG_CONFIG_HOME": "/tmp/vac-user/config",
             "XDG_CACHE_HOME": "/tmp/vac-user/cache",
+            "XDG_STATE_HOME": "/tmp/vac-user/state",
             "XDG_RUNTIME_DIR": "/tmp/vac-user/runtime",
         }
         if Path("/etc/fonts/fonts.conf").is_file():
@@ -108,6 +109,7 @@ class Sandbox:
         ]
         # Runtime sockets require an existing, owner-only directory, not just an env var.
         args += ["--perms", "0700", "--dir", "/tmp/vac-user/runtime"]
+        args += ["--perms", "0700", "--dir", "/tmp/vac-user/state"]
         if authenticated:
             home = self.auth_home or Path(os.getenv("CODEX_HOME", Path.home() / ".codex"))
             auth = home / "auth.json"

@@ -1252,3 +1252,32 @@ Starlette/httpx deprecation warnings were pre-existing, not test failures.
   341 pytest passed in 438.53s. Ruff/format, Godot import/state/headless,
   live WebSocket/selection and git diff --check PASS. Existing Starlette/httpx
   deprecation warning only. No external project validation claimed.
+
+## 2026-11-10 — Support private XDG state in integration Godot rechecks
+
+- Integration execution 6e6bcb90-feca-4237-b7a6-c2524099d5df recorded three
+  /usr/bin/bash -lc Godot commands with XDG_STATE_HOME, absolute frontend paths
+  and reported_cwd=null. The parser omitted XDG_STATE_HOME from its supported
+  variables and rejected the commands before controller validation began.
+  The state test also emitted the genuine Godot _sock == -1 error at exit 0;
+  the runtime recap incorrectly described that result as only a warning.
+- Added explicit XDG_STATE_HOME support. The controller normalizes it to its
+  own /tmp/vac-user/state directory, created with mode 0700 inside the private
+  ephemeral sandbox; recorded host paths are not reused. Unknown or repeated
+  settings remain rejected, with the variable name identified without its value.
+- Regression coverage includes the exact three command forms, private writable
+  state in direct and nested worker sandboxes, fresh state on each invocation,
+  environment identity/cache changes, and integration recovery followed by the
+  mandatory shared requirements checks. Strict Godot error handling, committed
+  snapshot validation, ancestry and publication gates remain unchanged.
+- Files: management/{worker_validation,sandbox}.py;
+  tests/{test_worker_validation,test_godot_sandbox}.py; PROGRESS.md.
+- Worker-reported focused verification: 49 tests passed; after fixture updates,
+  two targeted tests passed; one cache/environment identity test passed separately.
+  These are overlapping checks, not a combined suite total.
+- Full scripts/check.sh completed with exit 0: 351 pytest passed with one existing
+  warning in 444.08s; Ruff/format, Godot import/state/headless and live
+  WebSocket/selection checks PASS. No external project validation claimed.
+- External SimulationWorld integration remains unverified. Update/rebuild the
+  backend and use Retry team integration; successful local regression tests do
+  not establish external project acceptance or publication.

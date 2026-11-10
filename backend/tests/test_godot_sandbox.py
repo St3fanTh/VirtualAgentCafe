@@ -134,3 +134,41 @@ async def test_controller_keeps_godot_directory_failure_as_infrastructure(tmp_pa
         c["diagnostics"]["category"] == "ENVIRONMENT_ERROR" for c in run["validation"]["checks"]
     )
     assert "fixture-secret" not in str(run["validation"])
+
+
+@pytest.mark.parametrize("nested", [False, True])
+def test_state_home_is_private_writable_and_ephemeral(tmp_path, nested):
+    probe = """import os
+from pathlib import Path
+state = Path(os.environ['XDG_STATE_HOME'])
+assert str(state) == '/tmp/vac-user/state'
+assert state.stat().st_mode & 0o777 == 0o700
+assert not (state / 'probe').exists()
+(state / 'probe').write_text('private')
+"""
+    command = ["python3", "-c", probe]
+    if nested:
+        command = ["codex", "sandbox", "-c", 'sandbox_mode="workspace-write"', "--", *command]
+    for _ in range(2):
+        result = subprocess.run(
+            Sandbox().command(tmp_path, command, network=False, writable_git=False),
+            capture_output=True,
+            text=True,
+            timeout=45,
+        )
+        assert result.returncode == 0, result.stderr
+    assert not (tmp_path / "probe").exists()
+
+
+def test_state_home_is_part_of_validation_environment_identity(monkeypatch):
+    from virtual_agent_cafe.management.validation import environment_identity
+
+    current = Sandbox.runtime_environment()
+    before = environment_identity()
+    assert current["XDG_STATE_HOME"] == "/tmp/vac-user/state"
+    monkeypatch.setattr(
+        Sandbox,
+        "runtime_environment",
+        staticmethod(lambda: {k: v for k, v in current.items() if k != "XDG_STATE_HOME"}),
+    )
+    assert environment_identity()["sha256"] != before["sha256"]

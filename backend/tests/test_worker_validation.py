@@ -235,7 +235,10 @@ def test_other_failure_cannot_be_cleared_by_godot_recheck(tmp_path):
     assert worker_validation.candidates(result, {"checks": []}, tmp_path) is None
 
 
-async def test_recovered_worker_automatically_integrates_with_shared_tests(tmp_path, monkeypatch):
+@pytest.mark.parametrize("blocked_stage", ["frontend", "integration"])
+async def test_recovered_worker_automatically_integrates_with_shared_tests(
+    tmp_path, monkeypatch, blocked_stage
+):
     import json
 
     from test_team_integration import start_workers, team
@@ -253,41 +256,6 @@ async def test_recovered_worker_automatically_integrates_with_shared_tests(tmp_p
                 workspace.name, ["frontend/project.godot", "frontend/tests/test_states.gd"]
             )
             await manager.git.commit(workspace.name, "test: local networking coverage")
-            command = "godot --headless --path frontend --script res://tests/test_states.gd"
-            output = (
-                'ERROR: Condition "_sock == -1" is true.\n'
-                " at: open (drivers/unix/net_socket_unix.cpp:273)"
-            )
-            observer = CodexObserver(emit)
-            observer.consume(
-                {
-                    "type": "item.completed",
-                    "item": {
-                        "type": "command_execution",
-                        "command": command,
-                        "cwd": str(workspace),
-                        "exit_code": 0,
-                        "aggregated_output": output,
-                    },
-                }
-            )
-            run_id = manager.registry.get(workspace.name)["last_execution"]
-            manager.store.put(
-                "runtime_test_outputs",
-                run_id,
-                {
-                    "checks": [
-                        {
-                            "command": command,
-                            "reported_cwd": str(workspace),
-                            "workspace": str(workspace),
-                            "exit_code": 0,
-                            "aggregated_output": output,
-                        }
-                    ]
-                },
-            )
-            return RunResult(False, "Socket blocked", tuple(observer.test_runs), True)
         if workspace.name.endswith("integration"):
             path = workspace / "validation/plan.json"
             plan = json.loads(path.read_text())
@@ -303,6 +271,47 @@ async def test_recovered_worker_automatically_integrates_with_shared_tests(tmp_p
             path.write_text(json.dumps(plan))
             await manager.git.stage(workspace.name, ["validation/plan.json"])
             await manager.git.commit(workspace.name, "test: shared Godot coverage")
+        if workspace.name.endswith(blocked_stage):
+            command = (
+                "/usr/bin/bash -lc 'XDG_DATA_HOME=/tmp/simworld-xdg-data "
+                "XDG_CONFIG_HOME=/tmp/simworld-xdg-config "
+                "XDG_CACHE_HOME=/tmp/simworld-xdg-cache XDG_STATE_HOME=/tmp/simworld-xdg-state "
+                f"godot --headless --path {workspace}/frontend --script res://tests/test_states.gd'"
+            )
+            output = (
+                'ERROR: Condition "_sock == -1" is true.\n'
+                " at: open (drivers/unix/net_socket_unix.cpp:273)"
+            )
+            observer = CodexObserver(emit)
+            observer.consume(
+                {
+                    "type": "item.completed",
+                    "item": {
+                        "type": "command_execution",
+                        "command": command,
+                        "cwd": None,
+                        "exit_code": 0,
+                        "aggregated_output": output,
+                    },
+                }
+            )
+            run_id = manager.registry.get(workspace.name)["last_execution"]
+            manager.store.put(
+                "runtime_test_outputs",
+                run_id,
+                {
+                    "checks": [
+                        {
+                            "command": command,
+                            "reported_cwd": None,
+                            "workspace": str(workspace),
+                            "exit_code": 0,
+                            "aggregated_output": output,
+                        }
+                    ]
+                },
+            )
+            return RunResult(False, "Socket blocked", tuple(observer.test_runs), True)
         return result
 
     manager.adapter.run = socket_blocked
@@ -312,6 +321,15 @@ async def test_recovered_worker_automatically_integrates_with_shared_tests(tmp_p
     run = manager.store.get("executions", project["integration"]["execution"])
     assert run["validation"]["passed"] and len(run["validation"]["checks"]) == 2
     assert run["workflow"]["integration"] == "INTEGRATED"
+    if blocked_stage == "integration":
+        assert run["controller_recovered"]
+        assert run["worker_validation"]["passed"]
+        assert (
+            run["worker_validation"]["checks"][0]["context"]["runtime_environment"][
+                "XDG_STATE_HOME"
+            ]
+            == "/tmp/vac-user/state"
+        )
     assert (await manager.git.run(remote, "rev-parse", "main")).strip() != initial
 
 
@@ -351,3 +369,39 @@ def test_godot_recheck_rejects_symlink_project(tmp_path):
         worker_validation.observed_check(
             {"command": "godot --headless --path frontend --script tests/test_states.gd"}, tmp_path
         )
+
+
+@pytest.mark.parametrize("name", ["test_states", "test_protocol", "test_acceptance"])
+def test_recorded_integration_xdg_state_command(tmp_path, name):
+    (tmp_path / "frontend/tests").mkdir(parents=True)
+    command = (
+        "/usr/bin/bash -lc 'XDG_DATA_HOME=/tmp/simworld-xdg-data "
+        "XDG_CONFIG_HOME=/tmp/simworld-xdg-config XDG_CACHE_HOME=/tmp/simworld-xdg-cache "
+        "XDG_STATE_HOME=/tmp/simworld-xdg-state godot --headless "
+        f"--path {tmp_path}/frontend --script res://tests/{name}.gd'"
+    )
+    check = worker_validation.observed_check({"command": command, "reported_cwd": None}, tmp_path)
+    direct = worker_validation.observed_check(
+        {"command": f"godot --headless --path frontend --script res://tests/{name}.gd"}, tmp_path
+    )
+    assert check == direct  # Worker XDG overrides never enter the controller command/cache scope.
+    assert check.directory == "frontend" and check.script == f"tests/{name}.gd"
+
+
+@pytest.mark.parametrize(
+    "assignments, expected",
+    [
+        (
+            "XDG_STATE_HOME=private-value XDG_STATE_HOME=other-value",
+            "Repeated test environment setting: XDG_STATE_HOME",
+        ),
+        ("TEST_FILTER=private-value", "Unsupported test environment setting: TEST_FILTER"),
+        ("bad/private-value=secret", "Unsupported test environment setting: <invalid name>"),
+    ],
+)
+def test_environment_errors_name_setting_without_values(tmp_path, assignments, expected):
+    with pytest.raises(ValueError) as error:
+        worker_validation.observed_check(
+            {"command": f"{assignments} godot --headless --script test.gd"}, tmp_path
+        )
+    assert str(error.value) == expected

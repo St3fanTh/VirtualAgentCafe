@@ -3,6 +3,7 @@
 import asyncio
 import hashlib
 import json
+import re
 import shlex
 from pathlib import Path
 
@@ -17,6 +18,7 @@ RUNTIME_VARIABLES = {
     "XDG_CONFIG_HOME",
     "XDG_CACHE_HOME",
     "XDG_RUNTIME_DIR",
+    "XDG_STATE_HOME",
     "FONTCONFIG_FILE",
     "FONTCONFIG_PATH",
 }
@@ -78,7 +80,9 @@ def observed_check(evidence, workspace):
     while args and "=" in args[0]:
         name, value = args.pop(0).split("=", 1)
         if name not in RUNTIME_VARIABLES or name in environment:
-            raise ValueError("Unsupported or repeated test environment setting")
+            label = name if re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]{0,63}", name) else "<invalid name>"
+            reason = "Repeated" if name in environment else "Unsupported"
+            raise ValueError(f"{reason} test environment setting: {label}")
         environment[name] = value
     if not args or args.pop(0) not in {"godot", "/usr/local/bin/godot"}:
         raise ValueError("Only the approved Godot runtime can be rechecked")
