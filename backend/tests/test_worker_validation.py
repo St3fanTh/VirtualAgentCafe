@@ -73,8 +73,8 @@ async def setup(tmp_path, monkeypatch, *, real_error=False):
                 stdout, stderr = await process.communicate()
                 item = {
                     "type": "command_execution",
-                    "command": " ".join(args),
-                    "cwd": str(path),
+                    "command": "/usr/bin/bash -lc '" + " ".join(args) + "'",
+                    "cwd": None,
                     "exit_code": process.returncode,
                     "aggregated_output": (stdout + stderr).decode(),
                 }
@@ -82,7 +82,7 @@ async def setup(tmp_path, monkeypatch, *, real_error=False):
                 rows.append(
                     {
                         "command": item["command"],
-                        "reported_cwd": str(path),
+                        "reported_cwd": None,
                         "workspace": str(path),
                         "aggregated_output": item["aggregated_output"],
                         "exit_code": item["exit_code"],
@@ -188,6 +188,20 @@ def test_explicit_commands_are_parsed_without_shell_execution(tmp_path, command)
         assert check.fontconfig_file == "frontend/fonts.conf"
 
 
+@pytest.mark.parametrize("shell", ["/usr/bin/bash", "/usr/bin/sh"])
+@pytest.mark.parametrize("name", ["test_states", "test_protocol", "test_acceptance"])
+def test_recorded_shell_wrappers_resolve_null_cwd_to_workspace(tmp_path, shell, name):
+    (tmp_path / "frontend/tests").mkdir(parents=True)
+    command = f"{shell} -lc 'godot --headless --path frontend --script res://tests/{name}.gd'"
+    check = worker_validation.observed_check({"command": command, "reported_cwd": None}, tmp_path)
+    assert check.directory == "frontend"
+    assert check.script == f"tests/{name}.gd"
+    direct = worker_validation.observed_check(
+        {"command": f"godot --headless --path frontend --script res://tests/{name}.gd"}, tmp_path
+    )
+    assert check == direct
+
+
 @pytest.mark.parametrize(
     "command",
     [
@@ -199,6 +213,14 @@ def test_explicit_commands_are_parsed_without_shell_execution(tmp_path, command)
         "godot --headless --script ../test.gd",
         "godot --headless --script test.gd > output.txt",
         "python3 wrapper.py",
+        "/tmp/bash -lc 'godot --headless --script test.gd'",
+        "/custom/usr/bin/sh -lc 'godot --headless --script test.gd'",
+        "/usr/bin/bash-custom -lc 'godot --headless --script test.gd'",
+        "/usr/bin/bash -lc 'godot --headless --script test.gd; touch /tmp/escape'",
+        "/usr/bin/sh -lc 'godot --headless --script test.gd && touch /tmp/escape'",
+        "/usr/bin/bash -lc 'godot --headless --script test.gd' && touch /tmp/escape",
+        "/usr/bin/bash -lc 'godot --headless --script \"$(touch /tmp/escape).gd\"'",
+        "/usr/bin/bash -lc 'godot --headless --script \"`touch /tmp/escape`.gd\"'",
     ],
 )
 def test_unsupported_or_escaping_commands_remain_blocked(tmp_path, command):

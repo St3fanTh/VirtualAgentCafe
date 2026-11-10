@@ -52,10 +52,12 @@ def observed_check(evidence, workspace):
     if len(command) > 65536:
         raise ValueError("Observed command exceeds limit")
     args = tokens(command)
+    # Codex reports both /bin and /usr/bin shell wrappers. Unwrap only these
+    # literal paths; the controller executes the validated Godot argv, never a shell.
     for _ in range(3):
         if (
             len(args) == 3
-            and args[0] in {"bash", "sh", "/bin/bash", "/bin/sh"}
+            and args[0] in {"bash", "sh", "/bin/bash", "/bin/sh", "/usr/bin/bash", "/usr/bin/sh"}
             and args[1]
             in {
                 "-c",

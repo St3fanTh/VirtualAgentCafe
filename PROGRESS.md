@@ -1223,3 +1223,32 @@ Starlette/httpx deprecation warnings were pre-existing, not test failures.
 - Final scripts/check.sh PASS: 327 pytest passed in 457.50s; Ruff/format,
   Godot import/state/headless and live WebSocket/selection checks PASS.
   Existing Starlette/httpx deprecation warning only; final bash -n and diff check PASS.
+
+## 2026-11-09 — Recognize recorded /usr/bin shell wrappers in worker rechecks
+
+- User diagnostics confirmed all three recorded Godot commands use /usr/bin/bash
+  -lc with reported_cwd=null. The parser only unwrapped bash/sh and /bin paths,
+  then rejected /usr/bin/bash as the Godot executable. Empty validation_outputs
+  confirmed rejection before controller subprocess validation, not a failed check.
+- Backend subagent reproduced the exact old ValueError with the original parser
+  and added only explicit /usr/bin/bash and /usr/bin/sh wrapper aliases. Parsing
+  still builds approved Godot Check objects; recorded shell strings are never run.
+  Workspace/commit/blob validation, strict Godot errors and publication gates remain.
+- Regression coverage: exact states/protocol/acceptance commands, null-cwd fallback,
+  equivalence to direct Godot checks, custom executable lookalikes, shell chaining,
+  and substitutions. Real recovery fixtures now record the supplied wrapper form
+  for all three scopes; no-model retry and genuine-error rejection remain covered.
+- Files: management/worker_validation.py; tests/test_worker_validation.py; PROGRESS.md.
+- Focused tests: 32 passed in 48.78s; Ruff and diff check PASS. Existing Starlette/
+  httpx warning only. Full scripts/check.sh results recorded below.
+- Commit locator: git log --grep='recognize usr-bin shell wrappers in Godot rechecks'.
+- Next: update/rebuild backend and use Manage agents > Retry validation for the
+  unchanged failed worker. The external SimulationWorld commit has not been tested
+  here; successful actual controller validation/publication remains to be verified.
+- Independently recomputed scope IDs for the three exact commands with null cwd;
+  all match the supplied persisted diagnostic records. Existing evidence remains
+  addressable by the retry path; no new agent command run is needed to capture it.
+- Final verification (2026-11-10): scripts/check.sh completed all stages;
+  341 pytest passed in 438.53s. Ruff/format, Godot import/state/headless,
+  live WebSocket/selection and git diff --check PASS. Existing Starlette/httpx
+  deprecation warning only. No external project validation claimed.
