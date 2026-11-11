@@ -2,4 +2,4 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 source scripts/environment.sh
-python3 scripts/management_smoke.py
+python3 scripts/management_smoke.py "$@"

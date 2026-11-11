@@ -212,7 +212,9 @@ restart recovery, acceptance review and native Godot management actions. Normal
 checks use deterministic CLI fixtures and never invoke paid model tasks.
 
 
-An opt-in probe using the real model is available as `scripts/management-smoke.sh`.
+An opt-in probe using an explicitly selected real model is available as
+`scripts/management-smoke.sh --model gpt-5.6-luna --timeout 120`.
+It consumes model usage; automated pipeline tests use deterministic fixtures instead.
 It creates a temporary source repository and agent worktree, executes a Markdown
 Python task, independently reruns its unittest and verifies a commit on the assigned
 branch. It makes no remote Git calls. It requires Codex login and uses model quota;

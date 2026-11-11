@@ -1281,3 +1281,37 @@ Starlette/httpx deprecation warnings were pre-existing, not test failures.
 - External SimulationWorld integration remains unverified. Update/rebuild the
   backend and use Retry team integration; successful local regression tests do
   not establish external project acceptance or publication.
+
+## 2026-11-11 — Verify managed pipeline and rendered Café workflow
+
+- Added a deterministic end-to-end pipeline fixture with disposable repositories,
+  real management/controller execution, validation and publication gates, failed
+  validation followed by repair/retry, and independent published-product checks.
+  Added regression tests for smoke-result acceptance and redacted failure details.
+  Model code production is fixture-driven; no external project is modified.
+- Added an opt-in rendered GUI pipeline runner and `scripts/check.sh pipeline-gui`,
+  with an explicit CI Xvfb invocation and retained evidence artifacts. Rootless
+  Xvfb and software-rendered Godot X11 startup were verified in this container.
+  Full rendered workflow PASS: 199 assertions on X11 with Mesa llvmpipe, six
+  screenshots, actual FileDialog filename entry and Enter save, downloaded JSON
+  execution identity and shared validation output, and the integration Changelog.
+  Independently verified published counter increment/decrement/negative/reset
+  behavior and exact disposable remote main commit
+  `a419f73070a03e95884b49e8bc4b697a6617d3da`.
+  Evidence: `.runtime/checks/pipeline-gui/result.json`, `downloaded-logs.json`,
+  `godot.log`, six PNGs, and `.runtime/checks/pipeline-gui-run.log`.
+  Model responses remain deterministic fixtures; this is not live team coverage.
+- Documented deterministic versus live test boundaries, display dependencies,
+  commands, artifacts and Windows/physical-display limitations in
+  docs/pipeline-testing.md, linked from README.md.
+- Verified focused pipeline/regression suite: 8 passed in 36.02s.
+- Verified full `scripts/check.sh`: all stages completed; 359 pytest passed with
+  one existing warning in 463.81s. Ruff/format, Godot import/state/headless and
+  WebSocket smoke checks PASS.
+- Exactly one opt-in live smoke used `gpt-5.6-luna` with `--timeout 120` and passed
+  independent greeting behavior, unittest and committed-file/branch checks.
+  Evidence: .runtime/checks/managed-smoke/95679d07-2da7-434d-8284-5f8d3e4e40ea.json.
+  This establishes the selected model's small managed task only, not live
+  multi-agent team coverage or external-project acceptance.
+- Runtime diagnostic exports and provisioned GUI dependencies remain untracked
+  test artifacts; no Windows GUI result or external-project publication is claimed.

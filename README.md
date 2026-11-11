@@ -321,3 +321,10 @@ Override it intentionally with `--model MODEL` or `VAC_ORCHESTRATOR_MODEL`.
 to backend, Godot, runtime/Git, QA/integration and documentation subagents. This
 requires a Codex runtime with subagent capabilities; Markdown alone does not
 install or enable those capabilities.
+
+### Verify the complete managed pipeline
+
+See [Pipeline testing](docs/pipeline-testing.md) for deterministic controller and
+failure/retry tests, a rendered Café UI run on Xvfb, downloadable evidence, and an
+optional real-model smoke with explicit model selection. The rendered stage is
+`scripts/check.sh pipeline-gui`; CI runs it separately from the headless suite.

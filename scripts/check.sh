@@ -116,6 +116,9 @@ run_stage() {
     godot-headless)
       check_godot --headless --path game --quit-after 120
       ;;
+    pipeline-gui)
+      scripts/pipeline-gui.sh
+      ;;
     websocket-smoke)
       "$PYTHON" scripts/game_smoke.py
       ;;
